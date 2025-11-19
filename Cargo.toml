@@ -1,0 +1,51 @@
+[package]
+name = "seaorm-django"
+version = "0.1.0"
+edition = "2021"
+authors = ["SeaORM Django Contributors"]
+description = "Django-like ergonomic query API for SeaORM with zero duplication"
+license = "MIT OR Apache-2.0"
+keywords = ["seaorm", "orm", "database", "django", "query"]
+categories = ["database"]
+
+[dependencies]
+sea-orm = { workspace = true }
+chrono = { workspace = true }
+once_cell = { workspace = true }
+serde_json = "1.0"
+
+# Optional dependencies
+seaorm-django-derive = { path = "./derive", optional = true }
+
+[features]
+default = ["derive"]
+derive = ["seaorm-django-derive"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+sea-orm = { workspace = true, features = ["sqlx-sqlite", "runtime-tokio-native-tls"] }
+
+# Integration test binaries
+[[test]]
+name = "query_tests"
+path = "tests/query_tests/mod.rs"
+
+[[test]]
+name = "relation_tests"
+path = "tests/relation_tests/mod.rs"
+
+[[test]]
+name = "transaction_tests"
+path = "tests/transaction_tests/mod.rs"
+
+[[test]]
+name = "unit_tests"
+path = "tests/unit_tests/mod.rs"
+
+[[test]]
+name = "write_tests"
+path = "tests/write_tests/mod.rs"
+
+[[test]]
+name = "derive_tests"
+path = "tests/derive_tests/mod.rs"
