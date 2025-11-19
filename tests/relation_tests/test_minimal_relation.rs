@@ -6,7 +6,7 @@ use seaorm_django_derive::DjangoModel;
 // First: Test entity without relations (should work)
 pub mod simple {
     use super::*;
-    
+
     #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
     #[sea_orm(table_name = "simple")]
     pub struct Model {
@@ -24,7 +24,7 @@ pub mod simple {
 // Second: Add a related entity (should also work since it has no relations)
 pub mod parent {
     use super::*;
-    
+
     #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
     #[sea_orm(table_name = "parent")]
     pub struct Model {
@@ -42,7 +42,7 @@ pub mod parent {
 // Third: Add entity WITH relation to parent
 pub mod child {
     use super::*;
-    
+
     #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
     #[sea_orm(table_name = "child")]
     #[django(relations(parent = "super::parent::Entity"))]

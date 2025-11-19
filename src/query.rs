@@ -808,7 +808,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + Send,
     {
         use sea_orm::ActiveModelTrait;
-        let active_model = E::to_active_model_for_create(model);
+        let active_model = E::to_active_model_for_create(model)?;
         Ok(active_model.insert(self.db).await?)
     }
 
@@ -871,10 +871,11 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let count = models.len() as u64;
 
         // Convert models to ActiveModels using DjangoEntity logic (handles IDs/timestamps)
-        let active_models: Vec<E::ActiveModel> = models
+        let active_models: Result<Vec<E::ActiveModel>, DjangoOrmError> = models
             .into_iter()
             .map(|model| E::to_active_model_for_create(model))
             .collect();
+        let active_models = active_models?;
 
         // Use SeaORM's insert_many
         E::insert_many(active_models).exec(self.db).await?;
@@ -1027,7 +1028,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             None => {
                 // Create new record
                 let model = creator();
-                let active_model = E::to_active_model_for_create(model);
+                let active_model = E::to_active_model_for_create(model)?;
                 let model = active_model.insert(self.db).await?;
                 Ok((model, true))
             }
@@ -1100,7 +1101,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             None => {
                 // Create new
                 let model = creator();
-                let active_model = E::to_active_model_for_create(model);
+                let active_model = E::to_active_model_for_create(model)?;
                 let model = active_model.insert(self.db).await?;
                 Ok((model, true))
             }

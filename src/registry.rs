@@ -34,10 +34,7 @@ pub type LoaderFn = Arc<
             &[&(dyn std::any::Any + Send + Sync)],
             &'static DatabaseConnection,
         ) -> Pin<
-            Box<
-                dyn Future<Output = Result<RelationMap, crate::error::DjangoOrmError>>
-                    + Send,
-            >,
+            Box<dyn Future<Output = Result<RelationMap, crate::error::DjangoOrmError>> + Send>,
         > + Send
         + Sync,
 >;
@@ -59,11 +56,7 @@ static RELATION_REGISTRY: Lazy<Mutex<HashMap<(TypeId, TypeId), LoaderFn>>> =
 /// - `entity_type_id`: TypeId of the entity (e.g., `TypeId::of::<book::Entity>()`)
 /// - `relation_type_id`: TypeId of the related entity (e.g., `TypeId::of::<author::Entity>()`)
 /// - `loader`: Function that knows how to batch-load this relation
-pub fn register_loader(
-    entity_type_id: TypeId,
-    relation_type_id: TypeId,
-    loader: LoaderFn,
-) {
+pub fn register_loader(entity_type_id: TypeId, relation_type_id: TypeId, loader: LoaderFn) {
     RELATION_REGISTRY
         .lock()
         .unwrap()
@@ -92,10 +85,10 @@ pub fn get_loader(entity_type_id: TypeId, relation_type_id: TypeId) -> Option<Lo
 pub struct RelationDescriptor {
     /// TypeId of the entity
     pub entity_type_id: TypeId,
-    
+
     /// TypeId of the related entity
     pub relation_type_id: TypeId,
-    
+
     /// Loader function
     pub loader: LoaderFn,
 }
@@ -122,45 +115,40 @@ mod tests {
     fn test_registry_basic() {
         let entity_type = TypeId::of::<u32>();
         let relation_type = TypeId::of::<String>();
-        
-        let loader: LoaderFn = std::sync::Arc::new(|_models, _db| {
-            Box::pin(async move {
-                Ok(HashMap::new())
-            })
-        });
-        
+
+        let loader: LoaderFn =
+            std::sync::Arc::new(|_models, _db| Box::pin(async move { Ok(HashMap::new()) }));
+
         register_loader(entity_type, relation_type, loader);
-        
+
         let retrieved = get_loader(entity_type, relation_type);
         assert!(retrieved.is_some());
     }
-    
+
     #[test]
     fn test_registry_get_nonexistent_loader() {
         let entity_type = TypeId::of::<i64>();
         let relation_type = TypeId::of::<bool>();
-        
+
         let retrieved = get_loader(entity_type, relation_type);
         assert!(retrieved.is_none());
     }
-    
+
     #[test]
     fn test_registry_multiple_loaders() {
         let entity1 = TypeId::of::<i8>();
         let entity2 = TypeId::of::<i16>();
         let relation = TypeId::of::<u8>();
-        
-        let loader1: LoaderFn = std::sync::Arc::new(|_models, _db| {
-            Box::pin(async move { Ok(HashMap::new()) })
-        });
-        
-        let loader2: LoaderFn = std::sync::Arc::new(|_models, _db| {
-            Box::pin(async move { Ok(HashMap::new()) })
-        });
-        
+
+        let loader1: LoaderFn =
+            std::sync::Arc::new(|_models, _db| Box::pin(async move { Ok(HashMap::new()) }));
+
+        let loader2: LoaderFn =
+            std::sync::Arc::new(|_models, _db| Box::pin(async move { Ok(HashMap::new()) }));
+
         register_loader(entity1, relation, loader1);
         register_loader(entity2, relation, loader2);
-        
+
         assert!(get_loader(entity1, relation).is_some());
         assert!(get_loader(entity2, relation).is_some());
     }

@@ -4,7 +4,7 @@ use seaorm_django::prelude::*;
 #[tokio::test]
 async fn test_get_or_create_creates_when_not_exists() {
     let db = setup_test_db().await;
-    
+
     // Try to get_or_create with non-existent email
     let (author, created) = author::Entity::objects(&db)
         .filter(author::Column::Email.eq("newauthor@example.com"))
@@ -16,11 +16,11 @@ async fn test_get_or_create_creates_when_not_exists() {
         })
         .await
         .unwrap();
-    
+
     assert!(created, "Should create new record");
     assert_eq!(author.name, "New Author");
     assert_eq!(author.email, "newauthor@example.com");
-    
+
     // Verify it was actually created
     let found = author::Entity::objects(&db)
         .filter(author::Column::Email.eq("newauthor@example.com"))
@@ -33,7 +33,7 @@ async fn test_get_or_create_creates_when_not_exists() {
 #[tokio::test]
 async fn test_get_or_create_gets_when_exists() {
     let db = setup_test_db().await;
-    
+
     // Create an author first
     let original = author::Entity::objects(&db)
         .create(author::Model {
@@ -44,7 +44,7 @@ async fn test_get_or_create_gets_when_exists() {
         })
         .await
         .unwrap();
-    
+
     // Try to get_or_create - should get the existing one
     let (author, created) = author::Entity::objects(&db)
         .filter(author::Column::Email.eq("existing@example.com"))
@@ -56,7 +56,7 @@ async fn test_get_or_create_gets_when_exists() {
         })
         .await
         .unwrap();
-    
+
     assert!(!created, "Should not create new record");
     assert_eq!(author.id, original.id);
     assert_eq!(author.name, "Existing"); // Original name, not the creator's name
@@ -65,7 +65,7 @@ async fn test_get_or_create_gets_when_exists() {
 #[tokio::test]
 async fn test_update_or_create_creates_when_not_exists() {
     let db = setup_test_db().await;
-    
+
     // Try to update_or_create with non-existent email
     let (author, created) = author::Entity::objects(&db)
         .filter(author::Column::Email.eq("brand_new@example.com"))
@@ -82,7 +82,7 @@ async fn test_update_or_create_creates_when_not_exists() {
         )
         .await
         .unwrap();
-    
+
     assert!(created, "Should create new record");
     assert_eq!(author.name, "Brand New");
     assert_eq!(author.age, 28); // Creator value, updater not called
@@ -91,7 +91,7 @@ async fn test_update_or_create_creates_when_not_exists() {
 #[tokio::test]
 async fn test_update_or_create_updates_when_exists() {
     let db = setup_test_db().await;
-    
+
     // Create an author first
     let original = author::Entity::objects(&db)
         .create(author::Model {
@@ -102,7 +102,7 @@ async fn test_update_or_create_updates_when_exists() {
         })
         .await
         .unwrap();
-    
+
     // Try to update_or_create - should update the existing one
     let (author, created) = author::Entity::objects(&db)
         .filter(author::Column::Email.eq("toupdate@example.com"))
@@ -119,7 +119,7 @@ async fn test_update_or_create_updates_when_exists() {
         )
         .await
         .unwrap();
-    
+
     assert!(!created, "Should not create new record");
     assert_eq!(author.id, original.id);
     assert_eq!(author.age, 45); // Updated value

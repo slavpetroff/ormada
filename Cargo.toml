@@ -49,3 +49,7 @@ path = "tests/write_tests/mod.rs"
 [[test]]
 name = "derive_tests"
 path = "tests/derive_tests/mod.rs"
+
+[[test]]
+name = "django_model_tests"
+path = "tests/django_model_tests/mod.rs"

@@ -36,7 +36,7 @@
 //!
 //! ```rust,ignore
 //! use seaorm_django::tx;
-//! 
+//!
 //! let result = tx!(db, |txn| async move {
 //!     let author = create_author(txn).await?;
 //!     
@@ -48,7 +48,7 @@
 //!     let book = create_book(txn, author.id).await?;
 //!     Ok(book)
 //! }).await;
-//! 
+//!
 //! match result {
 //!     Ok(book) => println!("Transaction committed: {}", book.title),
 //!     Err(e) => println!("Transaction rolled back: {}", e),
@@ -59,7 +59,7 @@
 //!
 //! ```rust,ignore
 //! use seaorm_django::tx;
-//! 
+//!
 //! tx!(db, |txn| async move {
 //!     let author = create_author(txn).await?;
 //!     
@@ -120,7 +120,7 @@ pub trait AtomicExt {
     ///
     /// ```rust,ignore
     /// use seaorm_django::tx;
-    /// 
+    ///
     /// let (author, book) = tx!(db, |txn| async move {
     ///     // Create author
     ///     let author = author::Entity::objects(txn).create(author::Model {
@@ -148,7 +148,7 @@ pub trait AtomicExt {
     ///
     /// ```rust,ignore
     /// use seaorm_django::tx;
-    /// 
+    ///
     /// let result = tx!(db, |txn| async move {
     ///     let author = create_author(txn).await?;
     ///     
@@ -166,7 +166,7 @@ pub trait AtomicExt {
     ///
     /// ```rust,ignore
     /// use seaorm_django::tx;
-    /// 
+    ///
     /// let count = tx!(db, |txn| async move {
     ///     // Delete all draft books
     ///     let deleted = book::Entity::objects(txn)
@@ -197,7 +197,11 @@ pub trait AtomicExt {
     /// but panic safety is not guaranteed for all database states.
     async fn atomic<F, T>(&self, f: F) -> Result<T, DjangoOrmError>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> std::pin::Pin<Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>>,
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
+        >,
         T: Send;
 
     /// Execute a closure within a savepoint (nested transaction)
@@ -214,7 +218,7 @@ pub trait AtomicExt {
     ///
     /// ```rust,ignore
     /// use seaorm_django::tx;
-    /// 
+    ///
     /// tx!(db, |txn| async move {
     ///     let author = create_author(txn).await?;
     ///     
@@ -237,7 +241,11 @@ pub trait AtomicExt {
     /// Not all databases support savepoints. Check your database documentation.
     async fn savepoint<F, T>(&self, _name: &str, f: F) -> Result<T, DjangoOrmError>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> std::pin::Pin<Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>>,
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
+        >,
         T: Send;
 }
 
@@ -245,12 +253,16 @@ pub trait AtomicExt {
 impl AtomicExt for DatabaseConnection {
     async fn atomic<F, T>(&self, f: F) -> Result<T, DjangoOrmError>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> std::pin::Pin<Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>>,
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
+        >,
         T: Send,
     {
         // Begin transaction
         let txn = self.begin().await?;
-        
+
         // Execute user closure
         match f(&txn).await {
             Ok(result) => {
@@ -268,7 +280,11 @@ impl AtomicExt for DatabaseConnection {
 
     async fn savepoint<F, T>(&self, _name: &str, f: F) -> Result<T, DjangoOrmError>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> std::pin::Pin<Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>>,
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
+        >,
         T: Send,
     {
         // For savepoints, we need to be within a transaction already
@@ -320,12 +336,16 @@ macro_rules! tx {
 impl AtomicExt for DatabaseTransaction {
     async fn atomic<F, T>(&self, f: F) -> Result<T, DjangoOrmError>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> std::pin::Pin<Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>>,
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
+        >,
         T: Send,
     {
         // Begin nested transaction
         let txn = self.begin().await?;
-        
+
         // Execute user closure
         match f(&txn).await {
             Ok(result) => {
@@ -341,7 +361,11 @@ impl AtomicExt for DatabaseTransaction {
 
     async fn savepoint<F, T>(&self, _name: &str, f: F) -> Result<T, DjangoOrmError>
     where
-        F: for<'a> FnOnce(&'a DatabaseTransaction) -> std::pin::Pin<Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>>,
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
+        >,
         T: Send,
     {
         // Nested savepoint - use nested transaction
@@ -388,4 +412,3 @@ macro_rules! atomic {
         $db.atomic(|$txn| Box::pin(async move { $body })).await
     };
 }
-

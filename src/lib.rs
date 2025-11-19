@@ -107,7 +107,7 @@
 //!     .prefetch_related(relations![author::Entity])
 //!     .all()
 //!     .await?;
-//! 
+//!
 //! for book in books {
 //!     if let Some(author) = book.author {
 //!         println!("{} by {}", book.title, author.name);
@@ -142,7 +142,7 @@
 //!
 //! // Atomic operations - all succeed or all fail - simple and ergonomic!
 //! use seaorm_django::tx;
-//! 
+//!
 //! let (author, book) = tx!(db, |txn| async move {
 //!     // Create author
 //!     let author = author::Entity::objects(txn).create(author::Model {
@@ -231,13 +231,16 @@ pub mod error;
 pub mod query;
 pub mod registry;
 pub mod relations;
-pub mod transaction;
 pub mod traits;
+pub mod transaction;
+pub mod types;
 pub mod write;
 
-/// Convenience re-exports
+/// Convenience re-exports for common usage
+///
+/// Import everything you need with: `use seaorm_django::prelude::*;`
 pub mod prelude {
-
+    // Core traits and types
     pub use crate::aggregations::AggregateExt;
     pub use crate::error::DjangoOrmError;
     pub use crate::query::{ColumnExt, QueryExt, Q};
@@ -245,15 +248,29 @@ pub mod prelude {
     pub use crate::traits::DjangoConnection;
     pub use crate::transaction::AtomicExt;
     pub use crate::write::DeleteExt;
-    
-    // Re-export transaction macros
+
+    // Type-safe enums
+    pub use crate::types::{OnDelete, OnDelete::*};
+
+    // Transaction macros
     pub use crate::tx;
-    
-    // Re-export the relations! macro
+
+    // Relations macro
     pub use crate::relations;
 
+    // Derive macros
     #[cfg(feature = "derive")]
-    pub use seaorm_django_derive::{DjangoModel, atomic};
+    pub use seaorm_django_derive::{atomic, django_model, DjangoModel};
+
+    // Convenient type aliases for datetime handling
+    pub use chrono::{DateTime, Utc, FixedOffset};
+
+    /// Type alias for datetime with timezone (DateTime<FixedOffset>)
+    /// This matches SeaORM's DateTimeWithTimeZone type
+    pub type DateTimeWithTimeZone = DateTime<FixedOffset>;
+
+    // Re-export SeaORM essentials for convenience
+    pub use sea_orm::{Database, DatabaseConnection};
 }
 
 #[cfg(test)]

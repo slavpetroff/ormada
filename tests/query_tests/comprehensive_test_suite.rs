@@ -2,9 +2,8 @@
 //!
 //! This test suite covers edge cases and ensures idiomatic Rust patterns
 
-use seaorm_django::prelude::*;
 use sea_orm::ColumnTrait;
-
+use seaorm_django::prelude::*;
 
 use crate::common::*;
 
@@ -16,7 +15,7 @@ use crate::common::*;
 async fn test_all_empty_table() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let results = author::Entity::objects(db).all().await.unwrap();
     assert_eq!(results.len(), 0);
 }
@@ -26,13 +25,13 @@ async fn test_filter_no_results() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let results = author::Entity::objects(db)
         .filter(ColumnTrait::eq(&author::Column::Id, 99999))
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(results.len(), 0);
 }
 
@@ -41,13 +40,9 @@ async fn test_limit_zero() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
-    let results = author::Entity::objects(db)
-        .limit(0)
-        .all()
-        .await
-        .unwrap();
-    
+
+    let results = author::Entity::objects(db).limit(0).all().await.unwrap();
+
     assert_eq!(results.len(), 0);
 }
 
@@ -56,7 +51,7 @@ async fn test_offset_beyond_data() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // SQLite requires LIMIT with OFFSET
     let results = author::Entity::objects(db)
         .limit(100)
@@ -64,7 +59,7 @@ async fn test_offset_beyond_data() {
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(results.len(), 0);
 }
 
@@ -76,7 +71,7 @@ async fn test_offset_beyond_data() {
 async fn test_first_empty_table_errors() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let result = author::Entity::objects(db).first().await;
     assert!(result.is_err());
 }
@@ -85,7 +80,7 @@ async fn test_first_empty_table_errors() {
 async fn test_last_empty_table_errors() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let result = author::Entity::objects(db).last().await;
     assert!(result.is_err());
 }
@@ -99,14 +94,14 @@ async fn test_filter_and_exclude() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let results = author::Entity::objects(db)
         .filter(ColumnTrait::gt(&author::Column::Id, 0))
         .exclude(ColumnTrait::eq(&author::Column::Id, authors[0].id))
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(results.len(), authors.len() - 1);
     assert!(!results.iter().any(|a| a.id == authors[0].id));
 }
@@ -116,7 +111,7 @@ async fn test_order_limit_offset_combination() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let results = author::Entity::objects(db)
         .order_by_asc(author::Column::Id)
         .limit(2)
@@ -124,7 +119,7 @@ async fn test_order_limit_offset_combination() {
         .all()
         .await
         .unwrap();
-    
+
     assert!(results.len() <= 2);
 }
 
@@ -136,7 +131,7 @@ async fn test_order_limit_offset_combination() {
 async fn test_count_empty_table() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let count = author::Entity::objects(db).count().await.unwrap();
     assert_eq!(count, 0);
 }
@@ -145,7 +140,7 @@ async fn test_count_empty_table() {
 async fn test_exists_empty_table() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let exists = author::Entity::objects(db).exists().await.unwrap();
     assert!(!exists);
 }
@@ -155,7 +150,7 @@ async fn test_exists_with_data() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let exists = author::Entity::objects(db).exists().await.unwrap();
     assert!(exists);
 }
@@ -168,13 +163,13 @@ async fn test_exists_with_data() {
 async fn test_prefetch_empty_result() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(books.len(), 0);
 }
 
@@ -184,14 +179,14 @@ async fn test_prefetch_with_filter() {
     let authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::AuthorId, authors[0].id))
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     for book in &books {
         if book.author_id == authors[0].id {
             assert!(book.author.is_some());
@@ -205,21 +200,21 @@ async fn test_prefetch_with_ordering() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books_asc = book::Entity::objects(db)
         .order_by_asc(book::Column::Id)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     let books_desc = book::Entity::objects(db)
         .order_by_desc(book::Column::Id)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(books_asc.len(), books_desc.len());
 }
 
@@ -232,13 +227,13 @@ async fn test_delete_all_records() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let count_before = author::Entity::objects(db).count().await.unwrap();
     assert!(count_before > 0);
-    
+
     let deleted = author::Entity::objects(db).delete().await.unwrap();
     assert_eq!(deleted, count_before);
-    
+
     let count_after = author::Entity::objects(db).count().await.unwrap();
     assert_eq!(count_after, 0);
 }
@@ -248,15 +243,15 @@ async fn test_delete_filtered_subset() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let deleted = author::Entity::objects(db)
         .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
         .delete()
         .await
         .unwrap();
-    
+
     assert_eq!(deleted, 1);
-    
+
     let remaining = author::Entity::objects(db).count().await.unwrap();
     assert_eq!(remaining, (authors.len() - 1) as u64);
 }
@@ -271,19 +266,19 @@ async fn test_model_with_relations_has_all_fields() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     for book in &books {
         // Test field access
         let _id = book.id;
         let _title = &book.title;
         let _author_id = book.author_id;
-        
+
         // Test relation access
         if book.author_id > 0 {
             assert!(book.author.is_some());
@@ -297,13 +292,13 @@ async fn test_model_with_relations_clone() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     if let Some(book) = books.first() {
         let cloned = book.clone();
         assert_eq!(cloned.id, book.id);
@@ -320,18 +315,18 @@ async fn test_save_updates_model() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let mut author = authors[0].clone();
     let author_id = author.id;
     author.name = "Updated Name".to_string();
     author.save(db).await.unwrap();
-    
+
     let reloaded = author::Entity::objects(db)
         .filter(ColumnTrait::eq(&author::Column::Id, author_id))
         .first()
         .await
         .unwrap();
-    
+
     assert_eq!(reloaded.name, "Updated Name");
 }
 
@@ -340,21 +335,21 @@ async fn test_save_multiple_times() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let author_id = authors[0].id;
-    
+
     for i in 1..=3 {
         let mut author = authors[0].clone();
         author.name = format!("Update {}", i);
         author.save(db).await.unwrap();
     }
-    
+
     let reloaded = author::Entity::objects(db)
         .filter(ColumnTrait::eq(&author::Column::Id, author_id))
         .first()
         .await
         .unwrap();
-    
+
     assert_eq!(reloaded.name, "Update 3");
 }
 
@@ -366,10 +361,10 @@ async fn test_save_multiple_times() {
 async fn test_model_from_conversion() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    
+
     let author = authors[0].clone();
     let with_relations: author::ModelWithRelations = author.clone().into();
-    
+
     assert_eq!(with_relations.id, author.id);
     assert_eq!(with_relations.name, author.name);
 }

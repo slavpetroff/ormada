@@ -25,8 +25,12 @@ pub type LoaderFn = Arc<
             &'static DatabaseConnection,
         ) -> Pin<
             Box<
-                dyn Future<Output = Result<HashMap<i32, Box<dyn std::any::Any + Send + Sync>>, DjangoOrmError>>
-                    + Send,
+                dyn Future<
+                        Output = Result<
+                            HashMap<i32, Box<dyn std::any::Any + Send + Sync>>,
+                            DjangoOrmError,
+                        >,
+                    > + Send,
             >,
         > + Send
         + Sync,
@@ -65,7 +69,7 @@ pub trait EnsureLoadersRegistered {
 ///
 /// // Single relation
 /// relations![Author]
-/// 
+///
 /// // Multiple relations
 /// relations![Author, Publisher, Category]
 /// ```
@@ -107,10 +111,10 @@ impl<E: sea_orm::EntityTrait> Default for RelationSpec<E> {
 pub trait HasRelation<Related: EntityTrait>: EntityTrait {
     /// The type of the foreign key (usually i32, but can be other types)
     type RelatedPK: std::cmp::Eq + std::hash::Hash + Clone;
-    
+
     /// Extract the foreign key from a model
     fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK;
-    
+
     /// Load related models for a batch of parent models
     /// This must be implemented by the macro since we need access to the specific Column enum
     async fn load_related<C: ConnectionTrait>(
@@ -123,7 +127,7 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait {
 pub trait LoadRelations<Parent: EntityTrait> {
     /// The type of data loaded (tuple of HashMaps)
     type Output;
-    
+
     /// Load all relations
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
@@ -134,7 +138,7 @@ pub trait LoadRelations<Parent: EntityTrait> {
 // Base case: no relations to load
 impl<E: EntityTrait> LoadRelations<E> for () {
     type Output = ();
-    
+
     async fn load_all<C: ConnectionTrait>(
         _models: &[E::Model],
         _db: &C,
@@ -150,7 +154,7 @@ where
     R1: EntityTrait,
 {
     type Output = HashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>;
-    
+
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
@@ -166,8 +170,11 @@ where
     R1: EntityTrait,
     R2: EntityTrait,
 {
-    type Output = (HashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>, HashMap<<Parent as HasRelation<R2>>::RelatedPK, R2::Model>);
-    
+    type Output = (
+        HashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>,
+        HashMap<<Parent as HasRelation<R2>>::RelatedPK, R2::Model>,
+    );
+
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
@@ -213,20 +220,20 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
     /// ```rust,ignore
     /// use seaorm_django::relations;
     /// use entity::{author::Entity as Author, publisher::Entity as Publisher};
-    /// 
+    ///
     /// // Using the relations! macro (recommended)
     /// let books = Book::objects(db)
     ///     .filter(Column::Published.eq(true))
     ///     .prefetch_related(relations![Author, Publisher])
     ///     .all()
     ///     .await?;
-    /// 
+    ///
     /// // Single relation
     /// let books = Book::objects(db)
     ///     .prefetch_related(relations![Author])
     ///     .all()
     ///     .await?;
-    /// 
+    ///
     /// // Access the loaded relations
     /// for book in books {
     ///     println!("Title: {}", book.title);
@@ -243,7 +250,6 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
             _relations: std::marker::PhantomData,
         }
     }
-
 }
 
 // Separate impl block for typed relation methods
@@ -372,9 +378,9 @@ where
         use sea_orm::QuerySelect;
         let count_select = self.select.select_only().column_as(
             sea_orm::sea_query::Expr::col(sea_orm::sea_query::Asterisk).count(),
-            "count"
+            "count",
         );
-        
+
         let result = count_select.into_tuple::<i64>().one(self.db).await?;
         Ok(result.unwrap_or(0) as u64)
     }

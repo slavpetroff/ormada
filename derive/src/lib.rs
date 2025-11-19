@@ -8,6 +8,7 @@ use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 mod atomic;
+mod model;
 mod relations;
 
 /// Check if a field has a specific sea_orm attribute
@@ -211,11 +212,11 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
 
         // ===== DJANGO ENTITY TRAIT =====
         impl ::seaorm_django::traits::DjangoEntity for Entity {
-            fn to_active_model_for_create(model: Model) -> ActiveModel {
-                let now: sea_orm::prelude::DateTimeWithTimeZone = chrono::Utc::now().into();
-                ActiveModel {
+            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
+                let now = ::chrono::Utc::now().fixed_offset();
+                ::core::result::Result::Ok(ActiveModel {
                     #(#create_field_assignments,)*
-                }
+                })
             }
 
             async fn save_model<'a, C: ::sea_orm::ConnectionTrait>(
@@ -240,7 +241,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
                 db: &'a C,
             ) -> Result<Self, seaorm_django::error::DjangoOrmError> {
                 use sea_orm::Set;
-                let now: sea_orm::prelude::DateTimeWithTimeZone = chrono::Utc::now().into();
+                let now = ::chrono::Utc::now().fixed_offset();
 
                 // Create ActiveModel with ALL fields marked as Set (to be updated)
                 let mut active_model = ActiveModel {
@@ -280,4 +281,57 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
     atomic::impl_atomic(args, input)
+}
+
+/// Attribute macro for defining Django-like models with clean syntax
+///
+/// This macro transforms a simple struct definition into a full SeaORM entity
+/// with all the necessary derives and boilerplate.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// #[django_model(table = "books")]
+/// struct Book {
+///     #[primary_key]
+///     id: i32,
+///
+///     #[max_length(200)]
+///     #[index]
+///     title: String,
+///
+///     #[foreign_key(Author, on_delete = Cascade)]
+///     author_id: i32,
+///
+///     #[auto_now_add]
+///     created_at: DateTimeWithTimeZone,
+///
+///     #[auto_now]
+///     updated_at: DateTimeWithTimeZone,
+/// }
+/// ```
+///
+/// # Field Attributes
+///
+/// - `#[primary_key]` - Mark field as primary key
+/// - `#[primary_key(auto_increment = false)]` - Control auto-increment
+/// - `#[foreign_key(Entity)]` - Define foreign key relationship
+/// - `#[foreign_key(Entity, on_delete = Cascade)]` - FK with ON DELETE behavior
+/// - `#[index]` / `#[index(name = "idx_name")]` - Create index
+/// - `#[unique]` / `#[unique(name = "uniq_name")]` - Unique constraint
+/// - `#[max_length(n)]` - String max length validation
+/// - `#[min_length(n)]` - String min length validation
+/// - `#[range(min = n, max = m)]` - Numeric range validation
+/// - `#[auto_now]` - Auto-update timestamp on save
+/// - `#[auto_now_add]` - Auto-set timestamp on creation
+/// - `#[skip_serializing]` - Skip field when serializing
+/// - `#[skip_deserializing]` - Skip field when deserializing
+#[proc_macro_attribute]
+pub fn django_model(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match model::impl_django_model(attr.into(), item.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
 }

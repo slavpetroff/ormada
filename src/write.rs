@@ -83,24 +83,17 @@ pub trait DeleteExt {
     ///     Err(e) => return Err(e),
     /// }
     /// ```
-    async fn delete(
-        self,
-        db: &DatabaseConnection,
-    ) -> Result<(), DjangoOrmError>;
+    async fn delete(self, db: &DatabaseConnection) -> Result<(), DjangoOrmError>;
 }
 
 // Blanket implementation for all model types
 impl<M> DeleteExt for M
 where
     M: ModelTrait + Into<<M::Entity as EntityTrait>::ActiveModel>,
-    <M::Entity as EntityTrait>::ActiveModel: ActiveModelTrait<Entity = M::Entity>
-        + sea_orm::ActiveModelBehavior
-        + Send,
+    <M::Entity as EntityTrait>::ActiveModel:
+        ActiveModelTrait<Entity = M::Entity> + sea_orm::ActiveModelBehavior + Send,
 {
-    async fn delete(
-        self,
-        db: &DatabaseConnection,
-    ) -> Result<(), DjangoOrmError> {
+    async fn delete(self, db: &DatabaseConnection) -> Result<(), DjangoOrmError> {
         let active_model: <M::Entity as EntityTrait>::ActiveModel = self.into();
         active_model.delete(db).await?;
         Ok(())

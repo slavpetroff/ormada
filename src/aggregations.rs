@@ -94,10 +94,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// - `Some(value)` - The sum if records exist
     /// - `None` - If no records match the query
-    async fn aggregate_sum(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
 
     /// Calculate average of numeric column (Django's .aggregate(Avg('field')))
     ///
@@ -113,10 +110,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Average price: ${:.2}", avg_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_avg(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
 
     /// Get maximum value (Django's .aggregate(Max('field')))
     ///
@@ -131,10 +125,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Most expensive: ${}", max_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_max(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
 
     /// Get minimum value (Django's .aggregate(Min('field')))
     ///
@@ -150,10 +141,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Cheapest: ${}", min_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_min(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
 }
 
 // Helper struct for parsing aggregation results
@@ -174,94 +162,105 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         self.count().await
     }
 
-    async fn aggregate_sum(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
-        
+
         // Build SUM query
         let column_expr = Expr::col(column.as_column_ref());
         let sum_expr = Func::sum(column_expr);
-        
-        let query = self.select
-            .select_only()
-            .expr_as(sum_expr, "value");
-        
+
+        let query = self.select.select_only().expr_as(sum_expr, "value");
+
         // SQLite returns INTEGER for integer columns, try both types
-        if let Ok(Some(result)) = query.clone().into_model::<AggregateValueInt>().one(self.db).await {
+        if let Ok(Some(result)) = query
+            .clone()
+            .into_model::<AggregateValueInt>()
+            .one(self.db)
+            .await
+        {
             return Ok(result.value.map(|v| v as f64));
         }
-        
-        match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+
+        match query
+            .into_model::<AggregateValueFloat>()
+            .one(self.db)
+            .await?
+        {
             Some(result) => Ok(result.value),
             None => Ok(None),
         }
     }
 
-    async fn aggregate_avg(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
-        
+
         let column_expr = Expr::col(column.as_column_ref());
         let avg_expr = Func::avg(column_expr);
-        
-        let query = self.select
-            .select_only()
-            .expr_as(avg_expr, "value");
-        
+
+        let query = self.select.select_only().expr_as(avg_expr, "value");
+
         // AVG always returns float
-        match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+        match query
+            .into_model::<AggregateValueFloat>()
+            .one(self.db)
+            .await?
+        {
             Some(result) => Ok(result.value),
             None => Ok(None),
         }
     }
 
-    async fn aggregate_max(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
-        
+
         let column_expr = Expr::col(column.as_column_ref());
         let max_expr = Func::max(column_expr);
-        
-        let query = self.select
-            .select_only()
-            .expr_as(max_expr, "value");
-        
+
+        let query = self.select.select_only().expr_as(max_expr, "value");
+
         // Try int first for SQLite
-        if let Ok(Some(result)) = query.clone().into_model::<AggregateValueInt>().one(self.db).await {
+        if let Ok(Some(result)) = query
+            .clone()
+            .into_model::<AggregateValueInt>()
+            .one(self.db)
+            .await
+        {
             return Ok(result.value.map(|v| v as f64));
         }
-        
-        match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+
+        match query
+            .into_model::<AggregateValueFloat>()
+            .one(self.db)
+            .await?
+        {
             Some(result) => Ok(result.value),
             None => Ok(None),
         }
     }
 
-    async fn aggregate_min(
-        self,
-        column: impl ColumnTrait,
-    ) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
-        
+
         let column_expr = Expr::col(column.as_column_ref());
         let min_expr = Func::min(column_expr);
-        
-        let query = self.select
-            .select_only()
-            .expr_as(min_expr, "value");
-        
+
+        let query = self.select.select_only().expr_as(min_expr, "value");
+
         // Try int first for SQLite
-        if let Ok(Some(result)) = query.clone().into_model::<AggregateValueInt>().one(self.db).await {
+        if let Ok(Some(result)) = query
+            .clone()
+            .into_model::<AggregateValueInt>()
+            .one(self.db)
+            .await
+        {
             return Ok(result.value.map(|v| v as f64));
         }
-        
-        match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+
+        match query
+            .into_model::<AggregateValueFloat>()
+            .one(self.db)
+            .await?
+        {
             Some(result) => Ok(result.value),
             None => Ok(None),
         }

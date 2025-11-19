@@ -99,13 +99,28 @@ pub enum DjangoOrmError {
     /// Err(DjangoOrmError::Database(DbErr::Exec(...)))
     /// ```
     Database(sea_orm::DbErr),
-    
+
     /// Custom error message
     ///
     /// Used for application-level errors like "Record not found",
-    /// "Invalid state", validation errors, etc.
+    /// "Invalid state", etc.
     ///
     Custom(String),
+    
+    /// Field validation error
+    ///
+    /// Raised when model field validation fails (max_length, range, etc.)
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // String too long
+    /// Err(DjangoOrmError::ValidationError("Field 'username' exceeds max_length of 50"))
+    ///
+    /// // Number out of range
+    /// Err(DjangoOrmError::ValidationError("Field 'age' value 15 is less than minimum 18"))
+    /// ```
+    ValidationError(String),
 }
 
 impl fmt::Display for DjangoOrmError {
@@ -113,6 +128,7 @@ impl fmt::Display for DjangoOrmError {
         match self {
             Self::Database(e) => write!(f, "Database error: {}", e),
             Self::Custom(msg) => write!(f, "{}", msg),
+            Self::ValidationError(msg) => write!(f, "Validation error: {}", msg),
         }
     }
 }
@@ -170,7 +186,7 @@ mod tests {
     fn test_database_error_conversion() {
         let db_err = DbErr::RecordNotFound("test".to_string());
         let django_err: DjangoOrmError = db_err.into();
-        
+
         match django_err {
             DjangoOrmError::Database(_) => (),
             _ => panic!("Expected Database variant"),

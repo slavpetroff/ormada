@@ -2,9 +2,8 @@
 //!
 //! Tests multiple relations, error paths, and edge cases
 
-use seaorm_django::prelude::*;
 use sea_orm::ColumnTrait;
-
+use seaorm_django::prelude::*;
 
 use crate::common::*;
 
@@ -18,17 +17,17 @@ async fn test_get_with_relations() {
     let authors = create_sample_authors(&db).await;
     let books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // Find a book that has an author
     let book_with_author = books.iter().find(|b| b.author_id == authors[0].id).unwrap();
-    
+
     let book = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::Id, book_with_author.id))
         .prefetch_related(relations![author::Entity])
         .first()
         .await
         .unwrap();
-    
+
     assert_eq!(book.id, book_with_author.id);
     assert!(book.author.is_some());
 }
@@ -39,14 +38,14 @@ async fn test_get_without_relations_none() {
     let _authors = create_sample_authors(&db).await;
     let books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // Get book without prefetch
     let book = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::Id, books[0].id))
         .first()
         .await
         .unwrap();
-    
+
     // Convert to ModelWithRelations (relations should be None)
     let book_with_relations: book::ModelWithRelations = book.into();
     assert!(book_with_relations.author.is_none());
@@ -63,24 +62,27 @@ async fn test_get_without_relations_none() {
 async fn test_prefetch_with_all_invalid_fks() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // Create books with invalid author IDs
     for i in 1..=3 {
-        book::Entity::objects(db).create(book::Model {
-            title: format!("Orphan Book {}", i),
-            author_id: 99900 + i, // Invalid FK
-            published: true,
-            price: 1000,
-            ..Default::default()
-        }).await.unwrap();
+        book::Entity::objects(db)
+            .create(book::Model {
+                title: format!("Orphan Book {}", i),
+                author_id: 99900 + i, // Invalid FK
+                published: true,
+                price: 1000,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
     }
-    
+
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     // All books should have None for author
     assert!(books.len() >= 3);
     for book in &books {
@@ -96,33 +98,39 @@ async fn test_prefetch_partial_invalid_fks() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // Create one valid and one invalid
-    book::Entity::objects(db).create(book::Model {
-        title: "Valid Book".to_string(),
-        author_id: authors[0].id,
-        published: true,
-        price: 1000,
-        ..Default::default()
-    }).await.unwrap();
-    
-    book::Entity::objects(db).create(book::Model {
-        title: "Invalid Book".to_string(),
-        author_id: 99999,
-        published: true,
-        price: 1000,
-        ..Default::default()
-    }).await.unwrap();
-    
+    book::Entity::objects(db)
+        .create(book::Model {
+            title: "Valid Book".to_string(),
+            author_id: authors[0].id,
+            published: true,
+            price: 1000,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    book::Entity::objects(db)
+        .create(book::Model {
+            title: "Invalid Book".to_string(),
+            author_id: 99999,
+            published: true,
+            price: 1000,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     let valid_book = books.iter().find(|b| b.title == "Valid Book").unwrap();
     let invalid_book = books.iter().find(|b| b.title == "Invalid Book").unwrap();
-    
+
     assert!(valid_book.author.is_some());
     assert!(invalid_book.author.is_none());
 }
@@ -137,13 +145,13 @@ async fn test_first_with_relations_found() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let book = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .first()
         .await
         .unwrap();
-    
+
     assert!(book.id > 0);
 }
 
@@ -153,13 +161,13 @@ async fn test_last_with_relations_found() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let book = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .last()
         .await
         .unwrap();
-    
+
     assert!(book.id > 0);
 }
 
@@ -167,12 +175,12 @@ async fn test_last_with_relations_found() {
 async fn test_first_with_relations_not_found() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let result = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .first()
         .await;
-    
+
     assert!(result.is_err());
 }
 
@@ -180,12 +188,12 @@ async fn test_first_with_relations_not_found() {
 async fn test_last_with_relations_not_found() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let result = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .last()
         .await;
-    
+
     assert!(result.is_err());
 }
 
@@ -199,13 +207,13 @@ async fn test_count_ignores_prefetch() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let count = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .count()
         .await
         .unwrap();
-    
+
     assert!(count > 0);
 }
 
@@ -215,13 +223,13 @@ async fn test_exists_ignores_prefetch() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let exists = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .exists()
         .await
         .unwrap();
-    
+
     assert!(exists);
 }
 
@@ -235,14 +243,14 @@ async fn test_relation_field_access_consistency() {
     let authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::AuthorId, authors[0].id))
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     for book in &books {
         if let Some(ref author) = book.author {
             // Access all author fields to ensure they're populated
@@ -261,27 +269,30 @@ async fn test_prefetch_deduplicates_related_models() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // Create multiple books with same author
     for i in 1..=5 {
-        book::Entity::objects(db).create(book::Model {
-            title: format!("Same Author Book {}", i),
-            author_id: authors[0].id,
-            published: true,
-            price: 1000,
-            ..Default::default()
-        }).await.unwrap();
+        book::Entity::objects(db)
+            .create(book::Model {
+                title: format!("Same Author Book {}", i),
+                author_id: authors[0].id,
+                published: true,
+                price: 1000,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
     }
-    
+
     let books = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::AuthorId, authors[0].id))
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     assert!(books.len() >= 5);
-    
+
     // All should have the same author
     for book in &books {
         assert!(book.author.is_some());
@@ -300,7 +311,7 @@ async fn test_prefetch_with_complex_parent_filter() {
     let authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::AuthorId, authors[0].id))
         .exclude(ColumnTrait::eq(&book::Column::Id, 99999))
@@ -310,7 +321,7 @@ async fn test_prefetch_with_complex_parent_filter() {
         .all()
         .await
         .unwrap();
-    
+
     for book in &books {
         assert_eq!(book.author_id, authors[0].id);
         if book.author_id > 0 {
@@ -325,21 +336,21 @@ async fn test_prefetch_preserves_parent_order() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books_asc = book::Entity::objects(db)
         .order_by_asc(book::Column::Id)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     let books_desc = book::Entity::objects(db)
         .order_by_desc(book::Column::Id)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     if books_asc.len() > 1 {
         assert_eq!(books_asc.first().unwrap().id, books_desc.last().unwrap().id);
         assert_eq!(books_asc.last().unwrap().id, books_desc.first().unwrap().id);
@@ -356,14 +367,14 @@ async fn test_prefetch_batch_loading_efficiency() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     // Load all books with authors in one go
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     // Verify batch loading worked by checking all relations are populated
     let mut authors_loaded = 0;
     for book in &books {
@@ -371,7 +382,7 @@ async fn test_prefetch_batch_loading_efficiency() {
             authors_loaded += 1;
         }
     }
-    
+
     // Should have loaded authors for books with valid FKs
     assert!(authors_loaded > 0);
 }
@@ -385,22 +396,25 @@ async fn test_prefetch_batch_loading_efficiency() {
 async fn test_prefetch_with_zero_foreign_key() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
-    book::Entity::objects(db).create(book::Model {
-        title: "No Author Book".to_string(),
-        author_id: 0, // Zero FK
-        published: true,
-        price: 1000,
-        ..Default::default()
-    }).await.unwrap();
-    
+
+    book::Entity::objects(db)
+        .create(book::Model {
+            title: "No Author Book".to_string(),
+            author_id: 0, // Zero FK
+            published: true,
+            price: 1000,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
     let books = book::Entity::objects(db)
         .filter(ColumnTrait::eq(&book::Column::AuthorId, 0))
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     for book in &books {
         assert_eq!(book.author_id, 0);
         assert!(book.author.is_none());
@@ -417,28 +431,28 @@ async fn test_cloned_model_preserves_relations() {
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
-    
+
     let books = book::Entity::objects(db)
         .prefetch_related(relations![author::Entity])
         .all()
         .await
         .unwrap();
-    
+
     if let Some(book) = books.first() {
         let cloned = book.clone();
-        
+
         // Verify all fields match
         assert_eq!(cloned.id, book.id);
         assert_eq!(cloned.title, book.title);
         assert_eq!(cloned.author_id, book.author_id);
-        
+
         // Verify relation state matches
         match (&book.author, &cloned.author) {
             (Some(a1), Some(a2)) => {
                 assert_eq!(a1.id, a2.id);
                 assert_eq!(a1.name, a2.name);
-            },
-            (None, None) => {},
+            }
+            (None, None) => {}
             _ => panic!("Cloned relation state doesn't match original"),
         }
     }
