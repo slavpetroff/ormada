@@ -628,11 +628,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// Applies the same updates to all matching records using a closure.
     /// Returns the number of records updated.
     ///
-    /// **Performance Note:** Uses fetch-and-update pattern wrapped in a transaction
-    /// to ensure atomicity. All updates succeed or all fail together.
+    /// **Concurrency Safe:** Uses SELECT FOR UPDATE to lock rows before modification,
+    /// preventing lost updates in concurrent scenarios. All updates succeed or all fail
+    /// together within a transaction.
     ///
     /// **Batching:** Automatically chunks operations for large datasets. Default batch
-    /// size is 1000 records. Adjust with `update_batched()` for different sizes.
+    /// size is 1000 records. TODO: Support for different sizes.
     ///
     /// # Example
     ///
@@ -647,41 +648,28 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// println!("Updated {} books", count);
     /// ```
-    ///
-    /// # Concurrency Warning ⚠️
-    ///
-    /// This method uses a fetch-modify-write pattern which can lose concurrent updates.
-    /// If two transactions read the same row, modify it, and write back, the last write wins
-    /// and earlier modifications are lost.
-    ///
-    /// **For high-concurrency scenarios, consider:**
-    /// - Using database-level UPDATE with expressions (e.g., `SET value = value + 1`)
-    /// - Implementing optimistic locking with version fields
-    /// - Using serializable transaction isolation level
-    /// - Using SELECT FOR UPDATE to lock rows before updating
     pub async fn update<F>(self, updater: F) -> Result<u64, DjangoOrmError>
     where
         F: Fn(&mut E::Model) + Send + Sync,
-        E::Model: sea_orm::IntoActiveModel<E::ActiveModel>,
-        E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + sea_orm::ActiveModelBehavior + Send,
+        E: crate::traits::DjangoEntity,
         C: sea_orm::TransactionTrait,
     {
-        use sea_orm::{ActiveModelTrait, IntoActiveModel, TransactionSession};
+        use sea_orm::{QuerySelect, TransactionSession};
+        use sea_orm::sea_query::LockType;
 
         // Wrap in transaction for atomicity
         let txn = self.db.begin().await?;
 
-        // Fetch all matching records
-        let models = self.select.all(&txn).await?;
+        // Use SELECT FOR UPDATE to lock rows and prevent concurrent modifications
+        let models = self.select.lock(LockType::Update).all(&txn).await?;
         let mut count = 0u64;
 
         for mut model in models {
             // Apply the update
             updater(&mut model);
 
-            // Convert to ActiveModel and save
-            let active_model = model.into_active_model();
-            active_model.update(&txn).await?;
+            // Use save_model to properly mark all fields as Set
+            E::save_model(&txn, model).await?;
             count += 1;
         }
 
@@ -960,24 +948,54 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Safety
     ///
     /// - Always use with a filter to avoid accidentally deleting all records
-    /// - Batched for memory safety with large datasets
+    /// - Uses bulk DELETE with primary key IN clause for performance
     /// - Check foreign key constraints (may fail if records are referenced)
     pub async fn delete(self) -> Result<u64, DjangoOrmError>
     where
-        E::Model: Into<E::ActiveModel>,
-        E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + sea_orm::ActiveModelBehavior + Send,
+        E::Model: sea_orm::ModelTrait,
     {
-        use sea_orm::ActiveModelTrait;
+        use sea_orm::{ColumnTrait, Condition, Iterable, ModelTrait, PrimaryKeyToColumn, QueryFilter};
 
-        // Apply the same filters from select to delete
-        // Note: This fetches all models first then deletes individually
-        // TODO: Optimize to use a single DELETE with WHERE clause if possible
+        // First, fetch just the primary keys of records to delete
         let models = self.select.all(self.db).await?;
-        let count = models.len() as u64;
         
-        for model in models {
-            let active: E::ActiveModel = model.into();
-            active.delete(self.db).await?;
+        if models.is_empty() {
+            return Ok(0);
+        }
+
+        let count = models.len() as u64;
+
+        // Extract primary key values for bulk delete
+        // For entities with single-column primary keys, use IN clause
+        let pk_columns: Vec<_> = E::PrimaryKey::iter().collect();
+        
+        if pk_columns.len() == 1 {
+            // Single primary key - use optimized IN clause
+            let pk_col = pk_columns[0].into_column();
+            let pk_values: Vec<_> = models.iter().map(|m| m.get(pk_col)).collect();
+            
+            // Bulk delete with WHERE pk IN (...)
+            E::delete_many()
+                .filter(ColumnTrait::is_in(&pk_col, pk_values))
+                .exec(self.db)
+                .await?;
+        } else {
+            // Composite primary key - build OR conditions
+            let mut condition = Condition::any();
+            for model in models {
+                let mut row_condition = Condition::all();
+                for pk_col in &pk_columns {
+                    let col = pk_col.into_column();
+                    let val = model.get(col);
+                    row_condition = row_condition.add(ColumnTrait::eq(&col, val));
+                }
+                condition = condition.add(row_condition);
+            }
+            
+            E::delete_many()
+                .filter(condition)
+                .exec(self.db)
+                .await?;
         }
 
         Ok(count)
