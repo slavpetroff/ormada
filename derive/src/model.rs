@@ -370,21 +370,21 @@ pub fn impl_django_model(
     let model_convenience_impl = generate_model_convenience_methods(&input)?;
 
     // Generate code with nested module to avoid conflicts
-    // Creates: author::author::Entity, but re-exports as author::Entity
+    // This creates the internal SeaORM types and exposes Model as the main interface
     let expanded = quote! {
-        pub mod #module_name {
-            // Import only what we need explicitly - no super::* to avoid conflicts
+        // Internal module for SeaORM compatibility - users don't touch this
+        mod _internal {
             use ::serde::{Serialize, Deserialize};
             use ::sea_orm::entity::prelude::{
                 DeriveEntityModel, EnumIter, Related, RelationDef, RelationTrait,
                 ActiveModelBehavior, EntityTrait, PrimaryKeyTrait, ColumnTrait,
                 DeriveColumn, DerivePrimaryKey, DeriveRelation,
             };
-            use ::sea_orm::PrimaryKeyToColumn; // For HasRelation implementation
-            use ::seaorm_django::prelude::DateTimeWithTimeZone; // For datetime fields
-            use ::seaorm_django::types::OnDelete; // For foreign key cascades
+            use ::sea_orm::PrimaryKeyToColumn;
+            use ::seaorm_django::prelude::DateTimeWithTimeZone;
+            use ::seaorm_django::types::OnDelete;
             
-            // The Model struct with DeriveEntityModel
+            // The Model struct with DeriveEntityModel (this generates Entity internally)
             #input
             
             // Relation enum
@@ -398,21 +398,35 @@ pub fn impl_django_model(
             
             // HasRelation implementations for foreign keys
             #has_relation_impls
-            
-            // Model.save() method
-            #model_save_impl
-            
-            // Convenience methods on Model
-            #model_convenience_impl
         }
         
-        // Re-export all items at parent level for cleaner imports
-        // Enables: author::Entity instead of author::author::Entity
-        pub use #module_name::{Entity, Model, ActiveModel, Column, PrimaryKey, Relation};
+        // Export Model as the primary type - this is what users work with!
+        pub use _internal::Model;
         
-        // Main export: Book = Entity (for .objects() calls), with Column constants attached
-        // The actual data type is still Model, but Entity is what you query with
-        pub type #original_name = Entity;
+        // Also export other types for advanced use (including Entity for trait implementations)
+        pub use _internal::{Entity, ActiveModel, Column, PrimaryKey, Relation};
+        
+        // Alias for convenience in generated code
+        use _internal::Entity as _Entity;
+        
+        // Model instance methods (save, delete, etc.)
+        #model_save_impl
+        
+        // Model static methods and column constants
+        #model_convenience_impl
+        
+        // Forward DjangoEntity methods to Entity
+        impl Model {
+            /// Validate and convert Model to ActiveModel for creation
+            /// 
+            /// This is a convenience method that forwards to the Entity implementation.
+            pub fn to_active_model_for_create(model: Self) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
+                <Entity as ::seaorm_django::traits::DjangoEntity>::to_active_model_for_create(model)
+            }
+        }
+        
+        // Main export: Book = Model (the actual data struct!)
+        pub type #original_name = Model;
     };
 
     Ok(expanded)
@@ -885,9 +899,26 @@ fn generate_model_convenience_methods(
         .collect();
 
     Ok(quote! {
-        impl Entity {
+        impl Model {
             // Column constants for convenient access: Book::Title instead of book::Column::Title
             #(#column_constants)*
+            
+            /// Get a QuerySet for this model (Django's Model.objects equivalent)
+            /// 
+            /// # Example
+            /// ```
+            /// use crate::models::Book;
+            /// 
+            /// let books: Vec<Book> = Book::objects(db)
+            ///     .filter(Book::Title.contains("Django"))
+            ///     .all().await?;
+            /// ```
+            pub fn objects<C: ::sea_orm::ConnectionTrait>(
+                db: &C,
+            ) -> ::seaorm_django::query::QuerySet<'_, _Entity, C> {
+                use ::seaorm_django::query::QueryExt;
+                _Entity::objects(db)
+            }
         }
     })
 }

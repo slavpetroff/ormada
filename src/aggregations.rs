@@ -273,3 +273,78 @@ pub struct AggregateResult {
     /// Minimum values by column name
     pub mins: HashMap<String, f64>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_aggregate_value_int_some() {
+        let result = AggregateValueInt { value: Some(42) };
+        assert_eq!(result.value, Some(42));
+    }
+    
+    #[test]
+    fn test_aggregate_value_int_none() {
+        let result = AggregateValueInt { value: None };
+        assert_eq!(result.value, None);
+    }
+    
+    #[test]
+    fn test_aggregate_value_float_some() {
+        let result = AggregateValueFloat { value: Some(42.5) };
+        assert_eq!(result.value, Some(42.5));
+    }
+    
+    #[test]
+    fn test_aggregate_value_float_none() {
+        let result = AggregateValueFloat { value: None };
+        assert_eq!(result.value, None);
+    }
+    
+    #[test]
+    fn test_aggregate_result_construction() {
+        let mut sums = HashMap::new();
+        sums.insert("price".to_string(), 100.0);
+        
+        let mut averages = HashMap::new();
+        averages.insert("price".to_string(), 50.0);
+        
+        let mut maxes = HashMap::new();
+        maxes.insert("price".to_string(), 75.0);
+        
+        let mut mins = HashMap::new();
+        mins.insert("price".to_string(), 25.0);
+        
+        let result = AggregateResult {
+            count: 10,
+            sums,
+            averages,
+            maxes,
+            mins,
+        };
+        
+        assert_eq!(result.count, 10);
+        assert_eq!(result.sums.get("price"), Some(&100.0));
+        assert_eq!(result.averages.get("price"), Some(&50.0));
+        assert_eq!(result.maxes.get("price"), Some(&75.0));
+        assert_eq!(result.mins.get("price"), Some(&25.0));
+    }
+    
+    #[test]
+    fn test_aggregate_result_empty_maps() {
+        let result = AggregateResult {
+            count: 0,
+            sums: HashMap::new(),
+            averages: HashMap::new(),
+            maxes: HashMap::new(),
+            mins: HashMap::new(),
+        };
+        
+        assert_eq!(result.count, 0);
+        assert!(result.sums.is_empty());
+        assert!(result.averages.is_empty());
+        assert!(result.maxes.is_empty());
+        assert!(result.mins.is_empty());
+    }
+}

@@ -46,9 +46,16 @@ fn test_model_struct_generated() {
 
 #[test]
 fn test_entity_alias_works() {
-    // The SimpleAuthor type should be an alias for Entity
+    // The SimpleAuthor type is now an alias for Model (not Entity)
     // This compiles = test passes
-    let _entity_type: simple_author_mod::SimpleAuthor = simple_author_mod::Entity;
+    let _model_type: simple_author_mod::SimpleAuthor = simple_author_mod::Model {
+        id: 0,
+        name: "Test".to_string(),
+        email: "test@example.com".to_string(),
+    };
+    
+    // Verify the type
+    let _: simple_author_mod::Model = _model_type;
 }
 
 #[test]

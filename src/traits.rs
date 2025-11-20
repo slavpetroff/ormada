@@ -57,3 +57,27 @@ pub trait WithRelationsTrait {
     where
         Self: Sized;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::DatabaseConnection;
+    
+    #[test]
+    fn test_django_connection_trait_exists() {
+        // This is a compile-time test - if it compiles, the trait works
+        fn assert_django_connection<T: DjangoConnection>() {}
+        
+        // Test that DatabaseConnection implements DjangoConnection
+        assert_django_connection::<DatabaseConnection>();
+    }
+    
+    #[test]
+    fn test_trait_bound_convenience() {
+        // Verify that DjangoConnection can be used as a single bound
+        fn generic_with_django_connection<C: DjangoConnection>() {}
+        
+        // This should compile with DjangoConnection instead of multiple bounds
+        generic_with_django_connection::<DatabaseConnection>();
+    }
+}

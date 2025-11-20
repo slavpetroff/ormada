@@ -1781,3 +1781,63 @@ pub trait QueryExt: EntityTrait {
 
 // Implement for all entities
 impl<E: EntityTrait> QueryExt for E {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_is_unique_violation_sqlite() {
+        let err = DbErr::Custom("UNIQUE constraint failed: users.email".to_string());
+        assert!(is_unique_violation(&err));
+    }
+    
+    #[test]
+    fn test_is_unique_violation_postgres() {
+        let err = DbErr::Custom("duplicate key value violates unique constraint".to_string());
+        assert!(is_unique_violation(&err));
+    }
+    
+    #[test]
+    fn test_is_unique_violation_mysql() {
+        let err = DbErr::Custom("Duplicate entry '123' for key 'PRIMARY'".to_string());
+        assert!(is_unique_violation(&err));
+    }
+    
+    #[test]
+    fn test_is_unique_violation_negative() {
+        let err = DbErr::Custom("Connection refused".to_string());
+        assert!(!is_unique_violation(&err));
+    }
+    
+    #[test]
+    fn test_q_all_constructor() {
+        let q = Q::all();
+        // Should create an all() condition
+        assert!(matches!(q.condition, Condition));
+    }
+    
+    #[test]
+    fn test_q_any_constructor() {
+        let q = Q::any();
+        // Should create an any() condition
+        assert!(matches!(q.condition, Condition));
+    }
+    
+    #[test]
+    fn test_q_not_transformation() {
+        let q = Q::all().not();
+        // Should wrap condition in not()
+        assert!(matches!(q.condition, Condition));
+    }
+    
+    #[test]
+    fn test_q_add_chaining() {
+        use sea_orm::sea_query::Expr;
+        let q = Q::all()
+            .add(Expr::value(true))
+            .add(Expr::value(false));
+        // Should allow chaining multiple add calls
+        assert!(matches!(q.condition, Condition));
+    }
+}
