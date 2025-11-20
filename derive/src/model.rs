@@ -367,6 +367,7 @@ pub fn impl_django_model(
     let django_entity_impl = generate_django_entity_impl(&field_configs)?;
     let has_relation_impls = generate_has_relation_impls(&foreign_keys);
     let model_save_impl = generate_model_save_impl(&field_configs)?;
+    let model_convenience_impl = generate_model_convenience_methods(&input)?;
 
     // Generate code with nested module to avoid conflicts
     // Creates: author::author::Entity, but re-exports as author::Entity
@@ -400,13 +401,17 @@ pub fn impl_django_model(
             
             // Model.save() method
             #model_save_impl
+            
+            // Convenience methods on Model
+            #model_convenience_impl
         }
         
         // Re-export all items at parent level for cleaner imports
         // Enables: author::Entity instead of author::author::Entity
         pub use #module_name::{Entity, Model, ActiveModel, Column, PrimaryKey, Relation};
         
-        // Convenient type alias: author::Author
+        // Main export: Book = Entity (for .objects() calls), with Column constants attached
+        // The actual data type is still Model, but Entity is what you query with
         pub type #original_name = Entity;
     };
 
@@ -840,6 +845,49 @@ fn generate_model_save_impl(
                 use ::sea_orm::ActiveModelTrait;
                 ::core::result::Result::Ok(active_model.update(db).await?)
             }
+        }
+    })
+}
+
+/// Generate convenience methods and constants on Model for better UX
+fn generate_model_convenience_methods(
+    input: &DeriveInput,
+) -> syn::Result<TokenStream> {
+    // Extract field names to generate column constants
+    let fields = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => &fields.named,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    input,
+                    "Only structs with named fields are supported",
+                ))
+            }
+        },
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "Only structs are supported",
+            ))
+        }
+    };
+
+    // Generate column constants: Book::Title = Column::Title
+    let column_constants: Vec<_> = fields
+        .iter()
+        .map(|field| {
+            let field_name = field.ident.as_ref().unwrap();
+            let constant_name = format_ident!("{}", to_pascal_case(&field_name.to_string()));
+            quote! {
+                pub const #constant_name: Column = Column::#constant_name;
+            }
+        })
+        .collect();
+
+    Ok(quote! {
+        impl Entity {
+            // Column constants for convenient access: Book::Title instead of book::Column::Title
+            #(#column_constants)*
         }
     })
 }
