@@ -164,6 +164,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
 
     async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
+        use sea_orm::DbErr;
 
         // Build SUM query
         let column_expr = Expr::col(column.as_column_ref());
@@ -175,7 +176,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         match query.into_model::<AggregateValueInt>().one(self.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
-            Err(_) => {
+            // Only catch type conversion errors - propagate real DB errors
+            Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 // If int parsing failed, rebuild query for float
                 let sum_expr = Func::sum(column_expr);
                 let query = self.select.select_only().expr_as(sum_expr, "value");
@@ -185,6 +187,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
                     None => Ok(None),
                 }
             }
+            // Propagate connection errors, constraint violations, etc.
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -209,6 +213,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
 
     async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
+        use sea_orm::DbErr;
 
         let column_expr = Expr::col(column.as_column_ref());
         let max_expr = Func::max(column_expr.clone());
@@ -219,7 +224,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         match query.into_model::<AggregateValueInt>().one(self.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
-            Err(_) => {
+            // Only catch type conversion errors
+            Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 // Rebuild query for float type only if int failed
                 let max_expr = Func::max(column_expr);
                 let query = self.select.select_only().expr_as(max_expr, "value");
@@ -229,11 +235,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
                     None => Ok(None),
                 }
             }
+            // Propagate connection errors, constraint violations, etc.
+            Err(e) => Err(e.into()),
         }
     }
 
     async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
         use sea_orm::sea_query::{Expr, Func};
+        use sea_orm::DbErr;
 
         let column_expr = Expr::col(column.as_column_ref());
         let min_expr = Func::min(column_expr.clone());
@@ -244,7 +253,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         match query.into_model::<AggregateValueInt>().one(self.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
-            Err(_) => {
+            // Only catch type conversion errors
+            Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 // Rebuild query for float type only if int failed
                 let min_expr = Func::min(column_expr);
                 let query = self.select.select_only().expr_as(min_expr, "value");
@@ -254,6 +264,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
                     None => Ok(None),
                 }
             }
+            // Propagate connection errors, constraint violations, etc.
+            Err(e) => Err(e.into()),
         }
     }
 }
