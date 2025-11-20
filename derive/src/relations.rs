@@ -206,14 +206,14 @@ pub fn generate_trait_impl(relations: &[RelationInfo], fields: &[&syn::Field]) -
         quote! { () }
     } else if relations.len() == 1 {
         let related_entity = &relations[0].related_entity;
-        quote! { ::std::collections::HashMap<i32, <#related_entity as ::sea_orm::EntityTrait>::Model> }
+        quote! { ::rustc_hash::FxHashMap<i32, <#related_entity as ::sea_orm::EntityTrait>::Model> }
     } else {
         let hashmap_types: Vec<_> = relations
             .iter()
             .map(|rel| {
                 let related_entity = &rel.related_entity;
                 quote! {
-                    ::std::collections::HashMap<i32, <#related_entity as ::sea_orm::EntityTrait>::Model>
+                    ::rustc_hash::FxHashMap<i32, <#related_entity as ::sea_orm::EntityTrait>::Model>
                 }
             })
             .collect();
@@ -298,7 +298,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                         models: &[Self::Model],
                         db: &C,
                     ) -> ::core::result::Result<
-                        ::std::collections::HashMap<Self::RelatedPK, <#related_entity as ::sea_orm::EntityTrait>::Model>,
+                        ::rustc_hash::FxHashMap<Self::RelatedPK, <#related_entity as ::sea_orm::EntityTrait>::Model>,
                         ::seaorm_django::error::DjangoOrmError
                     > {
                         use ::sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PrimaryKeyToColumn, ModelTrait, Iterable};
@@ -309,7 +309,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                             .collect();
 
                         if fk_values.is_empty() {
-                            return ::core::result::Result::Ok(::std::collections::HashMap::new());
+                            return ::core::result::Result::Ok(::rustc_hash::FxHashMap::default());
                         }
 
                         // Get primary key column for filtering
@@ -341,76 +341,4 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
     }
 }
 
-/// Generate loader registration code
-pub fn generate_loader_registrations(relations: &[RelationInfo]) -> TokenStream {
-    if relations.is_empty() {
-        return quote! {};
-    }
-
-    let registrations: Vec<_> = relations
-        .iter()
-        .map(|rel| {
-            let fk_field = &rel.foreign_key_field;
-            let related_entity = &rel.related_entity;
-
-            quote! {
-                ::seaorm_django::registry::register_loader(
-                    ::std::any::TypeId::of::<Entity>(),
-                    ::std::any::TypeId::of::<#related_entity>(),
-                    ::std::sync::Arc::new(|models_any, db| {
-                        // Extract FK values BEFORE the async block to avoid lifetime issues
-                        let fk_values: ::std::vec::Vec<i32> = models_any
-                            .iter()
-                            .filter_map(|m| m.downcast_ref::<Model>())
-                            .map(|m| m.#fk_field)
-                            .collect();
-
-                        ::std::boxed::Box::pin(async move {
-                            use ::sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PrimaryKeyToColumn, ModelTrait, Iterable};
-
-                            if fk_values.is_empty() {
-                                return ::core::result::Result::Ok(::std::collections::HashMap::new());
-                            }
-
-                            // Get primary key column for filtering
-                            let pk_cols: ::std::vec::Vec<_> = <#related_entity as ::sea_orm::EntityTrait>::PrimaryKey::iter()
-                                .map(|pk| pk.into_column())
-                                .collect();
-                            let id_column = pk_cols[0];
-
-                            let related_models = <#related_entity as ::sea_orm::EntityTrait>::find()
-                                .filter(id_column.is_in(fk_values))
-                                .all(db)
-                                .await?;
-
-                            // Build HashMap using primary key values (assuming id field) - box models as Any
-                            ::core::result::Result::Ok(
-                                related_models
-                                    .into_iter()
-                                    .map(|m| {
-                                        let pk_val = m.id;
-                                        (pk_val, ::std::boxed::Box::new(m) as ::std::boxed::Box<dyn ::std::any::Any + Send + Sync>)
-                                    })
-                                    .collect()
-                            )
-                        })
-                    }),
-                );
-            }
-        })
-        .collect();
-
-    quote! {
-        // Implement EnsureLoadersRegistered trait for this entity
-        impl ::seaorm_django::relations::EnsureLoadersRegistered for Entity {
-            fn ensure_loaders_registered() {
-                use ::std::sync::Once;
-                static REGISTER_ONCE: Once = Once::new();
-
-                REGISTER_ONCE.call_once(|| {
-                    #(#registrations)*
-                });
-            }
-        }
-    }
-}
+// Loader registration removed - compile-time typed relations don't need runtime registration

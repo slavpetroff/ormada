@@ -3,8 +3,6 @@
 use crate::error::DjangoOrmError;
 use crate::transaction::AtomicExt;
 use sea_orm::{ConnectionTrait, EntityTrait};
-use std::any::TypeId;
-use std::collections::HashMap;
 
 /// Trait alias for connections that support Django-style operations
 ///
@@ -58,29 +56,4 @@ pub trait WithRelationsTrait {
     ) -> Self::ModelWithRelations
     where
         Self: Sized;
-}
-
-/// Map of loaded relations: FK -> Related Model (erased)
-pub type LoadedRelationMap = HashMap<i32, Box<dyn std::any::Any + Send + Sync>>;
-
-/// Future returning the loaded relation map
-pub type LoadBatchFuture<'a> = std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<LoadedRelationMap, sea_orm::DbErr>> + Send + 'a>,
->;
-
-/// Trait for relation descriptors
-///
-/// Each entity-relation pair gets a descriptor that knows how to load the relation.
-pub trait RelationLoader<E>: Send + Sync {
-    /// The related entity type's TypeId
-    fn relation_type_id(&self) -> TypeId;
-
-    /// Load relations for a batch of models
-    ///
-    /// Returns a HashMap mapping foreign key values to related models.
-    fn load_batch<'a>(
-        &self,
-        models: &[E],
-        db: &'a sea_orm::DatabaseConnection,
-    ) -> LoadBatchFuture<'a>;
 }

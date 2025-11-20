@@ -12,35 +12,8 @@
 //! Relation definitions and generates the extended struct at compile time.
 
 use crate::error::DjangoOrmError;
-use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Select};
-use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-
-/// A function that loads related models for a batch of parent models
-pub type LoaderFn = Arc<
-    dyn Fn(
-            &[&dyn std::any::Any],
-            &'static DatabaseConnection,
-        ) -> Pin<
-            Box<
-                dyn Future<
-                        Output = Result<
-                            HashMap<i32, Box<dyn std::any::Any + Send + Sync>>,
-                            DjangoOrmError,
-                        >,
-                    > + Send,
-            >,
-        > + Send
-        + Sync,
->;
-
-/// Trait for entities that can register their relation loaders
-pub trait EnsureLoadersRegistered {
-    /// Ensure relation loaders are registered (called lazily, idempotent)
-    fn ensure_loaders_registered();
-}
+use sea_orm::{ConnectionTrait, EntityTrait, Select};
+use rustc_hash::FxHashMap;
 
 // /// Note: RelationGraph has been removed in favor of compile-time typed relations
 // See LoadRelations trait and HasRelation trait for the new zero-cost approach
@@ -120,7 +93,7 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait {
     async fn load_related<C: ConnectionTrait>(
         models: &[Self::Model],
         db: &C,
-    ) -> Result<HashMap<Self::RelatedPK, Related::Model>, DjangoOrmError>;
+    ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, DjangoOrmError>;
 }
 
 /// Trait for loading relations at compile time
@@ -153,7 +126,7 @@ where
     Parent: EntityTrait + HasRelation<R1>,
     R1: EntityTrait,
 {
-    type Output = HashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>;
+    type Output = FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>;
 
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
@@ -171,8 +144,8 @@ where
     R2: EntityTrait,
 {
     type Output = (
-        HashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>,
-        HashMap<<Parent as HasRelation<R2>>::RelatedPK, R2::Model>,
+        FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>,
+        FxHashMap<<Parent as HasRelation<R2>>::RelatedPK, R2::Model>,
     );
 
     async fn load_all<C: ConnectionTrait>(

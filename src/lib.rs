@@ -227,9 +227,9 @@
 #![doc(html_root_url = "https://docs.rs/seaorm-django/0.1.0")]
 
 pub mod aggregations;
+pub mod batching;
 pub mod error;
 pub mod query;
-pub mod registry;
 pub mod relations;
 pub mod traits;
 pub mod transaction;
@@ -240,23 +240,22 @@ pub mod write;
 ///
 /// Import everything you need with: `use seaorm_django::prelude::*;`
 pub mod prelude {
-    // Core traits and types
+    //! Commonly used imports for seaorm-django
+
     pub use crate::aggregations::AggregateExt;
+    pub use crate::batching;
     pub use crate::error::DjangoOrmError;
-    pub use crate::query::{ColumnExt, QueryExt, Q};
-    pub use crate::relations::QuerySetEager;
-    pub use crate::traits::DjangoConnection;
+    pub use crate::query::{Q, QueryExt}; // Removed ColumnExt to avoid conflict with sea_orm::ColumnTrait
+    pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
+    pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
     pub use crate::transaction::AtomicExt;
-    pub use crate::write::DeleteExt;
-
-    // Type-safe enums
-    pub use crate::types::{OnDelete, OnDelete::*};
-
-    // Transaction macros
-    pub use crate::tx;
-
-    // Relations macro
-    pub use crate::relations;
+    pub use crate::types::OnDelete;
+    // Removed DeleteExt to avoid conflict with sea_orm::ModelTrait
+    pub use rustc_hash::FxHashMap;
+    pub use sea_orm::{self, *};
+    
+    // Macros are exported at crate root
+    pub use crate::{relations, tx};
 
     // Derive macros
     #[cfg(feature = "derive")]

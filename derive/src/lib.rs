@@ -185,25 +185,6 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
     // Generate HasRelation implementations (compile-time typed relations)
     let has_relation_impls = relations::generate_has_relation_impls(&relation_infos);
 
-    // Generate relation-specific code only if relations exist
-    let relation_code = if !relation_infos.is_empty() {
-        let loader_registrations = relations::generate_loader_registrations(&relation_infos);
-
-        quote! {
-            #has_relation_impls
-            #loader_registrations
-        }
-    } else {
-        // Even without relations, implement EnsureLoadersRegistered as a no-op
-        quote! {
-            impl ::seaorm_django::relations::EnsureLoadersRegistered for Entity {
-                fn ensure_loaders_registered() {
-                    // No loaders to register
-                }
-            }
-        }
-    };
-
     let expanded = quote! {
         // ===== RELATION MODELS =====
         #model_with_relations
@@ -257,7 +238,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
         }
 
         // ===== RELATION LOADING =====
-        #relation_code
+        #has_relation_impls
     };
 
     TokenStream::from(expanded)

@@ -167,27 +167,24 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
 
         // Build SUM query
         let column_expr = Expr::col(column.as_column_ref());
-        let sum_expr = Func::sum(column_expr);
+        let sum_expr = Func::sum(column_expr.clone());
 
-        let query = self.select.select_only().expr_as(sum_expr, "value");
+        let query = self.select.clone().select_only().expr_as(sum_expr, "value");
 
-        // SQLite returns INTEGER for integer columns, try both types
-        if let Ok(Some(result)) = query
-            .clone()
-            .into_model::<AggregateValueInt>()
-            .one(self.db)
-            .await
-        {
-            return Ok(result.value.map(|v| v as f64));
-        }
-
-        match query
-            .into_model::<AggregateValueFloat>()
-            .one(self.db)
-            .await?
-        {
-            Some(result) => Ok(result.value),
-            None => Ok(None),
+        // Try integer type first (more common for sum), fallback to float
+        match query.into_model::<AggregateValueInt>().one(self.db).await {
+            Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
+            Ok(None) => Ok(None),
+            Err(_) => {
+                // If int parsing failed, rebuild query for float
+                let sum_expr = Func::sum(column_expr);
+                let query = self.select.select_only().expr_as(sum_expr, "value");
+                
+                match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+                    Some(result) => Ok(result.value),
+                    None => Ok(None),
+                }
+            }
         }
     }
 
@@ -214,27 +211,24 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         use sea_orm::sea_query::{Expr, Func};
 
         let column_expr = Expr::col(column.as_column_ref());
-        let max_expr = Func::max(column_expr);
+        let max_expr = Func::max(column_expr.clone());
 
-        let query = self.select.select_only().expr_as(max_expr, "value");
+        let query = self.select.clone().select_only().expr_as(max_expr, "value");
 
-        // Try int first for SQLite
-        if let Ok(Some(result)) = query
-            .clone()
-            .into_model::<AggregateValueInt>()
-            .one(self.db)
-            .await
-        {
-            return Ok(result.value.map(|v| v as f64));
-        }
-
-        match query
-            .into_model::<AggregateValueFloat>()
-            .one(self.db)
-            .await?
-        {
-            Some(result) => Ok(result.value),
-            None => Ok(None),
+        // Try integer type first, fallback to float
+        match query.into_model::<AggregateValueInt>().one(self.db).await {
+            Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
+            Ok(None) => Ok(None),
+            Err(_) => {
+                // Rebuild query for float type only if int failed
+                let max_expr = Func::max(column_expr);
+                let query = self.select.select_only().expr_as(max_expr, "value");
+                
+                match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+                    Some(result) => Ok(result.value),
+                    None => Ok(None),
+                }
+            }
         }
     }
 
@@ -242,27 +236,24 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         use sea_orm::sea_query::{Expr, Func};
 
         let column_expr = Expr::col(column.as_column_ref());
-        let min_expr = Func::min(column_expr);
+        let min_expr = Func::min(column_expr.clone());
 
-        let query = self.select.select_only().expr_as(min_expr, "value");
+        let query = self.select.clone().select_only().expr_as(min_expr, "value");
 
-        // Try int first for SQLite
-        if let Ok(Some(result)) = query
-            .clone()
-            .into_model::<AggregateValueInt>()
-            .one(self.db)
-            .await
-        {
-            return Ok(result.value.map(|v| v as f64));
-        }
-
-        match query
-            .into_model::<AggregateValueFloat>()
-            .one(self.db)
-            .await?
-        {
-            Some(result) => Ok(result.value),
-            None => Ok(None),
+        // Try integer type first, fallback to float
+        match query.into_model::<AggregateValueInt>().one(self.db).await {
+            Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
+            Ok(None) => Ok(None),
+            Err(_) => {
+                // Rebuild query for float type only if int failed
+                let min_expr = Func::min(column_expr);
+                let query = self.select.select_only().expr_as(min_expr, "value");
+                
+                match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+                    Some(result) => Ok(result.value),
+                    None => Ok(None),
+                }
+            }
         }
     }
 }
