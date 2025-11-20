@@ -100,12 +100,27 @@ pub enum DjangoOrmError {
     /// ```
     Database(sea_orm::DbErr),
 
-    /// Custom error message
+    /// Record not found error
     ///
-    /// Used for application-level errors like "Record not found",
-    /// "Invalid state", etc.
+    /// Returned when a query expects exactly one record but finds none.
     ///
-    Custom(String),
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// match Book::objects(db).get(id).await {
+    ///     Ok(book) => println!("Found: {}", book.title),
+    ///     Err(DjangoOrmError::NotFound { entity, .. }) => {
+    ///         println!("No {} found", entity);
+    ///     }
+    ///     Err(e) => return Err(e),
+    /// }
+    /// ```
+    NotFound {
+        /// Entity name (e.g., "Book", "Author")
+        entity: &'static str,
+        /// Identifier that was searched for
+        id: String,
+    },
     
     /// Field validation error
     ///
@@ -114,21 +129,55 @@ pub enum DjangoOrmError {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // String too long
-    /// Err(DjangoOrmError::ValidationError("Field 'username' exceeds max_length of 50"))
-    ///
-    /// // Number out of range
-    /// Err(DjangoOrmError::ValidationError("Field 'age' value 15 is less than minimum 18"))
+    /// match author.save(db).await {
+    ///     Ok(_) => println!("Saved"),
+    ///     Err(DjangoOrmError::Validation { field, reason, .. }) => {
+    ///         println!("Field '{}' failed: {}", field, reason);
+    ///     }
+    ///     Err(e) => return Err(e),
+    /// }
     /// ```
-    ValidationError(String),
+    Validation {
+        /// Entity name
+        entity: &'static str,
+        /// Field name that failed validation
+        field: &'static str,
+        /// Reason for validation failure
+        reason: String,
+    },
+
+    /// Custom error message (deprecated - use specific variants)
+    ///
+    /// Used for application-level errors. Consider using `NotFound` or `Validation`
+    /// for structured error handling.
+    ///
+    /// # Migration
+    ///
+    /// ```rust,ignore
+    /// // Old:
+    /// Err(DjangoOrmError::Custom(format!("Book {} not found", id)))
+    ///
+    /// // New:
+    /// Err(DjangoOrmError::NotFound {
+    ///     entity: "Book",
+    ///     id: id.to_string(),
+    /// })
+    /// ```
+    Custom(String),
+    
 }
 
 impl fmt::Display for DjangoOrmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Database(e) => write!(f, "Database error: {}", e),
+            Self::NotFound { entity, id } => {
+                write!(f, "{} with id '{}' not found", entity, id)
+            }
+            Self::Validation { entity, field, reason } => {
+                write!(f, "Validation error in {}.{}: {}", entity, field, reason)
+            }
             Self::Custom(msg) => write!(f, "{}", msg),
-            Self::ValidationError(msg) => write!(f, "Validation error: {}", msg),
         }
     }
 }
@@ -150,6 +199,45 @@ impl From<String> for DjangoOrmError {
 impl From<&str> for DjangoOrmError {
     fn from(msg: &str) -> Self {
         DjangoOrmError::Custom(msg.to_string())
+    }
+}
+
+impl DjangoOrmError {
+    /// Create a NotFound error
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// return Err(DjangoOrmError::not_found("Book", id.to_string()));
+    /// ```
+    pub fn not_found(entity: &'static str, id: impl ToString) -> Self {
+        Self::NotFound {
+            entity,
+            id: id.to_string(),
+        }
+    }
+
+    /// Create a Validation error
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// return Err(DjangoOrmError::validation(
+    ///     "Author",
+    ///     "name",
+    ///     "must not be empty"
+    /// ));
+    /// ```
+    pub fn validation(
+        entity: &'static str,
+        field: &'static str,
+        reason: impl ToString,
+    ) -> Self {
+        Self::Validation {
+            entity,
+            field,
+            reason: reason.to_string(),
+        }
     }
 }
 
@@ -231,5 +319,67 @@ mod tests {
         let error = DjangoOrmError::Custom("Error with emoji 🚀 and unicode ñ".to_string());
         assert!(error.to_string().contains("🚀"));
         assert!(error.to_string().contains("ñ"));
+    }
+
+    #[test]
+    fn test_not_found_error() {
+        let error = DjangoOrmError::not_found("Book", 123);
+        assert!(error.to_string().contains("Book"));
+        assert!(error.to_string().contains("123"));
+        assert!(error.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_not_found_pattern_matching() {
+        let error = DjangoOrmError::NotFound {
+            entity: "Author",
+            id: "456".to_string(),
+        };
+        
+        match error {
+            DjangoOrmError::NotFound { entity, id } => {
+                assert_eq!(entity, "Author");
+                assert_eq!(id, "456");
+            }
+            _ => panic!("Expected NotFound variant"),
+        }
+    }
+
+    #[test]
+    fn test_validation_error() {
+        let error = DjangoOrmError::validation("User", "email", "invalid format");
+        assert!(error.to_string().contains("User"));
+        assert!(error.to_string().contains("email"));
+        assert!(error.to_string().contains("invalid format"));
+        assert!(error.to_string().contains("Validation"));
+    }
+
+    #[test]
+    fn test_validation_pattern_matching() {
+        let error = DjangoOrmError::Validation {
+            entity: "Book",
+            field: "title",
+            reason: "too long".to_string(),
+        };
+        
+        match error {
+            DjangoOrmError::Validation { entity, field, reason } => {
+                assert_eq!(entity, "Book");
+                assert_eq!(field, "title");
+                assert_eq!(reason, "too long");
+            }
+            _ => panic!("Expected Validation variant"),
+        }
+    }
+
+    #[test]
+    fn test_error_variants_are_distinct() {
+        let not_found = DjangoOrmError::not_found("Book", 1);
+        let validation = DjangoOrmError::validation("Book", "title", "required");
+        let custom = DjangoOrmError::Custom("custom".to_string());
+        
+        assert!(matches!(not_found, DjangoOrmError::NotFound { .. }));
+        assert!(matches!(validation, DjangoOrmError::Validation { .. }));
+        assert!(matches!(custom, DjangoOrmError::Custom(_)));
     }
 }

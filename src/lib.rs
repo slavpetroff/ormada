@@ -242,34 +242,59 @@ pub mod write;
 pub mod prelude {
     //! Commonly used imports for seaorm-django
 
+    // Django-style ORM extensions
     pub use crate::aggregations::AggregateExt;
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
-    pub use crate::query::{Q, QueryExt}; // Removed ColumnExt to avoid conflict with sea_orm::ColumnTrait
+    pub use crate::query::{Q, QueryExt, QuerySet};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
     pub use crate::transaction::AtomicExt;
     pub use crate::types::OnDelete;
-    // Removed DeleteExt to avoid conflict with sea_orm::ModelTrait
-    pub use rustc_hash::FxHashMap;
-    pub use sea_orm::{self, *};
     
-    // Macros are exported at crate root
+    // Macros
     pub use crate::{relations, tx};
 
     // Derive macros
     #[cfg(feature = "derive")]
     pub use seaorm_django_derive::{atomic, django_model, DjangoModel};
 
-    // Convenient type aliases for datetime handling
-    pub use chrono::{DateTime, Utc, FixedOffset};
+    // Fast hash map for better performance
+    pub use rustc_hash::FxHashMap;
+
+    // SeaORM core types (explicit re-exports for clarity)
+    pub use sea_orm::{
+        // Database connection
+        Database, DatabaseConnection, DatabaseTransaction,
+        
+        // Entity and model traits
+        EntityTrait, ModelTrait, ActiveModelTrait, PrimaryKeyTrait,
+        
+        // Column and query traits
+        ColumnTrait, QuerySelect, QueryFilter, QueryOrder, QueryTrait,
+        
+        // Query builders
+        Condition, JoinType, Order, RelationTrait,
+        
+        // Value types
+        ActiveValue, Value, Set, NotSet, Unchanged,
+        
+        // Error type
+        DbErr,
+        
+        // Transaction isolation
+        IsolationLevel, TransactionTrait,
+    };
+    
+    // Re-export SeaORM module for advanced usage
+    pub use sea_orm;
+
+    // Datetime handling
+    pub use chrono::{DateTime, FixedOffset, Utc};
 
     /// Type alias for datetime with timezone (DateTime<FixedOffset>)
     /// This matches SeaORM's DateTimeWithTimeZone type
     pub type DateTimeWithTimeZone = DateTime<FixedOffset>;
-
-    // Re-export SeaORM essentials for convenience
-    pub use sea_orm::{Database, DatabaseConnection};
 }
 
 #[cfg(test)]

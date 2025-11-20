@@ -364,7 +364,7 @@ pub fn impl_django_model(
     // Generate additional components
     let relation_enum = generate_relation_enum(&foreign_keys);
     let entity_impl = generate_entity_impl();
-    let django_entity_impl = generate_django_entity_impl(&field_configs)?;
+    let django_entity_impl = generate_django_entity_impl(&field_configs, table_name)?;
     let has_relation_impls = generate_has_relation_impls(&foreign_keys);
     let model_save_impl = generate_model_save_impl(&field_configs)?;
     let model_convenience_impl = generate_model_convenience_methods(&input)?;
@@ -653,6 +653,7 @@ fn generate_entity_impl() -> TokenStream {
 
 fn generate_django_entity_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
+    table_name: &str,
 ) -> syn::Result<TokenStream> {
     let mut create_assignments = Vec::new();
     let mut validations = Vec::new();
@@ -669,8 +670,10 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() > #max {
                             return ::core::result::Result::Err(
-                                ::seaorm_django::error::DjangoOrmError::ValidationError(
-                                    ::std::format!("Field '{}' exceeds max_length of {}", #field_name_str, #max)
+                                ::seaorm_django::error::DjangoOrmError::validation(
+                                    #table_name,
+                                    #field_name_str,
+                                    ::std::format!("exceeds max_length of {}", #max)
                                 )
                             );
                         }
@@ -680,8 +683,10 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() < #min {
                             return ::core::result::Result::Err(
-                                ::seaorm_django::error::DjangoOrmError::ValidationError(
-                                    ::std::format!("Field '{}' is shorter than min_length of {}", #field_name_str, #min)
+                                ::seaorm_django::error::DjangoOrmError::validation(
+                                    #table_name,
+                                    #field_name_str,
+                                    ::std::format!("is shorter than min_length of {}", #min)
                                 )
                             );
                         }
@@ -697,8 +702,10 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) < #min {
                         return ::core::result::Result::Err(
-                            ::seaorm_django::error::DjangoOrmError::ValidationError(
-                                ::std::format!("Field '{}' value {} is less than minimum {}", #field_name_str, model.#field_name, #min)
+                            ::seaorm_django::error::DjangoOrmError::validation(
+                                #table_name,
+                                #field_name_str,
+                                ::std::format!("value {} is less than minimum {}", model.#field_name, #min)
                             )
                         );
                     }
@@ -709,8 +716,10 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) > #max {
                         return ::core::result::Result::Err(
-                            ::seaorm_django::error::DjangoOrmError::ValidationError(
-                                ::std::format!("Field '{}' value {} exceeds maximum {}", #field_name_str, model.#field_name, #max)
+                            ::seaorm_django::error::DjangoOrmError::validation(
+                                #table_name,
+                                #field_name_str,
+                                ::std::format!("value {} exceeds maximum {}", model.#field_name, #max)
                             )
                         );
                     }

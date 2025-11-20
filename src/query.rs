@@ -398,41 +398,35 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Returns
     ///
     /// - `Ok(E::Model)` - Record found
-    /// - `Err(DjangoOrmError::Custom("Record not found"))` - No record with that ID
+    /// - `Err(DjangoOrmError::NotFound { entity, id })` - No record with that ID
     /// - `Err(DjangoOrmError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // Get existing book
+    /// // Simple get
     /// let book = Book::objects(db).get(1).await?;
     /// println!("Found: {}", book.title);
     ///
     /// // Handle not found
     /// match Book::objects(db).get(999).await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(DjangoOrmError::Custom(msg)) if msg.contains("not found") => {
-    ///         println!("Book doesn't exist");
+    ///     Err(DjangoOrmError::NotFound { entity, id }) => {
+    ///         println!("{} with id {} doesn't exist", entity, id);
     ///     }
     ///     Err(e) => return Err(e),  // Other error
     /// }
     ///
     /// // Or use ? for early return on not found
-    /// let book = Book::objects(db).get(1).await?;  // Propagates error if not found
-    /// ```
-    ///
-    /// # Comparison with first()
-    ///
-    /// - `.get(id)` - Returns error if not found
-    /// - `.first()` - Returns None if not found (no error)
     pub async fn get<T>(self, id: T) -> Result<E::Model, DjangoOrmError>
     where
-        T: Into<<E::PrimaryKey as PrimaryKeyTrait>::ValueType> + Send,
+        T: Into<<E::PrimaryKey as PrimaryKeyTrait>::ValueType> + Send + std::fmt::Display,
     {
+        let id_str = format!("{}", &id);
         E::find_by_id(id)
             .one(self.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::Custom("Record not found".into()))
+            .ok_or_else(|| DjangoOrmError::not_found(E::default().table_name(), id_str))
     }
 
     /// Get the earliest record by a field (Django's .earliest())

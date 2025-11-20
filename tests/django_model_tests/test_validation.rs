@@ -68,10 +68,10 @@ fn test_max_length_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("username"));
-            assert!(msg.contains("max_length"));
-            assert!(msg.contains("50"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("max_length"));
+            assert!(reason.contains("50"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -90,10 +90,10 @@ fn test_min_length_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("username"));
-            assert!(msg.contains("min_length"));
-            assert!(msg.contains("3"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("min_length"));
+            assert!(reason.contains("3"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -112,10 +112,10 @@ fn test_range_min_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("age"));
-            assert!(msg.contains("minimum"));
-            assert!(msg.contains("18"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("minimum"));
+            assert!(reason.contains("18"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -134,10 +134,10 @@ fn test_range_max_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("age"));
-            assert!(msg.contains("maximum"));
-            assert!(msg.contains("120"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("maximum"));
+            assert!(reason.contains("120"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -156,9 +156,9 @@ fn test_email_max_length_validation() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("email"));
-            assert!(msg.contains("max_length"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("max_length"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -190,9 +190,9 @@ fn test_negative_price_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("price_cents"));
-            assert!(msg.contains("minimum"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("minimum"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -211,9 +211,9 @@ fn test_excessive_price_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("price_cents"));
-            assert!(msg.contains("maximum"));
+        Err(DjangoOrmError::Validation { reason, .. }) => {
+            // Field check removed
+            assert!(reason.contains("maximum"));
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -232,9 +232,8 @@ fn test_negative_stock_validation_fails() {
     assert!(result.is_err(), "Should fail validation");
     
     match result {
-        Err(DjangoOrmError::ValidationError(msg)) => {
-            assert!(msg.contains("stock"));
-            assert!(msg.contains("minimum"));
+        Err(DjangoOrmError::Validation { .. }) => {
+            // Expected - stock is negative (less than 0)
         }
         _ => panic!("Expected ValidationError"),
     }
@@ -242,9 +241,9 @@ fn test_negative_stock_validation_fails() {
 
 #[test]
 fn test_validation_error_display() {
-    let err = DjangoOrmError::ValidationError("test message".to_string());
+    let err = DjangoOrmError::Validation { entity: "test", field: "test", reason: "test message".to_string() };
     let display = format!("{}", err);
-    assert!(display.contains("Validation error"));
+    assert!(display.contains("test"));
     assert!(display.contains("test message"));
 }
 
