@@ -298,7 +298,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                         models: &[Self::Model],
                         db: &C,
                     ) -> ::core::result::Result<
-                        ::rustc_hash::FxHashMap<Self::RelatedPK, <#related_entity as ::sea_orm::EntityTrait>::Model>,
+                        ::seaorm_django::prelude::FxHashMap<Self::RelatedPK, <#related_entity as ::sea_orm::EntityTrait>::Model>,
                         ::seaorm_django::error::DjangoOrmError
                     > {
                         use ::sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PrimaryKeyToColumn, ModelTrait, Iterable};
@@ -309,7 +309,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                             .collect();
 
                         if fk_values.is_empty() {
-                            return ::core::result::Result::Ok(::rustc_hash::FxHashMap::default());
+                            return ::core::result::Result::Ok(::seaorm_django::prelude::FxHashMap::default());
                         }
 
                         // Get primary key column for filtering
@@ -323,12 +323,13 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                             .all(db)
                             .await?;
 
-                        // Build HashMap using primary key values (assuming id field)
+                        // Build FxHashMap using primary key values (assuming id field)
                         ::core::result::Result::Ok(
-                            related_models
-                                .into_iter()
-                                .map(|m| (m.id, m))
-                                .collect()
+                            ::seaorm_django::prelude::FxHashMap::from_iter(
+                                related_models
+                                    .into_iter()
+                                    .map(|m| (m.id, m))
+                            )
                         )
                     }
                 }

@@ -753,7 +753,7 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
                         models: &[Self::Model],
                         db: &C,
                     ) -> ::core::result::Result<
-                        ::rustc_hash::FxHashMap<Self::RelatedPK, <#entity as ::sea_orm::EntityTrait>::Model>,
+                        ::seaorm_django::prelude::FxHashMap<Self::RelatedPK, <#entity as ::sea_orm::EntityTrait>::Model>,
                         ::seaorm_django::error::DjangoOrmError
                     > {
                         use ::sea_orm::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
@@ -764,7 +764,7 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
                             .collect();
 
                         if fk_values.is_empty() {
-                            return ::core::result::Result::Ok(::rustc_hash::FxHashMap::default());
+                            return ::core::result::Result::Ok(::seaorm_django::prelude::FxHashMap::default());
                         }
 
                         let pk_cols: ::std::vec::Vec<_> = <#entity as ::sea_orm::EntityTrait>::PrimaryKey::iter()
@@ -778,10 +778,11 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
                             .await?;
 
                         ::core::result::Result::Ok(
-                            related_models
-                                .into_iter()
-                                .map(|m| (m.id, m))
-                                .collect()
+                            ::seaorm_django::prelude::FxHashMap::from_iter(
+                                related_models
+                                    .into_iter()
+                                    .map(|m| (m.id, m))
+                            )
                         )
                     }
                 }
