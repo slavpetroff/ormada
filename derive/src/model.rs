@@ -372,15 +372,16 @@ pub fn impl_django_model(
     // Creates: author::author::Entity, but re-exports as author::Entity
     let expanded = quote! {
         pub mod #module_name {
-            use super::*;
-            
-            // Import only what DeriveEntityModel absolutely needs
+            // Import only what we need explicitly - no super::* to avoid conflicts
+            use ::serde::{Serialize, Deserialize};
             use ::sea_orm::entity::prelude::{
                 DeriveEntityModel, EnumIter, Related, RelationDef, RelationTrait,
                 ActiveModelBehavior, EntityTrait, PrimaryKeyTrait, ColumnTrait,
                 DeriveColumn, DerivePrimaryKey, DeriveRelation,
             };
             use ::sea_orm::PrimaryKeyToColumn; // For HasRelation implementation
+            use ::seaorm_django::prelude::DateTimeWithTimeZone; // For datetime fields
+            use ::seaorm_django::types::OnDelete; // For foreign key cascades
             
             // The Model struct with DeriveEntityModel
             #input
