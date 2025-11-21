@@ -1128,6 +1128,44 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         eager.prefetch_related(relations)
     }
 
+    /// Eager load related entities using efficient batch queries (Django's select_related)
+    ///
+    /// Currently implemented using the same batched query strategy as `prefetch_related`.
+    /// This prevents N+1 queries by loading all relations in separate queries (1+M pattern).
+    ///
+    /// **Note:** Future versions may use SQL JOINs for 1:1 and FK relationships for even better
+    /// performance, while continuing to use separate queries for 1:N and M:N.
+    ///
+    /// # Usage
+    ///
+    /// ```rust,ignore
+    /// use seaorm_django::relations;
+    ///
+    /// // Single relation
+    /// let books = Book::objects(db)
+    ///     .select_related(relations![Author])
+    ///     .all()
+    ///     .await?;
+    ///
+    /// // Multiple relations
+    /// let books = Book::objects(db)
+    ///     .filter(Column::Published.eq(true))
+    ///     .select_related(relations![Author, Publisher])
+    ///     .all()
+    ///     .await?;
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// For N books with M unique authors:
+    /// - Without eager loading: 1 + N queries (N+1 problem)
+    /// - With select_related: 1 + M queries (1+M pattern)
+    ///
+    /// Example: 100 books by 5 authors = 2 queries instead of 101!
+    pub fn select_related<R>(self, relations: R) -> crate::relations::QuerySetEager<'a, E, C, R> {
+        self.prefetch_related(relations)
+    }
+
     /// Create a new record (Django's .create())
     ///
     /// Creates and saves a new record in the database.

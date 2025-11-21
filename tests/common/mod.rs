@@ -77,6 +77,7 @@ pub mod book {
         #[primary_key]
         pub id: i32,
         pub title: String,
+        #[foreign_key(Author)]
         pub author_id: i32,
         pub price: i32,
         pub published: bool,

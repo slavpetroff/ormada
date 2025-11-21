@@ -358,13 +358,13 @@ async fn test_save_multiple_times() {
 // ============================================================================
 
 #[tokio::test]
-async fn test_model_from_conversion() {
+async fn test_model_clone() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
 
     let author = authors[0].clone();
-    let with_relations: AuthorWithRelations = author.clone().into();
+    let cloned = author.clone();
 
-    assert_eq!(with_relations.id, author.id);
-    assert_eq!(with_relations.name, author.name);
+    assert_eq!(cloned.id, author.id);
+    assert_eq!(cloned.name, author.name);
 }

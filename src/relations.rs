@@ -22,37 +22,35 @@ use rustc_hash::FxHashMap;
 // Relations Macro
 // ============================================================================
 
-/// Helper macro to create a Vec of TypeIds for relation prefetching
+/// Helper macro to create relation specifications for prefetching
 ///
 /// This macro provides a clean syntax for specifying which relations to prefetch.
-/// Instead of writing `vec![TypeId::of::<Author>(), TypeId::of::<Publisher>()]`,
-/// you can simply write `relations![Author, Publisher]`.
+/// Users just pass the Model type (e.g., `Author`) and the macro extracts the Entity.
 ///
 /// # Examples
 ///
 /// ```rust,ignore
 /// use seaorm_django::relations;
-/// use entity::{author::Entity as Author, publisher::Entity as Publisher};
 ///
-/// // Multiple relations
+/// // Single relation - just use the Model name!
 /// let books = Book::objects(db)
-///     .prefetch_related(relations![Author, Publisher])
+///     .prefetch_related(relations![Author])
 ///     .all()
 ///     .await?;
 ///
-/// // Single relation
-/// relations![Author]
-///
 /// // Multiple relations
-/// relations![Author, Publisher, Category]
+/// let books = Book::objects(db)
+///     .prefetch_related(relations![Author, Publisher, Category])
+///     .all()
+///     .await?;
 /// ```
 #[macro_export]
 macro_rules! relations {
-    ($entity:ty) => {
-        $crate::relations::RelationSpec::<$entity>::new()
+    ($model:ty) => {
+        $crate::relations::RelationSpec::<< $model as $crate::relations::HasEntityType >::__Entity>::new()
     };
-    ($($entity:ty),+ $(,)?) => {
-        ( $( $crate::relations::RelationSpec::<$entity>::new() ),+ )
+    ($($model:ty),+ $(,)?) => {
+        ( $( $crate::relations::RelationSpec::<< $model as $crate::relations::HasEntityType >::__Entity>::new() ),+ )
     };
 }
 
@@ -79,6 +77,14 @@ impl<E: sea_orm::EntityTrait> Default for RelationSpec<E> {
 // ============================================================================
 // Relation Loading Traits
 // ============================================================================
+
+/// Trait to extract Entity type from Model (for relations! macro)
+///
+/// This is automatically implemented by the #[django_model] macro
+#[doc(hidden)]
+pub trait HasEntityType {
+    type __Entity: sea_orm::EntityTrait;
+}
 
 /// Trait for entities that can load a specific relation
 pub trait HasRelation<Related: EntityTrait>: EntityTrait {

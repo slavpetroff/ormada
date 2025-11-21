@@ -14,6 +14,7 @@ use syn::{
 struct ModelConfig {
     table_name: String,
     composite_indexes: Vec<CompositeIndex>,
+    ordering: Option<String>,
 }
 
 /// Composite index definition
@@ -76,6 +77,7 @@ impl Parse for ModelConfig {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut table_name = None;
         let composite_indexes = Vec::new();
+        let mut ordering = None;
 
         while !input.is_empty() {
             let ident: Ident = input.parse()?;
@@ -86,6 +88,12 @@ impl Parse for ModelConfig {
                     let lit: Lit = input.parse()?;
                     if let Lit::Str(s) = lit {
                         table_name = Some(s.value());
+                    }
+                }
+                "ordering" => {
+                    let lit: Lit = input.parse()?;
+                    if let Lit::Str(s) = lit {
+                        ordering = Some(s.value());
                     }
                 }
                 _ => {
@@ -107,6 +115,7 @@ impl Parse for ModelConfig {
                 syn::Error::new(input.span(), "Missing required 'table' attribute")
             })?,
             composite_indexes,
+            ordering,
         })
     }
 }
@@ -241,15 +250,38 @@ fn parse_field_attributes(attrs: &[Attribute]) -> syn::Result<FieldConfig> {
 }
 
 fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig> {
-    let mut entity = None;
+    let mut model_type = None;
     let mut on_delete = None;
     let mut default = None;
 
     meta_list.parse_nested_meta(|meta| {
-        if entity.is_none() {
-            // First positional argument is the entity (can be path or identifier)
-            // Accept both: Author or super::author::Entity
-            entity = Some(meta.path.clone());
+        if model_type.is_none() {
+            // First positional argument is the Model type (e.g., Author)
+            // User should NEVER provide Entity - we auto-convert Model -> Entity
+            let path = meta.path.clone();
+            
+            // Convert Model type to Entity path
+            // If user provides "Author", we convert to "super::author::Entity"
+            // If user provides path like "super::author::Author", extract the module name
+            let entity_path = if path.segments.len() == 1 {
+                // Simple case: Author -> super::author::Entity
+                let model_name = &path.segments[0].ident;
+                let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
+                syn::parse_quote! { super::#module_name::Entity }
+            } else {
+                // Path case: super::author::Author -> super::author::Entity
+                // Replace last segment with Entity
+                let mut segments = path.segments.clone();
+                if let Some(last) = segments.last_mut() {
+                    last.ident = format_ident!("Entity");
+                }
+                syn::Path {
+                    leading_colon: path.leading_colon,
+                    segments,
+                }
+            };
+            
+            model_type = Some(entity_path);
         } else if meta.path.is_ident("on_delete") {
             let _: Token![=] = meta.input.parse()?;
             on_delete = Some(meta.input.parse::<Ident>()?);
@@ -261,8 +293,8 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
     })?;
 
     Ok(ForeignKeyConfig {
-        entity: entity
-            .ok_or_else(|| syn::Error::new_spanned(meta_list, "foreign_key requires an entity"))?,
+        entity: model_type
+            .ok_or_else(|| syn::Error::new_spanned(meta_list, "foreign_key requires a Model type"))?,
         on_delete,
         default,
     })
@@ -383,9 +415,10 @@ pub fn impl_django_model(
     let entity_impl = generate_entity_impl();
     let django_entity_impl = generate_django_entity_impl(&field_configs, table_name, soft_delete_field.as_ref())?;
     let has_relation_impls = generate_has_relation_impls(&foreign_keys);
+    let with_relations_trait_impl = generate_with_relations_trait(&foreign_keys);
     let model_save_impl = generate_model_save_impl(&field_configs)?;
     let model_delete_impl = generate_model_delete_impl(soft_delete_field.as_ref())?;
-    let model_convenience_impl = generate_model_convenience_methods(&input)?;
+    let model_convenience_impl = generate_model_convenience_methods(&input, &config.ordering)?;
 
     // Generate code with nested module to avoid conflicts
     // This creates the internal SeaORM types and exposes Model as the main interface
@@ -416,6 +449,9 @@ pub fn impl_django_model(
             
             // HasRelation implementations for foreign keys
             #has_relation_impls
+            
+            // WithRelationsTrait implementation (required for relations system)
+            #with_relations_trait_impl
         }
         
         // Export Model as the primary type - this is what users work with!
@@ -434,6 +470,11 @@ pub fn impl_django_model(
         // Model static methods and column constants
         #model_convenience_impl
         
+        // Implement HasEntityType trait so relations! macro can extract Entity from Model
+        impl ::seaorm_django::relations::HasEntityType for Model {
+            type __Entity = Entity;
+        }
+        
         // Forward DjangoEntity methods to Entity
         impl Model {
             /// Validate and convert Model to ActiveModel for creation
@@ -444,7 +485,7 @@ pub fn impl_django_model(
             }
         }
         
-        // Main export: Book = Model (the actual data struct!)
+        // Main export: Author = Model (the data struct users work with)
         pub type #original_name = Model;
     };
 
@@ -800,6 +841,29 @@ fn generate_django_entity_impl(
     })
 }
 
+/// Generate WithRelationsTrait implementation
+///
+/// This trait is ALWAYS generated (even for entities without foreign keys)
+/// so that the relations system works properly.
+fn generate_with_relations_trait(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenStream {
+    // For now, we generate a minimal implementation with no relations
+    // In the future, this could be enhanced to support actual relation loading
+    quote! {
+        impl ::seaorm_django::traits::WithRelationsTrait for Entity {
+            type Model = Model;
+            type ModelWithRelations = Model; // For now, same as Model
+            type Relations = (); // Empty relations tuple
+
+            fn from_model_and_relations(
+                model: Self::Model,
+                _relations: &Self::Relations,
+            ) -> Self::ModelWithRelations {
+                model // Just return the model as-is
+            }
+        }
+    }
+}
+
 fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenStream {
     let impls: Vec<_> = foreign_keys
         .iter()
@@ -993,6 +1057,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
 /// Generate convenience methods and constants on Model for better UX
 fn generate_model_convenience_methods(
     input: &DeriveInput,
+    ordering: &Option<String>,
 ) -> syn::Result<TokenStream> {
     // Extract field names to generate column constants
     let fields = match &input.data {
@@ -1025,6 +1090,37 @@ fn generate_model_convenience_methods(
         })
         .collect();
 
+    // Generate default ordering method if ordering is specified
+    let default_ordering_method = if let Some(ordering_str) = ordering {
+        let desc = ordering_str.starts_with('-');
+        let column_name = ordering_str.trim_start_matches('-');
+        let column_ident = format_ident!("{}", to_pascal_case(column_name));
+        
+        if desc {
+            quote! {
+                /// Apply default ordering (from #[django_model(ordering = "...")])
+                pub fn default_ordering<C: ::sea_orm::ConnectionTrait>(
+                    db: &C,
+                ) -> ::seaorm_django::query::QuerySet<'_, _Entity, C> {
+                    use ::seaorm_django::query::QueryExt;
+                    _Entity::objects(db).order_by_desc(Self::#column_ident)
+                }
+            }
+        } else {
+            quote! {
+                /// Apply default ordering (from #[django_model(ordering = "...")])
+                pub fn default_ordering<C: ::sea_orm::ConnectionTrait>(
+                    db: &C,
+                ) -> ::seaorm_django::query::QuerySet<'_, _Entity, C> {
+                    use ::seaorm_django::query::QueryExt;
+                    _Entity::objects(db).order_by_asc(Self::#column_ident)
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         impl Model {
             // Column constants for convenient access: Book::Title instead of book::Column::Title
@@ -1046,6 +1142,8 @@ fn generate_model_convenience_methods(
                 use ::seaorm_django::query::QueryExt;
                 _Entity::objects(db)
             }
+            
+            #default_ordering_method
         }
     })
 }
