@@ -2,9 +2,8 @@
 //!
 //! Verifies Django-like automatic caching with concurrency safety
 
-mod common;
 
-use common::test_helpers::*;
+use super::common::test_helpers::*;
 use seaorm_django::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Barrier;
@@ -31,7 +30,7 @@ mod cache_test_item {
 
 // Helper to create table for this specific test
 async fn create_cache_test_table(db: &DatabaseConnection) {
-    execute_sql(db, 
+    super::common::test_helpers::execute_sql(db, 
         "CREATE TABLE IF NOT EXISTS cache_test_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             value INTEGER NOT NULL,
@@ -42,7 +41,7 @@ async fn create_cache_test_table(db: &DatabaseConnection) {
 
 #[tokio::test]
 async fn test_query_caching_basic() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data
@@ -78,7 +77,7 @@ async fn test_query_caching_basic() {
 
 #[tokio::test]
 async fn test_separate_caches_for_different_queries() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data
@@ -118,7 +117,7 @@ async fn test_separate_caches_for_different_queries() {
 
 #[tokio::test]
 async fn test_cache_with_first_method() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data
@@ -148,7 +147,7 @@ async fn test_cache_with_first_method() {
 
 #[tokio::test]
 async fn test_concurrent_cache_access() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data
@@ -202,7 +201,7 @@ async fn test_concurrent_cache_access() {
 
 #[tokio::test]
 async fn test_modified_query_creates_new_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data
@@ -242,7 +241,7 @@ async fn test_modified_query_creates_new_cache() {
 
 #[tokio::test]
 async fn test_cache_with_count() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data
@@ -273,7 +272,7 @@ async fn test_cache_with_count() {
 
 #[tokio::test]
 async fn test_cache_with_exists() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed one item
@@ -300,7 +299,7 @@ async fn test_cache_with_exists() {
 
 #[tokio::test]
 async fn test_queryset_clone_shares_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     create_cache_test_table(&db).await;
 
     // Seed data

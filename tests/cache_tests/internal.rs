@@ -2,15 +2,14 @@
 //!
 //! Tests for the cache module's internal functions
 
-mod common;
 
-use common::test_helpers::*;
-use common::fixtures::simple_item;
+use super::common::test_helpers::*;
+use super::common::fixtures::simple_item;
 use seaorm_django::prelude::*;
 
 #[tokio::test]
 async fn test_cache_populated_on_first_all() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
@@ -29,7 +28,7 @@ async fn test_cache_populated_on_first_all() {
 
 #[tokio::test]
 async fn test_cache_not_shared_between_different_queries() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
@@ -58,7 +57,7 @@ async fn test_cache_not_shared_between_different_queries() {
 
 #[tokio::test]
 async fn test_builder_methods_create_new_queryset() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -85,7 +84,7 @@ async fn test_builder_methods_create_new_queryset() {
 
 #[tokio::test]
 async fn test_first_without_prior_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
@@ -101,7 +100,7 @@ async fn test_first_without_prior_cache() {
 
 #[tokio::test]
 async fn test_get_without_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let item = simple_item::Entity::objects(&db)
@@ -120,7 +119,7 @@ async fn test_get_without_cache() {
 
 #[tokio::test]
 async fn test_count_independent_of_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
@@ -139,7 +138,7 @@ async fn test_count_independent_of_cache() {
 
 #[tokio::test]
 async fn test_exists_independent_of_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
@@ -158,7 +157,7 @@ async fn test_exists_independent_of_cache() {
 
 #[tokio::test]
 async fn test_cache_with_complex_query_chain() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(200);
@@ -189,7 +188,7 @@ async fn test_cache_with_complex_query_chain() {
 
 #[tokio::test]
 async fn test_cache_cleared_on_query_modification() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -213,7 +212,7 @@ async fn test_cache_cleared_on_query_modification() {
 
 #[tokio::test]
 async fn test_multiple_concurrent_querysets() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -250,7 +249,7 @@ async fn test_multiple_concurrent_querysets() {
 
 #[tokio::test]
 async fn test_offset_creates_new_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -274,7 +273,7 @@ async fn test_offset_creates_new_cache() {
 
 #[tokio::test]
 async fn test_distinct_creates_new_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     // Insert with duplicates

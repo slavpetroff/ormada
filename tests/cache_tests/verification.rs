@@ -3,10 +3,9 @@
 //! These tests verify that QuerySet caching actually prevents database queries
 //! Uses query execution tracking to ensure cache hits don't touch the database
 
-mod common;
 
-use common::test_helpers::*;
-use common::fixtures::simple_item;
+use super::common::test_helpers::*;
+use super::common::fixtures::simple_item;
 use seaorm_django::prelude::*;
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use std::sync::{Arc, Mutex};
@@ -40,7 +39,7 @@ impl QueryCounter {
 
 #[tokio::test]
 async fn test_cache_prevents_second_select_query() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     // Insert test data
@@ -69,7 +68,7 @@ async fn test_cache_prevents_second_select_query() {
 
 #[tokio::test]
 async fn test_cache_multiple_calls_same_queryset() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(20);
@@ -92,7 +91,7 @@ async fn test_cache_multiple_calls_same_queryset() {
 
 #[tokio::test]
 async fn test_modified_queryset_creates_new_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -121,7 +120,7 @@ async fn test_modified_queryset_creates_new_cache() {
 
 #[tokio::test]
 async fn test_cache_works_with_limit() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
@@ -143,7 +142,7 @@ async fn test_cache_works_with_limit() {
 
 #[tokio::test]
 async fn test_cache_works_with_offset() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
@@ -170,7 +169,7 @@ async fn test_cache_works_with_offset() {
 
 #[tokio::test]
 async fn test_cache_works_with_ordering() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(20);
@@ -202,7 +201,7 @@ async fn test_cache_works_with_ordering() {
 
 #[tokio::test]
 async fn test_first_uses_cache_after_all() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
@@ -226,7 +225,7 @@ async fn test_first_uses_cache_after_all() {
 
 #[tokio::test]
 async fn test_cache_isolation_between_querysets() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -268,7 +267,7 @@ async fn test_cache_isolation_between_querysets() {
 
 #[tokio::test]
 async fn test_empty_result_cached() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     // No data inserted - empty table
@@ -285,7 +284,7 @@ async fn test_empty_result_cached() {
 
 #[tokio::test]
 async fn test_cache_with_complex_filter() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
@@ -314,7 +313,7 @@ async fn test_cache_with_complex_filter() {
 
 #[tokio::test]
 async fn test_count_does_not_populate_all_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
@@ -341,7 +340,7 @@ async fn test_count_does_not_populate_all_cache() {
 
 #[tokio::test]
 async fn test_exists_does_not_populate_all_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
@@ -368,7 +367,7 @@ async fn test_exists_does_not_populate_all_cache() {
 
 #[tokio::test]
 async fn test_clone_shares_cache() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(20);
@@ -400,7 +399,7 @@ async fn test_clone_shares_cache() {
 
 #[tokio::test]
 async fn test_concurrent_cache_access() {
-    let db = setup_test_db().await;
+    let db = super::common::test_helpers::setup_test_db().await;
     simple_item::create_table(&db).await;
 
     let items = simple_item::sample_items(100);

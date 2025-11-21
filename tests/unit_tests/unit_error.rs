@@ -1,10 +1,10 @@
 //! Unit tests for error types and conversions
 //!
-//! Tests error handling and conversion traits following Rust best practices
+//! Unit tests for error handling
+//!
+//! This module tests the error types and conversions.
 
 use sea_orm::DbErr;
-mod common;
-
 use seaorm_django::error::DjangoOrmError;
 use std::error::Error;
 
