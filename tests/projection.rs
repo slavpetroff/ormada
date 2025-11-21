@@ -10,4 +10,6 @@ mod projection_tests {
     
     mod test_macro_behavior;
     mod test_projection_usage;
+    mod test_projection_aggregations;
+    mod test_projection_validations;
 }
