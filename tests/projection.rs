@@ -1,11 +1,13 @@
 //! Projection derive macro tests
+//!
+//! Tests the #[django_projection] macro and .project::<T>() API
 
 mod common;
 
 #[path = "projection_tests"]
 mod projection_tests {
-    #[allow(unused_imports)]
     use super::common;
     
-    mod test_basic_compile;
+    mod test_macro_behavior;
+    mod test_projection_usage;
 }

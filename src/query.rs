@@ -1771,13 +1771,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     where
         T: sea_orm::FromQueryResult + Send,
     {
-        use sea_orm::QuerySelect;
-        
-        // Use select_only() to prepare for column selection
-        let select = self.inner.select.clone().select_only();
-        
-        // Convert to custom model type
-        Ok(select.into_model::<T>().all(self.inner.db).await?)
+        // Simply use into_model without select_only()
+        // SeaORM's FromQueryResult will map the available columns to T's fields
+        Ok(self.inner.select.clone().into_model::<T>().all(self.inner.db).await?)
     }
 
     /// Group query results by one or more columns (Django's .group_by())

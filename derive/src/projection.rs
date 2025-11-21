@@ -3,7 +3,7 @@
 //! Provides type-safe field projections with compile-time validation.
 
 use proc_macro2::TokenStream;
-use quote::{quote, format_ident};
+use quote::{quote, format_ident, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
     Data, DeriveInput, Fields, Ident, Token, Attribute, Meta,
@@ -83,6 +83,18 @@ pub fn generate_projection(
 
     let struct_name = &input.ident;
     let model_path = &config.model;
+    
+    // Get the module path (everything before the last ::)
+    // If model_path is user_model::User, we need user_model::Column
+    let model_str = model_path.to_token_stream().to_string();
+    let parts: Vec<&str> = model_str.rsplitn(2, "::").collect();
+    let module_path = if parts.len() == 2 {
+        syn::parse_str::<syn::Path>(parts[1])?
+    } else {
+        model_path.clone()
+    };
+    
+    let column_path = quote! { #module_path::Column };
 
     // Extract fields from struct
     let fields = match &input.data {
@@ -116,11 +128,11 @@ pub fn generate_projection(
             let column_name = format_ident!("{}", to_pascal_case(&field_name.to_string()));
 
             validations.push(quote! {
-                let _ : #model_path = #model_path::#column_name;
+                let _ : #column_path = #column_path::#column_name;
             });
 
             column_selections.push(quote! {
-                #model_path::#column_name
+                #column_path::#column_name
             });
         }
     }
