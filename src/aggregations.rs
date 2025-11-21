@@ -166,9 +166,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
-        // Build SUM query
-        let column_expr = Expr::col(column.as_column_ref());
-        let sum_expr = Func::sum(column_expr.clone());
+        // Build SUM query - store column ref for potential reuse
+        let column_ref = column.as_column_ref();
+        let column_expr = Expr::col(column_ref.clone());
+        let sum_expr = Func::sum(column_expr);
 
         let query = self.select.clone().select_only().expr_as(sum_expr, "value");
 
@@ -178,8 +179,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
             Ok(None) => Ok(None),
             // Only catch type conversion errors - propagate real DB errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
-                // If int parsing failed, rebuild query for float
-                let sum_expr = Func::sum(column_expr);
+                // If int parsing failed, rebuild query for float (reuse column_ref, cheaper than cloning Select)
+                let sum_expr = Func::sum(Expr::col(column_ref));
                 let query = self.select.select_only().expr_as(sum_expr, "value");
                 
                 match query.into_model::<AggregateValueFloat>().one(self.db).await? {
@@ -215,8 +216,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
-        let column_expr = Expr::col(column.as_column_ref());
-        let max_expr = Func::max(column_expr.clone());
+        let column_ref = column.as_column_ref();
+        let column_expr = Expr::col(column_ref.clone());
+        let max_expr = Func::max(column_expr);
 
         let query = self.select.clone().select_only().expr_as(max_expr, "value");
 
@@ -226,8 +228,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
             Ok(None) => Ok(None),
             // Only catch type conversion errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
-                // Rebuild query for float type only if int failed
-                let max_expr = Func::max(column_expr);
+                // Rebuild query for float type only if int failed (reuse column_ref)
+                let max_expr = Func::max(Expr::col(column_ref));
                 let query = self.select.select_only().expr_as(max_expr, "value");
                 
                 match query.into_model::<AggregateValueFloat>().one(self.db).await? {
@@ -244,8 +246,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
-        let column_expr = Expr::col(column.as_column_ref());
-        let min_expr = Func::min(column_expr.clone());
+        let column_ref = column.as_column_ref();
+        let column_expr = Expr::col(column_ref.clone());
+        let min_expr = Func::min(column_expr);
 
         let query = self.select.clone().select_only().expr_as(min_expr, "value");
 
@@ -255,8 +258,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
             Ok(None) => Ok(None),
             // Only catch type conversion errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
-                // Rebuild query for float type only if int failed
-                let min_expr = Func::min(column_expr);
+                // Rebuild query for float type only if int failed (reuse column_ref)
+                let min_expr = Func::min(Expr::col(column_ref));
                 let query = self.select.select_only().expr_as(min_expr, "value");
                 
                 match query.into_model::<AggregateValueFloat>().one(self.db).await? {

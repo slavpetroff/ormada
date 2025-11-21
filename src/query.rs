@@ -1284,19 +1284,20 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         // Create stream that fetches in chunks using limit/offset
         // This is Django's approach: paginate through results
         let db = self.db;
-        let base_select = self.select.clone();
-        let columns = columns.clone();
+        // Use Arc to avoid cloning the Select on every iteration
+        let base_select = std::sync::Arc::new(self.select);
+        let columns = std::sync::Arc::new(columns);
         
         let stream = stream::unfold((0u64, false), move |(offset, done)| {
-            let base_select = base_select.clone();
-            let columns = columns.clone();
+            let base_select = base_select.clone();  // Clone Arc (cheap pointer copy)
+            let columns = columns.clone();  // Clone Arc (cheap pointer copy)
             async move {
                 if done {
                     return None;
                 }
                 
-                let mut select = base_select.clone().select_only();
-                for col in &columns {
+                let mut select = (*base_select).clone().select_only();  // Clone Select once per chunk (unavoidable)
+                for col in &*columns {
                     select = select.column(*col);
                 }
                 
@@ -1365,9 +1366,11 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ) -> Result<impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C>, DjangoOrmError> {
         use futures::stream::StreamExt;
         
-        let stream = self.values_iter(columns.clone(), chunk_size).await?;
+        let columns_len = columns.len();
+        let columns_clone = columns.clone();  // Clone for later use in map closure
+        let stream = self.values_iter(columns, chunk_size).await?;
         
-        if flat && columns.len() == 1 {
+        if flat && columns_len == 1 {
             Ok(stream.map(|result| {
                 result.and_then(|obj| {
                     obj.as_object()
@@ -1381,7 +1384,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                     let values: Vec<serde_json::Value> = obj
                         .as_object()
                         .map(|map| {
-                            columns.iter()
+                            columns_clone.iter()
                                 .filter_map(|col| {
                                     let col_name = format!("{:?}", col).to_lowercase();
                                     map.get(&col_name).cloned()
