@@ -1247,6 +1247,74 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(results)
     }
 
+    /// Stream full model instances in chunks (Django's `.iterator()`).
+    /// 
+    /// Memory-efficient alternative to `.all()` for large result sets.
+    /// Fetches results in batches using LIMIT/OFFSET pagination.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `chunk_size` - Optional batch size (default: 100 rows)
+    /// 
+    /// # Examples
+    /// 
+    /// ```rust,ignore
+    /// use futures::StreamExt;
+    /// 
+    /// // Process 1 million rows without loading all into memory
+    /// let mut stream = Book::objects(db)
+    ///     .filter(book::Column::Published.eq(true))
+    ///     .iterator(Some(500))
+    ///     .await?;
+    /// 
+    /// while let Some(book) = stream.next().await {
+    ///     let book = book?;
+    ///     process_book(book).await?;
+    /// }
+    /// ```
+    pub async fn iterator(
+        self,
+        chunk_size: Option<usize>,
+    ) -> Result<impl futures::Stream<Item = Result<E::Model, DjangoOrmError>> + use<'a, E, C>, DjangoOrmError> {
+        use futures::stream::{self, StreamExt};
+        use sea_orm::QuerySelect;
+        
+        let chunk_size = chunk_size.unwrap_or(crate::batching::DEFAULT_CHUNK_SIZE) as u64;
+        let db = self.db;
+        let base_select = std::sync::Arc::new(self.select);
+        
+        let stream = stream::unfold((0u64, false), move |(offset, done)| {
+            let base_select = base_select.clone();
+            async move {
+                if done {
+                    return None;
+                }
+                
+                let select = (*base_select).clone()
+                    .limit(chunk_size)
+                    .offset(offset);
+                
+                let results: Vec<E::Model> = match select.all(db).await {
+                    Ok(r) => r,
+                    Err(e) => return Some((Err(DjangoOrmError::from(e)), (offset, true))),
+                };
+                
+                let is_done = results.len() < chunk_size as usize;
+                let next_offset = offset + results.len() as u64;
+                
+                Some((Ok(results), (next_offset, is_done)))
+            }
+        })
+        .flat_map(|result| {
+            match result {
+                Ok(models) => stream::iter(models.into_iter().map(Ok)).left_stream(),
+                Err(e) => stream::once(async move { Err(e) }).right_stream(),
+            }
+        });
+
+        Ok(stream.boxed())
+    }
+
     /// Get column values iterator (Django's values().iterator())
     ///
     /// Returns iterator that streams results in chunks, preventing OOM.
@@ -1466,6 +1534,28 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 })
                 .collect())
         }
+    }
+
+    /// Print the SQL query that would be executed (for debugging).
+    /// 
+    /// Returns the SQL string and query parameters.
+    /// Useful for debugging slow queries or understanding what SQL is generated.
+    /// 
+    /// # Examples
+    /// 
+    /// ```rust,ignore
+    /// let (sql, params) = Book::objects(db)
+    ///     .filter(book::Column::Published.eq(true))
+    ///     .order_by_desc(book::Column::CreatedAt)
+    ///     .debug_sql();
+    /// 
+    /// println!("SQL: {}", sql);
+    /// println!("Params: {:?}", params);
+    /// ```
+    pub fn debug_sql(&self) -> String {
+        use sea_orm::QueryTrait;
+        let stmt = self.select.build(self.db.get_database_backend());
+        stmt.to_string()
     }
 }
 

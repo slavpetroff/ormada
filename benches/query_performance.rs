@@ -171,13 +171,32 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
         });
     });
 
-    group.bench_function("iterator_10k", |b| {
+    group.bench_function("values_iter_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use futures::StreamExt;
             use seaorm_django::query::QueryExt;
 
             let mut stream = Entity::objects(&db)
                 .values_iter(vec![Column::Id, Column::Name], Some(500))
+                .await
+                .expect("Iterator failed");
+
+            let mut count = 0;
+            while let Some(result) = stream.next().await {
+                result.expect("Stream error");
+                count += 1;
+            }
+            black_box(count)
+        });
+    });
+
+    group.bench_function("model_iter_10k", |b| {
+        b.to_async(&rt).iter(|| async {
+            use futures::StreamExt;
+            use seaorm_django::query::QueryExt;
+
+            let mut stream = Entity::objects(&db)
+                .iterator(Some(500))
                 .await
                 .expect("Iterator failed");
 
