@@ -11,27 +11,27 @@
 //! use seaorm_django::prelude::*;
 //!
 //! // Get total count
-//! let total = book::Entity::objects(db)
+//! let total = Book::objects(db)
 //!     .aggregate_count()
 //!     .await?;
 //!
 //! // Get sum of prices
-//! let total_value = book::Entity::objects(db)
-//!     .aggregate_sum(book::Column::Price)
+//! let total_value = Book::objects(db)
+//!     .aggregate_sum(Book::Price)
 //!     .await?;
 //!
 //! // Get average price
-//! let avg_price = book::Entity::objects(db)
-//!     .aggregate_avg(book::Column::Price)
+//! let avg_price = Book::objects(db)
+//!     .aggregate_avg(Book::Price)
 //!     .await?;
 //!
 //! // Get max/min
-//! let highest_price = book::Entity::objects(db)
-//!     .aggregate_max(book::Column::Price)
+//! let highest_price = Book::objects(db)
+//!     .aggregate_max(Book::Price)
 //!     .await?;
 //!
-//! let lowest_price = book::Entity::objects(db)
-//!     .aggregate_min(book::Column::Price)
+//! let lowest_price = Book::objects(db)
+//!     .aggregate_min(Book::Price)
 //!     .await?;
 //! ```
 //!
@@ -39,12 +39,12 @@
 //!
 //! ```rust,ignore
 //! // Get multiple aggregate values at once
-//! let stats = book::Entity::objects(db)
-//!     .filter(book::Column::Published.eq(true))
+//! let stats = Book::objects(db)
+//!     .filter(Book::Published.eq(true))
 //!     .aggregate()
 //!     .count()
-//!     .sum(book::Column::Price)
-//!     .avg(book::Column::Price)
+//!     .sum(Book::Price)
+//!     .avg(Book::Price)
 //!     .execute()
 //!     .await?;
 //!
@@ -67,8 +67,8 @@ pub trait AggregateExt<E: EntityTrait> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let count = book::Entity::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
+    /// let count = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
     ///     .aggregate_count()
     ///     .await?;
     ///
@@ -83,8 +83,8 @@ pub trait AggregateExt<E: EntityTrait> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let total_value = book::Entity::objects(db)
-    ///     .aggregate_sum(book::Column::Price)
+    /// let total_value = Book::objects(db)
+    ///     .aggregate_sum(Book::Price)
     ///     .await?;
     ///
     /// println!("Total inventory value: ${}", total_value.unwrap_or(0.0));
@@ -103,9 +103,9 @@ pub trait AggregateExt<E: EntityTrait> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let avg_price = book::Entity::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
-    ///     .aggregate_avg(book::Column::Price)
+    /// let avg_price = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .aggregate_avg(Book::Price)
     ///     .await?;
     ///
     /// println!("Average price: ${:.2}", avg_price.unwrap_or(0.0));
@@ -119,8 +119,8 @@ pub trait AggregateExt<E: EntityTrait> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let max_price = book::Entity::objects(db)
-    ///     .aggregate_max(book::Column::Price)
+    /// let max_price = Book::objects(db)
+    ///     .aggregate_max(Book::Price)
     ///     .await?;
     ///
     /// println!("Most expensive: ${}", max_price.unwrap_or(0.0));
@@ -134,9 +134,9 @@ pub trait AggregateExt<E: EntityTrait> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let min_price = book::Entity::objects(db)
-    ///     .filter(book::Column::Price.gt(0))
-    ///     .aggregate_min(book::Column::Price)
+    /// let min_price = Book::objects(db)
+    ///     .filter(Book::Price.gt(0))
+    ///     .aggregate_min(Book::Price)
     ///     .await?;
     ///
     /// println!("Cheapest: ${}", min_price.unwrap_or(0.0));

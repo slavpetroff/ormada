@@ -240,7 +240,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let books: Vec<book::ModelWithRelations> = Book::objects(db)
+    /// let books: Vec<BookWithRelations> = Book::objects(db)
     ///     .prefetch_related(relations![Author])
     ///     .all()
     ///     .await?;
@@ -283,7 +283,7 @@ where
     /// use seaorm_django::relations;
     ///
     /// // Get first book with author - DIRECT FIELD ACCESS!
-    /// let book: book::ModelWithRelations = Book::objects(db)
+    /// let book: BookWithRelations = Book::objects(db)
     ///     .filter(Column::Published.eq(true))
     ///     .order_by_desc(Column::CreatedAt)
     ///     .prefetch_related(relations![Author])
@@ -313,7 +313,7 @@ where
     /// use seaorm_django::relations;
     ///
     /// // Get last book with relations - DIRECT FIELD ACCESS!
-    /// let book: book::ModelWithRelations = Book::objects(db)
+    /// let book: BookWithRelations = Book::objects(db)
     ///     .order_by_asc(Column::CreatedAt)
     ///     .prefetch_related(relations![Author, Publisher])
     ///     .last()

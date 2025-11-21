@@ -1,4 +1,51 @@
-//! Write operations (Create, Update, Delete) with Django-like Model-based API
+//! Write operations (Create, Update, Delete) for Django-style ORM
+//!
+//! This module provides Django-like save/update/delete operations.
+//!
+//! # Examples
+//!
+//! ```rust,ignore
+//! use seaorm_django::prelude::*;
+//!
+//! // Create a new record
+//! let book = Book::objects(&db)
+//!     .create(Book {
+//!         title: "The Rust Programming Language".into(),
+//!         price: 3999,
+//!         published: true,
+//!         ..Default::default()
+//!     })
+//!     .await?;
+//!
+//! // Save (update all fields) - Django style
+//! let mut book = book;
+//! book.price = 2999;
+//! book.title = "Rust Book - Updated".into();
+//! let updated = Book::save(&db, book).await?;
+//!
+//! // Bulk update with filter
+//! let count = Book::objects(&db)
+//!     .filter(Book::Published.eq(false))
+//!     .update(|book| {
+//!         book.published = true;
+//!     })
+//!     .await?;
+//!
+//! // Delete records
+//! let deleted = Book::objects(&db)
+//!     .filter(Book::Price.gt(10000))
+//!     .delete()
+//!     .await?;
+//!
+//! // Bulk create (high performance)
+//! let books = vec![
+//!     Book { title: "Book 1".into(), price: 1999, ..Default::default() },
+//!     Book { title: "Book 2".into(), price: 2999, ..Default::default() },
+//! ];
+//! let count = Book::objects(&db)
+//!     .bulk_create(books)
+//!     .await?;
+//! ```
 //!
 //! This module provides the DeleteExt trait. Create and Update operations
 //! are generated directly on Entity and Model by the `#[derive(DjangoModel)]` macro.

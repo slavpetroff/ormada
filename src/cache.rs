@@ -69,7 +69,8 @@ impl CachedConnection {
 
         // Try to get from cache
         {
-            let cache_read = self.cache.read().unwrap();
+            let cache_read = self.cache.read()
+                .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {}", e)))?;
             if let Some(cached) = cache_read.get(&hash) {
                 return Ok(Arc::clone(cached));
             }
@@ -81,7 +82,8 @@ impl CachedConnection {
 
         // Store in cache
         {
-            let mut cache_write = self.cache.write().unwrap();
+            let mut cache_write = self.cache.write()
+                .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {}", e)))?;
             cache_write.insert(hash, Arc::clone(&result_arc));
         }
 
@@ -94,18 +96,26 @@ impl CachedConnection {
     }
 
     /// Get cache statistics (for debugging).
-    pub fn cache_stats(&self) -> CacheStats {
-        let cache = self.cache.read().unwrap();
-        CacheStats {
+    ///
+    /// Returns `None` if the cache lock is poisoned.
+    pub fn cache_stats(&self) -> Option<CacheStats> {
+        let cache = self.cache.read().ok()?;
+        Some(CacheStats {
             entries: cache.len(),
             total_bytes: cache.values().map(|v| v.len()).sum(),
-        }
+        })
     }
 
     /// Clear the query cache manually.
-    pub fn clear_cache(&self) {
-        let mut cache = self.cache.write().unwrap();
-        cache.clear();
+    ///
+    /// Returns `false` if the cache lock is poisoned.
+    pub fn clear_cache(&self) -> bool {
+        if let Ok(mut cache) = self.cache.write() {
+            cache.clear();
+            true
+        } else {
+            false
+        }
     }
 
     fn hash_query(query: &str) -> u64 {

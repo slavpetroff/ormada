@@ -72,39 +72,39 @@
 //! // === QUERYING ===
 //!
 //! // Basic filtering
-//! let books = book::Entity::objects(db)
-//!     .filter(book::Column::Title.contains("Rust"))
-//!     .exclude(book::Column::Price.gt(5000))
-//!     .order_by_desc(book::Column::Published)
+//! let books = Book::objects(db)
+//!     .filter(Book::Title.contains("Rust"))
+//!     .exclude(Book::Price.gt(5000))
+//!     .order_by_desc(Book::Published)
 //!     .limit(10)
 //!     .all()
 //!     .await?;
 //!
 //! // Complex queries with Q objects
 //! let q = Q::any()
-//!     .add(book::Column::Title.contains("Rust"))
-//!     .add(book::Column::Title.contains("Python"));
-//! let books = book::Entity::objects(db).filter(q).all().await?;
+//!     .add(Book::Title.contains("Rust"))
+//!     .add(Book::Title.contains("Python"));
+//! let books = Book::objects(db).filter(q).all().await?;
 //!
 //! // Aggregation
-//! let count = book::Entity::objects(db)
-//!     .filter(book::Column::Price.lt(3000))
+//! let count = Book::objects(db)
+//!     .filter(Book::Price.lt(3000))
 //!     .count()
 //!     .await?;
 //!
-//! let exists = book::Entity::objects(db)
-//!     .filter(book::Column::Title.eq("The Rust Book"))
+//! let exists = Book::objects(db)
+//!     .filter(Book::Title.eq("The Rust Book"))
 //!     .exists()
 //!     .await?;
 //!
 //! // Column selection (values)
-//! let titles = book::Entity::objects(db)
-//!     .values_list(vec![book::Column::Title], true)
+//! let titles = Book::objects(db)
+//!     .values_list(vec![Book::Title], true)
 //!     .await?;
 //!
 //! // Eager loading relations (prevent N+1)
-//! let books = book::Entity::objects(db)
-//!     .prefetch_related(relations![author::Entity])
+//! let books = Book::objects(db)
+//!     .prefetch_related(relations![Author])
 //!     .all()
 //!     .await?;
 //!
@@ -117,24 +117,24 @@
 //! // === WRITING ===
 //!
 //! // Create
-//! let book = book::Entity::objects(db).create(book::Model {
+//! let book = Book::objects(db).create(Book {
 //!     title: "New Book".to_string(),
 //!     price: 2999,
 //!     ..Default::default()
 //! }).await?;
 //!
 //! // Update (Django-style: updates ALL fields)
-//! let updated = book::Entity::save_model(db, book).await?;
+//! let updated = Book::save(db, book).await?;
 //!
 //! // Bulk update
-//! let count = book::Entity::objects(db)
-//!     .filter(book::Column::Price.lt(1000))
+//! let count = Book::objects(db)
+//!     .filter(Book::Price.lt(1000))
 //!     .update(|book| book.price = 999)
 //!     .await?;
 //!
 //! // Delete
-//! let count = book::Entity::objects(db)
-//!     .filter(book::Column::Published.eq(false))
+//! let count = Book::objects(db)
+//!     .filter(Book::Published.eq(false))
 //!     .delete()
 //!     .await?;
 //!
@@ -145,7 +145,7 @@
 //!
 //! let (author, book) = tx!(db, |txn| async move {
 //!     // Create author
-//!     let author = author::Entity::objects(txn).create(author::Model {
+//!     let author = Author::objects(txn).create(Author {
 //!         name: "John Doe".to_string(),
 //!         email: "john@example.com".to_string(),
 //!         age: 30,
@@ -153,7 +153,7 @@
 //!     }).await?;
 //!     
 //!     // Create book - if this fails, author creation also rolls back
-//!     let book = book::Entity::objects(txn).create(book::Model {
+//!     let book = Book::objects(txn).create(Book {
 //!         title: "Rust Guide".to_string(),
 //!         author_id: author.id,
 //!         price: 2999,
@@ -170,24 +170,24 @@
 //!
 //! ```rust,ignore
 //! // String operations
-//! book::Column::Title.contains("Rust")
-//! book::Column::Title.starts_with("The")
-//! book::Column::Title.ends_with("Guide")
+//! Book::Title.contains("Rust")
+//! Book::Title.starts_with("The")
+//! Book::Title.ends_with("Guide")
 //!
 //! // Comparisons
-//! book::Column::Price.eq(2999)
-//! book::Column::Price.ne(0)
-//! book::Column::Price.gt(1000)
-//! book::Column::Price.gte(1000)
-//! book::Column::Price.lt(5000)
-//! book::Column::Price.lte(5000)
+//! Book::Price.eq(2999)
+//! Book::Price.ne(0)
+//! Book::Price.gt(1000)
+//! Book::Price.gte(1000)
+//! Book::Price.lt(5000)
+//! Book::Price.lte(5000)
 //!
 //! // Null checks
-//! book::Column::Description.is_null()
-//! book::Column::Description.is_not_null()
+//! Book::Description.is_null()
+//! Book::Description.is_not_null()
 //!
 //! // IN queries
-//! book::Column::Id.in_values(vec![1, 2, 3])
+//! Book::Id.in_values(vec![1, 2, 3])
 //! ```
 //!
 //! ## Derive Macro (Optional)

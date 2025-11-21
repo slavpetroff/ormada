@@ -3,6 +3,86 @@
 //! This module provides Django-style transaction management with Rust idioms.
 //! All operations within a transaction are atomic - they either all succeed or all fail.
 //!
+//! # Quick Start
+//!
+//! ```rust,ignore
+//! use seaorm_django::prelude::*;
+//!
+//! // Simple transaction with tx! macro
+//! let (author, book) = tx!(db, |txn| async move {
+//!     // Create author
+//!     let author = Author::objects(txn)
+//!         .create(Author {
+//!             name: "John Doe".into(),
+//!             ..Default::default()
+//!         })
+//!         .await?;
+//!     
+//!     // Create book - if this fails, author creation also rolls back
+//!     let book = Book::objects(txn)
+//!         .create(Book {
+//!             title: "My Book".into(),
+//!             author_id: author.id,
+//!             ..Default::default()
+//!         })
+//!         .await?;
+//!     
+//!     Ok((author, book))
+//! }).await?;
+//! ```
+//!
+//! # Using #[atomic] Attribute
+//!
+//! ```rust,ignore
+//! use seaorm_django::prelude::*;
+//!
+//! #[atomic]
+//! async fn create_book_with_author(
+//!     db: &DatabaseConnection,
+//!     title: String,
+//!     author_name: String,
+//! ) -> Result<Book, DjangoOrmError> {
+//!     // This entire function runs in a transaction
+//!     let author = Author::objects(db)
+//!         .create(Author {
+//!             name: author_name,
+//!             ..Default::default()
+//!         })
+//!         .await?;
+//!     
+//!     Book::objects(db)
+//!         .create(Book {
+//!             title,
+//!             author_id: author.id,
+//!             ..Default::default()
+//!         })
+//!         .await
+//! }
+//! ```
+//!
+//! # Error Handling
+//!
+//! ```rust,ignore
+//! // Transactions automatically rollback on error
+//! let result = tx!(db, |txn| async move {
+//!     let book = Book::objects(txn)
+//!         .create(Book { /* ... */ })
+//!         .await?;
+//!     
+//!     // If this fails, book creation is rolled back
+//!     if book.price < 0 {
+//!         return Err(DjangoOrmError::Custom("Invalid price".into()));
+//!     }
+//!     
+//!     Ok(book)
+//! }).await;
+//!
+//! match result {
+//!     Ok(book) => println!("Book created: {}", book.title),
+//!     Err(e) => println!("Transaction failed: {}", e),
+//! }
+//! ```
+//!
 //! # Examples
 //!
 //! ## Basic Transaction
@@ -13,7 +93,7 @@
 //! // All operations succeed or all rollback - clean and simple!
 //! tx!(db, |txn| async move {
 //!     // Create author
-//!     let author = author::Entity::objects(txn).create(author::Model {
+//!     let author = Author::objects(txn).create(Author {
 //!         name: "John Doe".to_string(),
 //!         email: "john@example.com".to_string(),
 //!         age: 30,
@@ -21,7 +101,7 @@
 //!     }).await?;
 //!     
 //!     // Create book referencing the author
-//!     let book = book::Entity::objects(txn).create(book::Model {
+//!     let book = Book::objects(txn).create(Book {
 //!         title: "Rust Book".to_string(),
 //!         author_id: author.id,
 //!         price: 2999,
@@ -123,7 +203,7 @@ pub trait AtomicExt {
     ///
     /// let (author, book) = tx!(db, |txn| async move {
     ///     // Create author
-    ///     let author = author::Entity::objects(txn).create(author::Model {
+    ///     let author = Author::objects(txn).create(Author {
     ///         name: "Jane Doe".to_string(),
     ///         email: "jane@example.com".to_string(),
     ///         age: 25,
@@ -131,7 +211,7 @@ pub trait AtomicExt {
     ///     }).await?;
     ///     
     ///     // Create book - if this fails, author creation also rolls back
-    ///     let book = book::Entity::objects(txn).create(book::Model {
+    ///     let book = Book::objects(txn).create(Book {
     ///         title: "Advanced Rust".to_string(),
     ///         author_id: author.id,
     ///         price: 3999,
@@ -169,8 +249,8 @@ pub trait AtomicExt {
     ///
     /// let count = tx!(db, |txn| async move {
     ///     // Delete all draft books
-    ///     let deleted = book::Entity::objects(txn)
-    ///         .filter(book::Column::Status.eq("draft"))
+    ///     let deleted = Book::objects(txn)
+    ///         .filter(Book::Status.eq("draft"))
     ///         .delete()
     ///         .await?;
     ///     
@@ -305,7 +385,7 @@ impl AtomicExt for DatabaseConnection {
 ///
 /// // Simple and clean - just like Django!
 /// let result = tx!(db, |txn| async move {
-///     let author = author::Entity::objects(txn).create(author::Model {
+///     let author = Author::objects(txn).create(Author {
 ///         name: "John".to_string(),
 ///         ..Default::default()
 ///     }).await?;
@@ -386,7 +466,7 @@ impl AtomicExt for DatabaseTransaction {
 /// use seaorm_django::tx;
 ///
 /// let author = tx!(db, |txn| async move {
-///     author::Entity::objects(txn).create(author::Model {
+///     Author::objects(txn).create(Author {
 ///         name: "John".to_string(),
 ///         ..Default::default()
 ///     }).await
@@ -400,7 +480,7 @@ impl AtomicExt for DatabaseTransaction {
 ///
 /// // Body is automatically wrapped in async move
 /// let author = atomic!(db, |txn| {
-///     author::Entity::objects(txn).create(author::Model {
+///     Author::objects(txn).create(Author {
 ///         name: "John".to_string(),
 ///         ..Default::default()
 ///     }).await

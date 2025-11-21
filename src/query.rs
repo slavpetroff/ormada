@@ -1,11 +1,70 @@
 //! Core Django-like Query API for SeaORM
 //!
 //! This module provides ergonomic query building with zero duplication.
+//!
+//! # Quick Start
+//!
+//! ```rust,ignore
+//! use seaorm_django::prelude::*;
+//!
+//! // Basic filtering and ordering
+//! let books = Book::objects(&db)
+//!     .filter(Book::Price.lt(3000))
+//!     .order_by_desc(Book::Published)
+//!     .limit(10)
+//!     .all()
+//!     .await?;
+//!
+//! // Count records
+//! let count = Book::objects(&db)
+//!     .filter(Book::InStock.eq(true))
+//!     .count()
+//!     .await?;
+//!
+//! // Get single record
+//! let book = Book::objects(&db)
+//!     .get(42)
+//!     .await?;
+//!
+//! // Check existence
+//! let exists = Book::objects(&db)
+//!     .filter(Book::Isbn.eq("978-0134685991"))
+//!     .exists()
+//!     .await?;
+//! ```
+//!
+//! # Advanced Usage
+//!
+//! ```rust,ignore
+//! // Complex queries with Q objects
+//! let q = Q::any()
+//!     .add(Book::Title.contains("Rust"))
+//!     .add(Book::Title.contains("Python"));
+//!
+//! let books = Book::objects(&db)
+//!     .filter(q)
+//!     .exclude(Book::Price.gt(5000))
+//!     .all()
+//!     .await?;
+//!
+//! // Get or create
+//! let (book, created) = Book::objects(&db)
+//!     .get_or_create(
+//!         Book::Isbn.eq("978-1234567890"),
+//!         || Book {
+//!             title: "New Book".into(),
+//!             isbn: "978-1234567890".into(),
+//!             price: 2999,
+//!             ..Default::default()
+//!         }
+//!     )
+//!     .await?;
+//! ```
 
 use crate::error::DjangoOrmError;
 use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, DbErr, EntityTrait, Iterable, ModelTrait, Order, PrimaryKeyTrait, QueryFilter, 
-    QueryOrder, QuerySelect, Select, TransactionTrait,
+    ColumnTrait, Condition, ConnectionTrait, DbErr, EntityTrait, Order, PrimaryKeyTrait, QueryFilter, 
+    QueryOrder, QuerySelect, Select,
 };
 use sea_orm::sea_query::{Expr, Func, SimpleExpr};
 use std::sync::Arc;
@@ -245,14 +304,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// ```rust,ignore
     /// // Get unique book titles (no duplicates)
-    /// let books = book::Entity::objects(db)
+    /// let books = Book::objects(db)
     ///     .distinct()
     ///     .all()
     ///     .await?;
     ///
     /// // Combined with filters
-    /// let unique_authors = book::Entity::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
+    /// let unique_authors = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
     ///     .distinct()
     ///     .all()
     ///     .await?;
@@ -277,14 +336,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// ```rust,ignore
     /// // Order by price (lowest first)
-    /// let books = book::Entity::objects(db)
-    ///     .order_by_asc(book::Column::Price)
+    /// let books = Book::objects(db)
+    ///     .order_by_asc(Book::Price)
     ///     .all()
     ///     .await?;
     ///
     /// // Order by name alphabetically
-    /// let authors = author::Entity::objects(db)
-    ///     .order_by_asc(author::Column::Name)
+    /// let authors = Author::objects(db)
+    ///     .order_by_asc(Author::Name)
     ///     .all()
     ///     .await?;
     /// ```
@@ -299,14 +358,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// ```rust,ignore
     /// // Order by price (highest first)
-    /// let books = book::Entity::objects(db)
-    ///     .order_by_desc(book::Column::Price)
+    /// let books = Book::objects(db)
+    ///     .order_by_desc(Book::Price)
     ///     .all()
     ///     .await?;
     ///
     /// // Get newest books first
-    /// let recent = book::Entity::objects(db)
-    ///     .order_by_desc(book::Column::CreatedAt)
+    /// let recent = Book::objects(db)
+    ///     .order_by_desc(Book::CreatedAt)
     ///     .limit(10)
     ///     .all()
     ///     .await?;
@@ -552,14 +611,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// ```rust,ignore
     /// // Get oldest book by creation date
-    /// let oldest = book::Entity::objects(db)
-    ///     .earliest(book::Column::CreatedAt)
+    /// let oldest = Book::objects(db)
+    ///     .earliest(Book::CreatedAt)
     ///     .await?;
     ///
     /// // With filters
-    /// let first_published = book::Entity::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
-    ///     .earliest(book::Column::PublishedDate)
+    /// let first_published = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .earliest(Book::PublishedDate)
     ///     .await?;
     /// ```
     ///
@@ -590,19 +649,19 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// ```rust,ignore
     /// // Get newest book
-    /// let newest = book::Entity::objects(db)
-    ///     .latest(book::Column::CreatedAt)
+    /// let newest = Book::objects(db)
+    ///     .latest(Book::CreatedAt)
     ///     .await?;
     ///
     /// // With filters
-    /// let latest_published = book::Entity::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
-    ///     .latest(book::Column::PublishedDate)
+    /// let latest_published = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .latest(Book::PublishedDate)
     ///     .await?;
     ///
     /// // Get most expensive book
-    /// let most_expensive = book::Entity::objects(db)
-    ///     .latest(book::Column::Price)
+    /// let most_expensive = Book::objects(db)
+    ///     .latest(Book::Price)
     ///     .await?;
     /// ```
     ///
@@ -937,7 +996,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let author = author::Entity::objects(db).create(author::Model {
+    /// let author = Author::objects(db).create(Author {
     ///     name: "John Doe".to_string(),
     ///     ..Default::default() // ID and timestamps handled automatically
     /// }).await?;
@@ -971,17 +1030,17 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// ```rust,ignore
     /// // Create multiple authors at once
     /// let authors = vec![
-    ///     author::Model {
+    ///     Author {
     ///         name: "Author 1".to_string(),
     ///         ..Default::default()
     ///     },
-    ///     author::Model {
+    ///     Author {
     ///         name: "Author 2".to_string(),
     ///         ..Default::default()
     ///     },
     /// ];
     ///
-    /// let count = author::Entity::objects(db)
+    /// let count = Author::objects(db)
     ///     .bulk_create(authors)
     ///     .await?;
     ///
@@ -1131,8 +1190,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// use sea_orm::Set;
     ///
     /// // Get or create an author - race-condition safe
-    /// let (author, created) = author::Entity::objects(db)
-    ///     .filter(author::Column::Email.eq("john@example.com"))
+    /// let (author, created) = Author::objects(db)
+    ///     .filter(Author::Email.eq("john@example.com"))
     ///     .get_or_create(|| {
     ///         author::ActiveModel {
     ///             name: Set("John Doe".to_string()),
@@ -1151,8 +1210,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// // With dynamic data
     /// let email = "jane@example.com";
-    /// let (author, _) = author::Entity::objects(db)
-    ///     .filter(author::Column::Email.eq(email))
+    /// let (author, _) = Author::objects(db)
+    ///     .filter(Author::Email.eq(email))
     ///     .get_or_create(|| {
     ///         author::ActiveModel {
     ///             name: Set("Jane Doe".to_string()),
@@ -1203,12 +1262,19 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                         }
                         Err(e) if is_unique_violation(&e) && attempt < 2 => {
                             // Race condition detected - another transaction inserted the row
-                            // Roll back and retry
-                            let _ = txn.rollback().await;
+                            // Roll back and retry. Rollback errors are logged but not fatal
+                            // since the transaction will be dropped anyway.
+                            if let Err(rollback_err) = txn.rollback().await {
+                                eprintln!("Warning: Failed to rollback transaction after unique violation: {}", rollback_err);
+                            }
                             continue;
                         }
                         Err(e) => {
-                            let _ = txn.rollback().await;
+                            // Attempt rollback on error. Rollback failure is logged but doesn't
+                            // change the error we return since transaction drop also rolls back.
+                            if let Err(rollback_err) = txn.rollback().await {
+                                eprintln!("Warning: Failed to rollback transaction: {}", rollback_err);
+                            }
                             return Err(e.into());
                         }
                     }
@@ -1242,8 +1308,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let (book, created) = book::Entity::objects(db)
-    ///     .filter(book::Column::Isbn.eq("1234567890"))
+    /// let (book, created) = Book::objects(db)
+    ///     .filter(Book::Isbn.eq("1234567890"))
     ///     .update_or_create(
     ///         |model| {
     ///             // Update existing
@@ -1251,7 +1317,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///         },
     ///         || {
     ///             // Create new
-    ///             book::Model {
+    ///             Book {
     ///                 isbn: "1234567890".to_string(),
     ///                 title: "Rust Book".to_string(),
     ///                 price: 2999,
@@ -1306,11 +1372,15 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                         Err(e) if is_unique_violation(&e) && attempt < 2 => {
                             // Race condition detected - another transaction inserted the row
                             // Roll back and retry (next iteration will find and update it)
-                            let _ = txn.rollback().await;
+                            if let Err(rollback_err) = txn.rollback().await {
+                                eprintln!("Warning: Failed to rollback transaction after unique violation: {}", rollback_err);
+                            }
                             continue;
                         }
                         Err(e) => {
-                            let _ = txn.rollback().await;
+                            if let Err(rollback_err) = txn.rollback().await {
+                                eprintln!("Warning: Failed to rollback transaction: {}", rollback_err);
+                            }
                             return Err(e.into());
                         }
                     }
@@ -1336,7 +1406,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// // Get only title and price fields
     /// let values = Book::objects(db)
-    ///     .values(vec![book::Column::Title, book::Column::Price])
+    ///     .values(vec![Book::Title, Book::Price])
     ///     .await?;
     ///
     /// for val in values {
@@ -1379,7 +1449,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// 
     /// // Process 1 million rows without loading all into memory
     /// let mut stream = Book::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
+    ///     .filter(Book::Published.eq(true))
     ///     .iterator(Some(500))
     ///     .await?;
     /// 
@@ -1443,7 +1513,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// // Stream results without loading all into memory
     /// let mut stream = Book::objects(db)
-    ///     .values_iter(vec![book::Column::Title, book::Column::Price], None)
+    ///     .values_iter(vec![Book::Title, Book::Price], None)
     ///     .await?;
     ///
     /// while let Some(value) = stream.next().await {
@@ -1524,7 +1594,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// // Stream tuples
     /// let mut stream = Book::objects(db)
-    ///     .values_list_iter(vec![book::Column::Title, book::Column::Price], false, None)
+    ///     .values_list_iter(vec![Book::Title, Book::Price], false, None)
     ///     .await?;
     ///
     /// while let Some(row) = stream.next().await {
@@ -1534,7 +1604,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// // Stream flat values
     /// let mut stream = Book::objects(db)
-    ///     .values_list_iter(vec![book::Column::Title], true, None)
+    ///     .values_list_iter(vec![Book::Title], true, None)
     ///     .await?;
     ///
     /// while let Some(title) = stream.next().await {
@@ -1597,12 +1667,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// ```rust,ignore
     /// // Get tuples
     /// let pairs = Book::objects(db)
-    ///     .values_list(vec![book::Column::Title, book::Column::Price], false)
+    ///     .values_list(vec![Book::Title, Book::Price], false)
     ///     .await?;
     ///
     /// // Get flat list
     /// let titles = Book::objects(db)
-    ///     .values_list(vec![book::Column::Title], true)
+    ///     .values_list(vec![Book::Title], true)
     ///     .await?;
     /// ```
     pub async fn values_list(
@@ -1661,8 +1731,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// 
     /// ```rust,ignore
     /// let (sql, params) = Book::objects(db)
-    ///     .filter(book::Column::Published.eq(true))
-    ///     .order_by_desc(book::Column::CreatedAt)
+    ///     .filter(Book::Published.eq(true))
+    ///     .order_by_desc(Book::CreatedAt)
     ///     .debug_sql();
     /// 
     /// println!("SQL: {}", sql);
