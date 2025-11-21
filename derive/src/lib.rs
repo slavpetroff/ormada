@@ -9,6 +9,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 mod atomic;
 mod model;
+mod projection;
 mod relations;
 
 /// Check if a field has a specific sea_orm attribute
@@ -312,6 +313,53 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn django_model(attr: TokenStream, item: TokenStream) -> TokenStream {
     match model::impl_django_model(attr.into(), item.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Attribute macro for defining type-safe projections with compile-time validation
+///
+/// Provides a type-safe alternative to JSON-based `values()` queries.
+/// Validates that all non-computed fields exist on the model at compile time.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// // Simple projection (all fields must exist on Book)
+/// #[django_projection(model = Book)]
+/// struct BookSummary {
+///     title: String,
+///     price: f64,
+/// }
+///
+/// // With computed fields (for aggregations)
+/// #[django_projection(model = Book)]
+/// struct AuthorBookStats {
+///     author_id: i32,           // Validated
+///     #[computed]
+///     book_count: i64,          // Not validated (computed by DB)
+///     #[computed]
+///     avg_price: Option<f64>,   // Not validated (computed by DB)
+/// }
+///
+/// // Query usage
+/// let summaries: Vec<BookSummary> = Book::objects(db)
+///     .filter(Book::Published.eq(true))
+///     .project::<BookSummary>()
+///     .await?;
+/// ```
+///
+/// # Field Attributes
+///
+/// - `#[computed]` - Mark field as computed (e.g., aggregations). These fields
+///   are not validated against the model and must be provided by the query
+///   (e.g., via `.annotate()` for aggregations).
+#[proc_macro_attribute]
+pub fn django_projection(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match projection::generate_projection(attr.into(), item.into()) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }

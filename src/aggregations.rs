@@ -171,19 +171,19 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         let column_expr = Expr::col(column_ref.clone());
         let sum_expr = Func::sum(column_expr);
 
-        let query = self.select.clone().select_only().expr_as(sum_expr, "value");
+        let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
 
         // Try integer type first (more common for sum), fallback to float
-        match query.into_model::<AggregateValueInt>().one(self.db).await {
+        match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
             // Only catch type conversion errors - propagate real DB errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 // If int parsing failed, rebuild query for float (reuse column_ref, cheaper than cloning Select)
                 let sum_expr = Func::sum(Expr::col(column_ref));
-                let query = self.select.select_only().expr_as(sum_expr, "value");
+                let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
                 
-                match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+                match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
                     Some(result) => Ok(result.value),
                     None => Ok(None),
                 }
@@ -199,12 +199,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         let column_expr = Expr::col(column.as_column_ref());
         let avg_expr = Func::avg(column_expr);
 
-        let query = self.select.select_only().expr_as(avg_expr, "value");
+        let query = self.inner.select.clone().select_only().expr_as(avg_expr, "value");
 
         // AVG always returns float
         match query
             .into_model::<AggregateValueFloat>()
-            .one(self.db)
+            .one(self.inner.db)
             .await?
         {
             Some(result) => Ok(result.value),
@@ -220,19 +220,19 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         let column_expr = Expr::col(column_ref.clone());
         let max_expr = Func::max(column_expr);
 
-        let query = self.select.clone().select_only().expr_as(max_expr, "value");
+        let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
 
         // Try integer type first, fallback to float
-        match query.into_model::<AggregateValueInt>().one(self.db).await {
+        match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
             // Only catch type conversion errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 // Rebuild query for float type only if int failed (reuse column_ref)
                 let max_expr = Func::max(Expr::col(column_ref));
-                let query = self.select.select_only().expr_as(max_expr, "value");
+                let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
                 
-                match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+                match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
                     Some(result) => Ok(result.value),
                     None => Ok(None),
                 }
@@ -250,19 +250,19 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E,
         let column_expr = Expr::col(column_ref.clone());
         let min_expr = Func::min(column_expr);
 
-        let query = self.select.clone().select_only().expr_as(min_expr, "value");
+        let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
 
         // Try integer type first, fallback to float
-        match query.into_model::<AggregateValueInt>().one(self.db).await {
+        match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
             // Only catch type conversion errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 // Rebuild query for float type only if int failed (reuse column_ref)
                 let min_expr = Func::min(Expr::col(column_ref));
-                let query = self.select.select_only().expr_as(min_expr, "value");
+                let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
                 
-                match query.into_model::<AggregateValueFloat>().one(self.db).await? {
+                match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
                     Some(result) => Ok(result.value),
                     None => Ok(None),
                 }

@@ -14,6 +14,7 @@ chrono = { workspace = true }
 once_cell = { workspace = true }
 serde_json = "1.0"
 futures = "0.3"
+tokio = { version = "1", features = ["sync"] }
 
 # Optional dependencies
 seaorm-django-derive = { path = "./derive", optional = true }
@@ -60,4 +61,8 @@ path = "tests/django_model_tests/mod.rs"
 
 [[bench]]
 name = "query_performance"
+harness = false
+
+[[bench]]
+name = "cache_performance"
 harness = false

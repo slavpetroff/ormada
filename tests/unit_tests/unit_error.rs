@@ -3,6 +3,8 @@
 //! Tests error handling and conversion traits following Rust best practices
 
 use sea_orm::DbErr;
+mod common;
+
 use seaorm_django::error::DjangoOrmError;
 use std::error::Error;
 

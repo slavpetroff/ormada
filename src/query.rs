@@ -4,10 +4,12 @@
 
 use crate::error::DjangoOrmError;
 use sea_orm::{
-    sea_query::{Condition, SimpleExpr},
-    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, Order, PrimaryKeyTrait, QueryFilter, QueryOrder,
-    QuerySelect, Select,
+    ColumnTrait, Condition, ConnectionTrait, DbErr, EntityTrait, Iterable, ModelTrait, Order, PrimaryKeyTrait, QueryFilter, 
+    QueryOrder, QuerySelect, Select, TransactionTrait,
 };
+use sea_orm::sea_query::{Expr, Func, SimpleExpr};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 // ============================================================================
 // Concurrency Helpers
@@ -137,35 +139,102 @@ pub trait ColumnExt: ColumnTrait {
 impl<T: ColumnTrait> ColumnExt for T {}
 
 // ============================================================================
-// QuerySet - Django-like Query Builder
-// ============================================================================
-
-/// Django-inspired QuerySet for ergonomic query building
+/// Main QuerySet structure (Django's QuerySet equivalent)
+///
+/// Provides chainable query building with automatic caching and lazy evaluation.
+/// All operations are lazy until a terminal method (.all(), .first(), etc.) is called.
+///
+/// **Caching Behavior (Django-like):**
+/// - First execution of `.all()`, `.first()`, etc. hits the database
+/// - Results are cached in the QuerySet instance
+/// - Subsequent calls on the SAME QuerySet reuse cached results
+/// - Building new queries (`.filter()`, `.limit()`) creates new QuerySet with separate cache
+///
+/// **Concurrency Safety:**
+/// - Uses `Arc` for cheap cloning across async tasks
+/// - Uses `tokio::RwLock` for thread-safe cache access
+/// - Safe to share across threads and async tasks
+///
+/// # Type Parameters
+///
+/// - `E`: The SeaORM Entity type
+/// - `C`: The database connection type
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Build query
+/// let queryset = Book::objects(db)
+///     .filter(Book::Published.eq(true));
+///
+/// // First call - hits DB, caches results
+/// let books = queryset.all().await?;
+///
+/// // Second call - uses cache, no DB query!
+/// let books_again = queryset.all().await?;
+///
+/// // Modify query - creates new QuerySet with new cache
+/// let limited = queryset.limit(10).all().await?;
+/// ```
 pub struct QuerySet<'a, E: EntityTrait, C: ConnectionTrait> {
+    pub(crate) inner: Arc<QuerySetInner<'a, E, C>>,
+}
+
+/// Internal state for QuerySet (shared via Arc)
+pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
     pub(crate) db: &'a C,
     pub(crate) select: Select<E>,
+    // Thread-safe cache for query results
+    pub(crate) cache: RwLock<Option<Arc<Vec<E::Model>>>>,
+}
+
+// Implement Clone for QuerySet (cheap Arc clone)
+impl<'a, E: EntityTrait, C: ConnectionTrait> Clone for QuerySet<'a, E, C> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
 }
 
 impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// Create a new QuerySet
     pub fn new(db: &'a C) -> Self {
         Self {
-            db,
-            select: E::find(),
+            inner: Arc::new(QuerySetInner {
+                db,
+                select: E::find(),
+                cache: RwLock::new(None),
+            }),
+        }
+    }
+
+    /// Create a new QuerySet with modified select (internal helper)
+    fn with_select(&self, select: Select<E>) -> Self {
+        Self {
+            inner: Arc::new(QuerySetInner {
+                db: self.inner.db,
+                select,
+                cache: RwLock::new(None),  // New cache for modified query
+            }),
         }
     }
 
     /// Filter records (Django's .filter())
-    pub fn filter(mut self, condition: impl Into<Condition>) -> Self {
-        self.select = self.select.filter(condition);
-        self
+    ///
+    /// Creates a new QuerySet with added filter. The new QuerySet has its own cache.
+    pub fn filter(&self, condition: impl Into<Condition>) -> Self {
+        let new_select = self.inner.select.clone().filter(condition);
+        self.with_select(new_select)
     }
 
     /// Exclude records (Django's .exclude())
-    pub fn exclude(mut self, condition: impl Into<Condition>) -> Self {
+    ///
+    /// Creates a new QuerySet with added exclusion. The new QuerySet has its own cache.
+    pub fn exclude(&self, condition: impl Into<Condition>) -> Self {
         let cond: Condition = condition.into();
-        self.select = self.select.filter(cond.not());
-        self
+        let new_select = self.inner.select.clone().filter(cond.not());
+        self.with_select(new_select)
     }
 
     /// Remove duplicate rows (Django's .distinct())
@@ -196,10 +265,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Performance
     ///
     /// DISTINCT can be expensive on large datasets. Use only when necessary.
-    pub fn distinct(mut self) -> Self {
+    pub fn distinct(&self) -> Self {
         use sea_orm::QuerySelect;
-        self.select = self.select.distinct();
-        self
+        let new_select = self.inner.select.clone().distinct();
+        self.with_select(new_select)
     }
 
     /// Order by a column in ascending order (Django's .order_by('field'))
@@ -219,9 +288,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .all()
     ///     .await?;
     /// ```
-    pub fn order_by_asc(mut self, column: impl ColumnTrait) -> Self {
-        self.select = self.select.order_by(column, Order::Asc);
-        self
+    pub fn order_by_asc(&self, column: impl ColumnTrait) -> Self {
+        let new_select = self.inner.select.clone().order_by(column, Order::Asc);
+        self.with_select(new_select)
     }
 
     /// Order by a column in descending order (Django's .order_by('-field'))
@@ -242,21 +311,21 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .all()
     ///     .await?;
     /// ```
-    pub fn order_by_desc(mut self, column: impl ColumnTrait) -> Self {
-        self.select = self.select.order_by(column, Order::Desc);
-        self
+    pub fn order_by_desc(&self, column: impl ColumnTrait) -> Self {
+        let new_select = self.inner.select.clone().order_by(column, Order::Desc);
+        self.with_select(new_select)
     }
 
     /// Limit results (Django's [:n])
-    pub fn limit(mut self, limit: u64) -> Self {
-        self.select = self.select.limit(limit);
-        self
+    pub fn limit(&self, limit: u64) -> Self {
+        let new_select = self.inner.select.clone().limit(limit);
+        self.with_select(new_select)
     }
 
     /// Offset results
-    pub fn offset(mut self, offset: u64) -> Self {
-        self.select = self.select.offset(offset);
-        self
+    pub fn offset(&self, offset: u64) -> Self {
+        let new_select = self.inner.select.clone().offset(offset);
+        self.with_select(new_select)
     }
 
     /// Execute query and return all matching results (Django's .all())
@@ -288,8 +357,37 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .await?;
     /// assert_eq!(no_books.len(), 0);  // Returns empty vec, not error
     /// ```
-    pub async fn all(self) -> Result<Vec<E::Model>, DjangoOrmError> {
-        Ok(self.select.all(self.db).await?)
+    ///
+    /// # Caching
+    ///
+    /// **First call** - Executes SQL query and caches results:
+    /// ```rust,ignore
+    /// let qs = Book::objects(db).filter(Book::Published.eq(true));
+    /// let books = qs.all().await?;  // DB query executed
+    /// ```
+    ///
+    /// **Second call on same QuerySet** - Returns cached results (no DB query):
+    /// ```rust,ignore
+    /// let books_again = qs.all().await?;  // Cache hit! No DB query
+    /// ```
+    pub async fn all(&self) -> Result<Vec<E::Model>, DjangoOrmError> {
+        // Try to read from cache first (allows multiple concurrent readers)
+        {
+            let cache = self.inner.cache.read().await;
+            if let Some(cached_results) = cache.as_ref() {
+                // Cache hit! Return cloned results
+                return Ok((**cached_results).clone());
+            }
+        }
+        
+        // Cache miss - execute query and populate cache
+        let results = self.inner.select.clone().all(self.inner.db).await?;
+        let arc_results = Arc::new(results.clone());
+        
+        // Store in cache (exclusive write lock)
+        *self.inner.cache.write().await = Some(arc_results);
+        
+        Ok(results)
     }
 
     /// Execute query and return first result (Django's .first())
@@ -333,9 +431,25 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .first()
     ///     .await?;
     /// ```
-    pub async fn first(self) -> Result<E::Model, DjangoOrmError> {
-        self.select
-            .one(self.db)
+    ///
+    /// # Caching
+    ///
+    /// Uses the same cache as `.all()`. If cache exists, returns first element.
+    pub async fn first(&self) -> Result<E::Model, DjangoOrmError> {
+        // Try cache first
+        {
+            let cache = self.inner.cache.read().await;
+            if let Some(cached_results) = cache.as_ref() {
+                return cached_results.first()
+                    .cloned()
+                    .ok_or_else(|| DjangoOrmError::Custom("No records found".into()));
+            }
+        }
+        
+        // Cache miss - execute query for single record
+        self.inner.select
+            .clone()
+            .one(self.inner.db)
             .await?
             .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
     }
@@ -382,7 +496,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         // This is a known limitation due to SeaORM's query API not exposing order reversal.
         // For better performance on large datasets, use .order_by_desc().first() instead.
         // TODO: Optimize by reversing order clauses and using LIMIT 1
-        let models = self.select.all(self.db).await?;
+        let models = self.inner.select.clone().all(self.inner.db).await?;
 
         models
             .into_iter()
@@ -418,13 +532,13 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// }
     ///
     /// // Or use ? for early return on not found
-    pub async fn get<T>(self, id: T) -> Result<E::Model, DjangoOrmError>
+    pub async fn get<T>(&self, id: T) -> Result<E::Model, DjangoOrmError>
     where
         T: Into<<E::PrimaryKey as PrimaryKeyTrait>::ValueType> + Send + std::fmt::Display,
     {
         let id_str = format!("{}", &id);
         E::find_by_id(id)
-            .one(self.db)
+            .one(self.inner.db)
             .await?
             .ok_or_else(|| DjangoOrmError::not_found(E::default().table_name(), id_str))
     }
@@ -458,10 +572,11 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Equivalent to
     ///
     /// `.order_by_asc(column).first()` but returns error on empty result
-    pub async fn earliest(mut self, column: impl ColumnTrait) -> Result<E::Model, DjangoOrmError> {
-        self.select = self.select.order_by(column, Order::Asc);
-        self.select
-            .one(self.db)
+    pub async fn earliest(&self, column: impl ColumnTrait) -> Result<E::Model, DjangoOrmError> {
+        self.inner.select
+            .clone()
+            .order_by(column, Order::Asc)
+            .one(self.inner.db)
             .await?
             .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
     }
@@ -500,10 +615,11 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Equivalent to
     ///
     /// `.order_by_desc(column).first()` but returns error on empty result
-    pub async fn latest(mut self, column: impl ColumnTrait) -> Result<E::Model, DjangoOrmError> {
-        self.select = self.select.order_by(column, Order::Desc);
-        self.select
-            .one(self.db)
+    pub async fn latest(&self, column: impl ColumnTrait) -> Result<E::Model, DjangoOrmError> {
+        self.inner.select
+            .clone()
+            .order_by(column, Order::Desc)
+            .one(self.inner.db)
             .await?
             .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
     }
@@ -551,16 +667,16 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// This uses a SQL `COUNT(*)` query which is optimized by the database.
     /// Much faster than loading all records and counting in memory.
-    pub async fn count(self) -> Result<u64, DjangoOrmError> {
+    pub async fn count(&self) -> Result<u64, DjangoOrmError> {
         // Get count using SeaORM's built-in count functionality
         use sea_orm::QuerySelect;
-        let count_select = self.select.select_only().column_as(
+        let count_select = self.inner.select.clone().select_only().column_as(
             sea_orm::sea_query::Expr::col(sea_orm::sea_query::Asterisk).count(),
             "count",
         );
 
         // Execute and get the count
-        let result = count_select.into_tuple::<i64>().one(self.db).await?;
+        let result = count_select.into_tuple::<i64>().one(self.inner.db).await?;
         Ok(result.unwrap_or(0) as u64)
     }
 
@@ -610,10 +726,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// Uses `LIMIT 1` internally, so it stops as soon as it finds any match.
     /// This is much faster than counting all records when you just need to know
     /// if any exist.
-    pub async fn exists(self) -> Result<bool, DjangoOrmError> {
+    pub async fn exists(&self) -> Result<bool, DjangoOrmError> {
         use sea_orm::QuerySelect;
         // Use LIMIT 1 for efficiency
-        let result = self.select.limit(1).one(self.db).await?;
+        let result = self.inner.select.clone().limit(1).one(self.inner.db).await?;
         Ok(result.is_some())
     }
 
@@ -652,10 +768,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         use sea_orm::sea_query::LockType;
 
         // Wrap in transaction for atomicity
-        let txn = self.db.begin().await?;
+        let txn = self.inner.db.begin().await?;
 
         // Use SELECT FOR UPDATE to lock rows and prevent concurrent modifications
-        let models = self.select.lock(LockType::Update).all(&txn).await?;
+        let models = self.inner.select.clone().lock(LockType::Update).all(&txn).await?;
         let mut count = 0u64;
 
         for mut model in models {
@@ -809,7 +925,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     pub fn prefetch_related<R>(self, relations: R) -> crate::relations::QuerySetEager<'a, E, C, R> {
         use crate::relations::QuerySetEager;
 
-        let eager = QuerySetEager::new(self.db, self.select);
+        let eager = QuerySetEager::new(self.inner.db, self.inner.select.clone());
         eager.prefetch_related(relations)
     }
 
@@ -834,7 +950,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     {
         use sea_orm::ActiveModelTrait;
         let active_model = E::to_active_model_for_create(model)?;
-        Ok(active_model.insert(self.db).await?)
+        Ok(active_model.insert(self.inner.db).await?)
     }
 
     /// Bulk create multiple records (Django's bulk_create())
@@ -903,7 +1019,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let active_models = active_models?;
 
         // Use SeaORM's insert_many
-        E::insert_many(active_models).exec(self.db).await?;
+        E::insert_many(active_models).exec(self.inner.db).await?;
 
         Ok(count)
     }
@@ -951,7 +1067,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         use sea_orm::{ColumnTrait, Condition, Iterable, ModelTrait, PrimaryKeyToColumn, QueryFilter};
 
         // First, fetch just the primary keys of records to delete
-        let models = self.select.all(self.db).await?;
+        let models = self.inner.select.clone().all(self.inner.db).await?;
         
         if models.is_empty() {
             return Ok(0);
@@ -971,7 +1087,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             // Bulk delete with WHERE pk IN (...)
             E::delete_many()
                 .filter(ColumnTrait::is_in(&pk_col, pk_values))
-                .exec(self.db)
+                .exec(self.inner.db)
                 .await?;
         } else {
             // Composite primary key - build OR conditions
@@ -988,7 +1104,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             
             E::delete_many()
                 .filter(condition)
-                .exec(self.db)
+                .exec(self.inner.db)
                 .await?;
         }
 
@@ -1067,10 +1183,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
         // Retry up to 3 times to handle race conditions with unique constraints
         for attempt in 0..3 {
-            let txn = self.db.begin().await?;
+            let txn = self.inner.db.begin().await?;
 
             // Try to get existing record
-            match self.select.clone().one(&txn).await? {
+            match self.inner.select.clone().one(&txn).await? {
                 Some(model) => {
                     txn.commit().await?;
                     return Ok((model, false));
@@ -1166,10 +1282,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
         // Retry up to 3 times to handle race conditions with unique constraints
         for attempt in 0..3 {
-            let txn = self.db.begin().await?;
+            let txn = self.inner.db.begin().await?;
 
             // Try to get existing record
-            match self.select.clone().one(&txn).await? {
+            match self.inner.select.clone().one(&txn).await? {
                 Some(mut model) => {
                     // Update existing record
                     updater(&mut model);
@@ -1228,7 +1344,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// }
     /// ```
     pub async fn values(
-        self,
+        &self,
         columns: Vec<E::Column>,
     ) -> Result<Vec<serde_json::Value>, DjangoOrmError> {
         use sea_orm::{JsonValue, QuerySelect};
@@ -1238,12 +1354,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
 
         // Use the existing select query directly to respect limits/offsets
-        let mut select = self.select.select_only();
+        let mut select = self.inner.select.clone().select_only();
         for col in columns {
             select = select.column(col);
         }
 
-        let results: Vec<JsonValue> = select.into_json().all(self.db).await?;
+        let results: Vec<JsonValue> = select.into_json().all(self.inner.db).await?;
         Ok(results)
     }
 
@@ -1273,15 +1389,15 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// }
     /// ```
     pub async fn iterator(
-        self,
+        &self,
         chunk_size: Option<usize>,
     ) -> Result<impl futures::Stream<Item = Result<E::Model, DjangoOrmError>> + use<'a, E, C>, DjangoOrmError> {
         use futures::stream::{self, StreamExt};
         use sea_orm::QuerySelect;
         
         let chunk_size = chunk_size.unwrap_or(crate::batching::DEFAULT_CHUNK_SIZE) as u64;
-        let db = self.db;
-        let base_select = std::sync::Arc::new(self.select);
+        let db = self.inner.db;
+        let base_select = Arc::new(self.inner.select.clone());
         
         let stream = stream::unfold((0u64, false), move |(offset, done)| {
             let base_select = base_select.clone();
@@ -1336,7 +1452,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// }
     /// ```
     pub async fn values_iter(
-        self,
+        &self,
         columns: Vec<E::Column>,
         chunk_size: Option<usize>,
     ) -> Result<impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C>, DjangoOrmError> {
@@ -1351,10 +1467,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
         // Create stream that fetches in chunks using limit/offset
         // This is Django's approach: paginate through results
-        let db = self.db;
+        let db = self.inner.db;
         // Use Arc to avoid cloning the Select on every iteration
-        let base_select = std::sync::Arc::new(self.select);
-        let columns = std::sync::Arc::new(columns);
+        let base_select = Arc::new(self.inner.select.clone());
+        let columns = Arc::new(columns);
         
         let stream = stream::unfold((0u64, false), move |(offset, done)| {
             let base_select = base_select.clone();  // Clone Arc (cheap pointer copy)
@@ -1427,7 +1543,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// }
     /// ```
     pub async fn values_list_iter(
-        self,
+        &self,
         columns: Vec<E::Column>,
         flat: bool,
         chunk_size: Option<usize>,
@@ -1490,7 +1606,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .await?;
     /// ```
     pub async fn values_list(
-        self,
+        &self,
         columns: Vec<E::Column>,
         flat: bool,
     ) -> Result<Vec<serde_json::Value>, DjangoOrmError> {
@@ -1501,12 +1617,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
 
         // Use the existing select query directly to respect limits/offsets
-        let mut select = self.select.select_only();
+        let mut select = self.inner.select.clone().select_only();
         for col in &columns {
             select = select.column(*col);
         }
 
-        let results: Vec<JsonValue> = select.into_json().all(self.db).await?;
+        let results: Vec<JsonValue> = select.into_json().all(self.inner.db).await?;
 
         // If flat and single column, extract values
         if flat && columns.len() == 1 {
@@ -1554,10 +1670,246 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// ```
     pub fn debug_sql(&self) -> String {
         use sea_orm::QueryTrait;
-        let stmt = self.select.build(self.db.get_database_backend());
+        let stmt = self.inner.select.build(self.inner.db.get_database_backend());
         stmt.to_string()
     }
+
+    /// Type-safe projection query (alternative to JSON-based values())
+    ///
+    /// Returns results as a custom type with compile-time validation.
+    /// Use `#[django_projection(model = YourModel)]` to define projection structs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// #[django_projection(model = Book)]
+    /// struct BookSummary {
+    ///     title: String,
+    ///     price: f64,
+    /// }
+    ///
+    /// let summaries = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .project::<BookSummary>()
+    ///     .await?;
+    ///
+    /// for summary in summaries {
+    ///     println!("{}: ${}", summary.title, summary.price);
+    /// }
+    /// ```
+    pub async fn project<T>(&self) -> Result<Vec<T>, DjangoOrmError>
+    where
+        T: sea_orm::FromQueryResult + Send,
+    {
+        use sea_orm::QuerySelect;
+        
+        // Use select_only() to prepare for column selection
+        let select = self.inner.select.clone().select_only();
+        
+        // Convert to custom model type
+        Ok(select.into_model::<T>().all(self.inner.db).await?)
+    }
+
+    /// Group query results by one or more columns (Django's .group_by())
+    ///
+    /// Used with `.annotate()` for aggregation queries.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let stats = Book::objects(db)
+    ///     .group_by(Book::AuthorId)
+    ///     .annotate([
+    ///         ("book_count", Aggregation::count_all()),
+    ///         ("avg_price", Aggregation::avg(Book::Price)),
+    ///     ])
+    ///     .project::<AuthorBookStats>()
+    ///     .await?;
+    /// ```
+    pub fn group_by(&self, column: E::Column) -> Self {
+        use sea_orm::QuerySelect;
+        let new_select = self.inner.select.clone().group_by(column);
+        self.with_select(new_select)
+    }
+
+    /// Add computed/aggregated columns to the query (Django's .annotate())
+    ///
+    /// Adds aliased expressions for aggregations or computed values.
+    /// Must be used with `.project::<T>()` where T has `#[computed]` fields
+    /// matching the annotation aliases.
+    ///
+    /// # Examples
+    ///
+    /// ## Basic Aggregation
+    ///
+    /// ```rust,ignore
+    /// use seaorm_django::prelude::*;
+    ///
+    /// #[django_projection(model = Book)]
+    /// struct AuthorStats {
+    ///     author_id: i32,
+    ///     #[computed]
+    ///     book_count: i64,
+    ///     #[computed]
+    ///     avg_price: Option<f64>,
+    ///     #[computed]
+    ///     total_sales: Option<i64>,
+    /// }
+    ///
+    /// let stats = Book::objects(db)
+    ///     .group_by(Book::AuthorId)
+    ///     .annotate([
+    ///         ("book_count", Aggregation::count_all()),
+    ///         ("avg_price", Aggregation::avg(Book::Price)),
+    ///         ("total_sales", Aggregation::sum(Book::Sales)),
+    ///     ])
+    ///     .project::<AuthorStats>()
+    ///     .await?;
+    ///
+    /// for stat in stats {
+    ///     println!("Author {}: {} books, avg ${:.2}",
+    ///         stat.author_id,
+    ///         stat.book_count,
+    ///         stat.avg_price.unwrap_or(0.0)
+    ///     );
+    /// }
+    /// ```
+    ///
+    /// ## With Filtering
+    ///
+    /// ```rust,ignore
+    /// // Count only published books per author
+    /// let stats = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .group_by(Book::AuthorId)
+    ///     .annotate([("published_count", Aggregation::count_all())])
+    ///     .project::<PublishedStats>()
+    ///     .await?;
+    /// ```
+    ///
+    /// ## Without GROUP BY (aggregate over entire result set)
+    ///
+    /// ```rust,ignore
+    /// #[django_projection(model = Book)]
+    /// struct OverallStats {
+    ///     #[computed]
+    ///     total_books: i64,
+    ///     #[computed]
+    ///     avg_price: Option<f64>,
+    /// }
+    ///
+    /// let stats = Book::objects(db)
+    ///     .annotate([
+    ///         ("total_books", Aggregation::count_all()),
+    ///         ("avg_price", Aggregation::avg(Book::Price)),
+    ///     ])
+    ///     .project::<OverallStats>()
+    ///     .await?;
+    /// ```
+    pub fn annotate<const N: usize>(&self, annotations: [(&str, Aggregation); N]) -> Self {
+        use sea_orm::QuerySelect;
+        
+        let mut new_select = self.inner.select.clone();
+        for (alias, aggregation) in annotations {
+            let expr = aggregation.into_expr();
+            new_select = new_select.expr_as(expr, alias);
+        }
+        
+        self.with_select(new_select)
+    }
 }
+
+// ============================================================================
+// Aggregation Helpers
+// ============================================================================
+
+/// Aggregation helper for use with `.annotate()`
+///
+/// Provides type-safe aggregation functions for queries.
+#[derive(Clone)]
+pub struct Aggregation {
+    expr: SimpleExpr,
+}
+
+impl Aggregation {
+    /// COUNT(*) - Count all rows
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// .annotate([("total", Aggregation::count_all())])
+    /// ```
+    pub fn count_all() -> Self {
+        Self {
+            expr: Expr::expr(Func::count(Expr::asterisk())),
+        }
+    }
+
+    /// COUNT(column) - Count non-NULL values in column
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// .annotate([("published_count", Aggregation::count(Book::PublishedDate))])
+    /// ```
+    pub fn count(column: impl ColumnTrait) -> Self {
+        Self {
+            expr: Expr::expr(Func::count(Expr::col(column.as_column_ref()))),
+        }
+    }
+
+    /// SUM(column) - Sum of numeric column
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// .annotate([("total_sales", Aggregation::sum(Book::Sales))])
+    /// ```
+    pub fn sum(column: impl ColumnTrait) -> Self {
+        Self {
+            expr: Expr::expr(Func::sum(Expr::col(column.as_column_ref()))),
+        }
+    }
+
+    /// AVG(column) - Average of numeric column
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// .annotate([("avg_price", Aggregation::avg(Book::Price))])
+    /// ```
+    pub fn avg(column: impl ColumnTrait) -> Self {
+        Self {
+            expr: Expr::expr(Func::avg(Expr::col(column.as_column_ref()))),
+        }
+    }
+
+    /// MAX(column) - Maximum value
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// .annotate([("max_price", Aggregation::max(Book::Price))])
+    /// ```
+    pub fn max(column: impl ColumnTrait) -> Self {
+        Self {
+            expr: Expr::expr(Func::max(Expr::col(column.as_column_ref()))),
+        }
+    }
+
+    /// MIN(column) - Minimum value
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// .annotate([("min_price", Aggregation::min(Book::Price))])
+    /// ```
+    pub fn min(column: impl ColumnTrait) -> Self {
+        Self {
+            expr: Expr::expr(Func::min(Expr::col(column.as_column_ref()))),
+        }
+    }
+
+    /// Convert to SeaORM expression
+    fn into_expr(self) -> SimpleExpr {
+        self.expr
+    }
+}
+
 
 // ============================================================================
 // Q Objects - Complex Query Building

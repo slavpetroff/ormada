@@ -228,6 +228,7 @@
 
 pub mod aggregations;
 pub mod batching;
+pub mod cache;
 pub mod error;
 pub mod query;
 pub mod relations;
@@ -246,7 +247,7 @@ pub mod prelude {
     pub use crate::aggregations::AggregateExt;
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
-    pub use crate::query::{Q, QueryExt, QuerySet};
+    pub use crate::query::{Aggregation, Q, QueryExt, QuerySet};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
     pub use crate::transaction::AtomicExt;
@@ -257,7 +258,7 @@ pub mod prelude {
 
     // Derive macros
     #[cfg(feature = "derive")]
-    pub use seaorm_django_derive::{atomic, django_model, DjangoModel};
+    pub use seaorm_django_derive::{atomic, django_model, django_projection, DjangoModel};
 
     // Fast hash map for better performance
     pub use rustc_hash::FxHashMap;

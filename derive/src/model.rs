@@ -24,7 +24,7 @@ struct CompositeIndex {
 }
 
 /// Field-level attribute configuration
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 struct FieldConfig {
     // Primary key
     is_primary_key: bool,
@@ -52,7 +52,7 @@ struct FieldConfig {
     skip_deserializing: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct ForeignKeyConfig {
     entity: syn::Path,  // Can be Author or super::author::Entity
     on_delete: Option<Ident>,

@@ -1,9 +1,52 @@
-//! Common test utilities and shared test entities
+//! Common test utilities and infrastructure
+//!
+//! This module provides shared functionality for all tests:
+//! - Database setup helpers (`test_helpers`)
+//! - Test fixtures/models (`fixtures`)
+//! - Legacy test entities (`author`, `book`)
+//! - Assertion utilities
+//! - Test data factories
+//!
+//! # Usage
+//!
+//! ## Using New Test Infrastructure
+//!
+//! ```rust
+//! use common::test_helpers::*;
+//! use common::fixtures::simple_item;
+//!
+//! #[tokio::test]
+//! async fn my_test() {
+//!     let db = setup_test_db().await;
+//!     simple_item::create_table(&db).await;
+//!     
+//!     let items = simple_item::sample_items(10);
+//!     // ... test code
+//! }
+//! ```
+//!
+//! ## Using Legacy Setup
+//!
+//! ```rust
+//! use common::{setup_test_db, create_sample_authors};
+//!
+//! #[tokio::test]
+//! async fn my_test() {
+//!     let db = setup_test_db().await;
+//!     let authors = create_sample_authors(&db).await;
+//!     // ...
+//! }
+//! ```
 
+// New modular test infrastructure
+pub mod test_helpers;
+pub mod fixtures;
+
+// Legacy test utilities (kept for backward compatibility)
 use sea_orm::entity::prelude::*;
 use sea_orm::{Database, DatabaseConnection, DbBackend, Schema};
-use seaorm_django::prelude::{DateTimeWithTimeZone, DjangoOrmError}; // Explicit imports to avoid ambiguity
-use seaorm_django::query::QueryExt; // For .objects() method
+use seaorm_django::prelude::{DateTimeWithTimeZone, DjangoOrmError};
+use seaorm_django::query::QueryExt;
 use seaorm_django_derive::DjangoModel;
 
 /// Test Author entity module
