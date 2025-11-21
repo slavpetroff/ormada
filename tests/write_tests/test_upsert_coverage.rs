@@ -14,13 +14,13 @@ async fn test_update_or_create_insert_path_detailed() {
     let email = "newuser@example.com";
 
     // This should trigger the insert path
-    let (author, created) = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Email, email))
+    let (author, created) = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Email, email))
         .update_or_create(
             |_author| {
                 // This won't be called since record doesn't exist
             },
-            || author::Model {
+            || Author {
                 name: "New User".to_string(),
                 email: email.to_string(),
                 age: 28,
@@ -44,9 +44,9 @@ async fn test_get_or_create_insert_path_detailed() {
     let email = "created@example.com";
 
     // This should trigger the insert path
-    let (author, created) = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Email, email))
-        .get_or_create(|| author::Model {
+    let (author, created) = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Email, email))
+        .get_or_create(|| Author {
             name: "Created User".to_string(),
             email: email.to_string(),
             age: 32,

@@ -156,7 +156,7 @@ struct AggregateValueFloat {
     value: Option<f64>,
 }
 
-impl<'a, E: EntityTrait, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E, C> {
+impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E, C> {
     async fn aggregate_count(self) -> Result<u64, DjangoOrmError> {
         // Use the existing count() method
         self.count().await

@@ -1,6 +1,6 @@
 //! Integration tests for relation loading and prefetch_related
 
-use crate::common::author::Entity as Author;
+use crate::common::Author as Author;
 use crate::common::book::{Entity as Book, Model as BookModel};
 use crate::common::*;
 use seaorm_django::prelude::*;

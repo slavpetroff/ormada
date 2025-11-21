@@ -12,7 +12,7 @@ async fn test_get_by_id_found() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = author::Entity::objects(db)
+    let author = Author::objects(db)
         .get(authors[0].id)
         .await
         .unwrap();
@@ -27,7 +27,7 @@ async fn test_get_by_id_not_found() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = author::Entity::objects(db).get(99999).await;
+    let result = Author::objects(db).get(99999).await;
 
     assert!(result.is_err());
 }
@@ -39,8 +39,8 @@ async fn test_get_with_filter_ignored() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // get() ignores filters and just uses the ID
-    let author = author::Entity::objects(db)
-        .filter(sea_orm::ColumnTrait::eq(&author::Column::Age, 999))
+    let author = Author::objects(db)
+        .filter(sea_orm::ColumnTrait::eq(&Author::Age, 999))
         .get(authors[0].id)
         .await
         .unwrap();

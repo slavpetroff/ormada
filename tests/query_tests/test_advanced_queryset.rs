@@ -17,7 +17,7 @@ async fn test_distinct_basic() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = author::Entity::objects(db).distinct().all().await.unwrap();
+    let authors = Author::objects(db).distinct().all().await.unwrap();
 
     // Should return all unique authors
     assert_eq!(authors.len(), 3);
@@ -29,8 +29,8 @@ async fn test_distinct_with_filter() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = author::Entity::objects(db)
-        .filter(ColumnTrait::gt(&author::Column::Age, 25))
+    let authors = Author::objects(db)
+        .filter(ColumnTrait::gt(&Author::Age, 25))
         .distinct()
         .all()
         .await
@@ -45,8 +45,8 @@ async fn test_distinct_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 9999))
+    let authors = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 9999))
         .distinct()
         .all()
         .await
@@ -65,8 +65,8 @@ async fn test_earliest_basic() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let earliest = author::Entity::objects(db)
-        .earliest(author::Column::Id)
+    let earliest = Author::objects(db)
+        .earliest(Author::Id)
         .await
         .unwrap();
 
@@ -80,8 +80,8 @@ async fn test_earliest_by_age() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let youngest = author::Entity::objects(db)
-        .earliest(author::Column::Age)
+    let youngest = Author::objects(db)
+        .earliest(Author::Age)
         .await
         .unwrap();
 
@@ -95,9 +95,9 @@ async fn test_earliest_with_filter() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let earliest = author::Entity::objects(db)
-        .filter(ColumnTrait::gt(&author::Column::Age, 30))
-        .earliest(author::Column::Age)
+    let earliest = Author::objects(db)
+        .filter(ColumnTrait::gt(&Author::Age, 30))
+        .earliest(Author::Age)
         .await;
 
     // Should either find one or error
@@ -113,8 +113,8 @@ async fn test_earliest_empty_result() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = author::Entity::objects(db)
-        .earliest(author::Column::Id)
+    let result = Author::objects(db)
+        .earliest(Author::Id)
         .await;
 
     assert!(result.is_err());
@@ -134,8 +134,8 @@ async fn test_latest_basic() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let latest = author::Entity::objects(db)
-        .latest(author::Column::Id)
+    let latest = Author::objects(db)
+        .latest(Author::Id)
         .await
         .unwrap();
 
@@ -149,8 +149,8 @@ async fn test_latest_by_age() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let oldest = author::Entity::objects(db)
-        .latest(author::Column::Age)
+    let oldest = Author::objects(db)
+        .latest(Author::Age)
         .await
         .unwrap();
 
@@ -164,12 +164,12 @@ async fn test_latest_with_filter() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let latest = author::Entity::objects(db)
+    let latest = Author::objects(db)
         .filter(ColumnTrait::eq(
-            &author::Column::Email,
+            &Author::Email,
             authors[1].email.clone(),
         ))
-        .latest(author::Column::Id)
+        .latest(Author::Id)
         .await
         .unwrap();
 
@@ -181,7 +181,7 @@ async fn test_latest_empty_result() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = author::Entity::objects(db).latest(author::Column::Id).await;
+    let result = Author::objects(db).latest(Author::Id).await;
 
     assert!(result.is_err());
     match result {
@@ -200,9 +200,9 @@ async fn test_get_or_create_creates_new() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "newauthor@example.com";
-    let (author, created) = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Email, email))
-        .get_or_create(|| author::Model {
+    let (author, created) = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Email, email))
+        .get_or_create(|| Author {
             name: "New Author".to_string(),
             email: email.to_string(),
             age: 35,
@@ -223,12 +223,12 @@ async fn test_get_or_create_gets_existing() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let existing_email = authors[0].email.clone();
-    let (author, created) = author::Entity::objects(db)
+    let (author, created) = Author::objects(db)
         .filter(ColumnTrait::eq(
-            &author::Column::Email,
+            &Author::Email,
             existing_email.clone(),
         ))
-        .get_or_create(|| author::Model {
+        .get_or_create(|| Author {
             name: "Should Not Create".to_string(),
             email: existing_email.clone(),
             age: 999,
@@ -249,13 +249,13 @@ async fn test_get_or_create_multiple_filters() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let (author, created) = author::Entity::objects(db)
+    let (author, created) = Author::objects(db)
         .filter(ColumnTrait::eq(
-            &author::Column::Email,
+            &Author::Email,
             "unique@example.com",
         ))
-        .filter(ColumnTrait::gt(&author::Column::Age, 25))
-        .get_or_create(|| author::Model {
+        .filter(ColumnTrait::gt(&Author::Age, 25))
+        .get_or_create(|| Author {
             name: "Unique Author".to_string(),
             email: "unique@example.com".to_string(),
             age: 30,
@@ -278,13 +278,13 @@ async fn test_update_or_create_creates_new() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "newemail@example.com";
-    let (author, created) = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Email, email))
+    let (author, created) = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Email, email))
         .update_or_create(
             |author| {
                 author.age = 40; // This won't be called
             },
-            || author::Model {
+            || Author {
                 name: "Created Author".to_string(),
                 email: email.to_string(),
                 age: 35,
@@ -307,16 +307,16 @@ async fn test_update_or_create_updates_existing() {
 
     let existing_email = authors[0].email.clone();
 
-    let (author, created) = author::Entity::objects(db)
+    let (author, created) = Author::objects(db)
         .filter(ColumnTrait::eq(
-            &author::Column::Email,
+            &Author::Email,
             existing_email.clone(),
         ))
         .update_or_create(
             |author| {
                 author.age = 99; // Update age
             },
-            || author::Model {
+            || Author {
                 name: "Should Not Be Created".to_string(),
                 email: existing_email.clone(),
                 age: 888,
@@ -336,17 +336,17 @@ async fn test_update_or_create_with_filter() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let (author, created) = author::Entity::objects(db)
+    let (author, created) = Author::objects(db)
         .filter(ColumnTrait::eq(
-            &author::Column::Email,
+            &Author::Email,
             "filter@example.com",
         ))
-        .filter(ColumnTrait::gt(&author::Column::Age, 20))
+        .filter(ColumnTrait::gt(&Author::Age, 20))
         .update_or_create(
             |author| {
                 author.age = 50;
             },
-            || author::Model {
+            || Author {
                 name: "Filtered Author".to_string(),
                 email: "filter@example.com".to_string(),
                 age: 30,
@@ -370,9 +370,9 @@ async fn test_distinct_with_ordering() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = author::Entity::objects(db)
+    let authors = Author::objects(db)
         .distinct()
-        .order_by_asc(author::Column::Name)
+        .order_by_asc(Author::Name)
         .all()
         .await
         .unwrap();
@@ -386,13 +386,13 @@ async fn test_earliest_latest_comparison() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let earliest = author::Entity::objects(db)
-        .earliest(author::Column::Id)
+    let earliest = Author::objects(db)
+        .earliest(Author::Id)
         .await
         .unwrap();
 
-    let latest = author::Entity::objects(db)
-        .latest(author::Column::Id)
+    let latest = Author::objects(db)
+        .latest(Author::Id)
         .await
         .unwrap();
 
@@ -407,9 +407,9 @@ async fn test_get_or_create_idempotent() {
     let email = "idempotent@example.com";
 
     // First call - creates
-    let (author1, created1) = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Email, email))
-        .get_or_create(|| author::Model {
+    let (author1, created1) = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Email, email))
+        .get_or_create(|| Author {
             name: "Idempotent Test".to_string(),
             email: email.to_string(),
             age: 30,
@@ -419,9 +419,9 @@ async fn test_get_or_create_idempotent() {
         .unwrap();
 
     // Second call - gets existing
-    let (author2, created2) = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Email, email))
-        .get_or_create(|| author::Model {
+    let (author2, created2) = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Email, email))
+        .get_or_create(|| Author {
             name: "Idempotent Test".to_string(),
             email: email.to_string(),
             age: 30,

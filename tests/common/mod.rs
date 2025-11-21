@@ -42,85 +42,58 @@
 pub mod test_helpers;
 pub mod fixtures;
 
-// Legacy test utilities (kept for backward compatibility)
-use sea_orm::entity::prelude::*;
+// Test utilities using OUR django_model macro
 use sea_orm::{Database, DatabaseConnection, DbBackend, Schema};
-use seaorm_django::prelude::{DateTimeWithTimeZone, DjangoOrmError};
-use seaorm_django::query::QueryExt;
-use seaorm_django_derive::DjangoModel;
+use seaorm_django::prelude::*;
 
-/// Test Author entity module
+/// Test Author model - properly using django_model macro
 pub mod author {
     use super::*;
-
-    #[derive(Clone, Debug, PartialEq, Eq, Default, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "authors")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    
+    #[django_model(table = "authors")]
+    pub struct Author {
+        #[primary_key]
         pub id: i32,
         pub name: String,
         pub email: String,
         pub age: i32,
-
-        #[django(auto_now_add)]
+        
+        #[auto_now_add]
         pub created_at: DateTimeWithTimeZone,
-
-        #[django(auto_now)]
+        
+        #[auto_now]
         pub updated_at: DateTimeWithTimeZone,
     }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
+    
+    impl AsyncLifecycleHooks for Model {}
 }
 
-/// Test Book entity module with relations
+/// Test Book model - properly using django_model macro
 pub mod book {
     use super::*;
-
-    // Note: Temporarily not using DjangoModel to avoid macro issues
-    // We'll fix the DjangoModel macro separately
-    #[derive(Clone, Debug, PartialEq, Eq, Default, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "books")]
-    #[django(relations(author = "super::author::Entity"))]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    
+    #[django_model(table = "books")]
+    pub struct Book {
+        #[primary_key]
         pub id: i32,
         pub title: String,
         pub author_id: i32,
-        pub price: i32, // in cents
+        pub price: i32,
         pub published: bool,
-
-        #[django(auto_now_add)]
+        
+        #[auto_now_add]
         pub created_at: DateTimeWithTimeZone,
-
-        #[django(auto_now)]
+        
+        #[auto_now]
         pub updated_at: DateTimeWithTimeZone,
     }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {
-        #[sea_orm(
-            belongs_to = "super::author::Entity",
-            from = "Column::AuthorId",
-            to = "super::author::Column::Id"
-        )]
-        Author,
-    }
-
-    impl Related<super::author::Entity> for Entity {
-        fn to() -> RelationDef {
-            Relation::Author.def()
-        }
-    }
-
-    impl ActiveModelBehavior for ActiveModel {}
+    
+    impl AsyncLifecycleHooks for Model {}
 }
 
-// Re-export entity types for convenience in tests
-pub use author::Entity as Author;
-pub use book::Entity as Book;
+// Convenience type aliases - users work with Author and Book directly
+pub use author::Author;
+pub use book::Book;
 
 /// Setup in-memory SQLite database for testing
 pub async fn setup_test_db() -> DatabaseConnection {
@@ -131,14 +104,20 @@ pub async fn setup_test_db() -> DatabaseConnection {
     // Create schema
     let schema = Schema::new(DbBackend::Sqlite);
 
+    // Note: For schema creation we still need Entity (SeaORM requirement)
     let author_stmt = schema.create_table_from_entity(author::Entity);
     let book_stmt = schema.create_table_from_entity(book::Entity);
 
-    db.execute(&author_stmt)
+    use sea_orm::ConnectionTrait;
+    use sea_orm::Statement;
+    
+    let sql = author_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
+    db.execute_unprepared(&sql)
         .await
         .expect("Failed to create authors table");
 
-    db.execute(&book_stmt)
+    let sql = book_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
+    db.execute_unprepared(&sql)
         .await
         .expect("Failed to create books table");
 
@@ -146,11 +125,11 @@ pub async fn setup_test_db() -> DatabaseConnection {
 }
 
 /// Create sample authors for testing
-pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<author::Model> {
+pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<Author> {
     let mut authors = Vec::new();
 
-    let author1 = author::Entity::objects(db)
-        .create(author::Model {
+    let author1 = Author::objects(db)
+        .create(Author {
             name: "Alice Johnson".to_string(),
             email: "alice@example.com".to_string(),
             age: 35,
@@ -160,8 +139,8 @@ pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<author::Model
         .expect("Failed to insert author");
     authors.push(author1);
 
-    let author2 = author::Entity::objects(db)
-        .create(author::Model {
+    let author2 = Author::objects(db)
+        .create(Author {
             name: "Bob Smith".to_string(),
             email: "bob@example.com".to_string(),
             age: 42,
@@ -171,8 +150,8 @@ pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<author::Model
         .expect("Failed to insert author");
     authors.push(author2);
 
-    let author3 = author::Entity::objects(db)
-        .create(author::Model {
+    let author3 = Author::objects(db)
+        .create(Author {
             name: "Charlie Brown".to_string(),
             email: "charlie@example.com".to_string(),
             age: 28,
@@ -186,18 +165,14 @@ pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<author::Model
 }
 
 /// Create sample books for testing
-pub async fn create_sample_books(db: &DatabaseConnection) -> Vec<book::Model> {
+pub async fn create_sample_books(db: &DatabaseConnection) -> Vec<Book> {
     let mut books = Vec::new();
 
-    // Ensure we have authors first? No, tests usually call create_sample_authors first.
-    // But book models need author_id.
-    // The existing implementation assumes author_id 1 and 2 exist.
-
-    let book1 = book::Entity::objects(db)
-        .create(book::Model {
+    let book1 = Book::objects(db)
+        .create(Book {
             title: "Rust Programming".to_string(),
             author_id: 1,
-            price: 4999, // $49.99
+            price: 4999,
             published: true,
             ..Default::default()
         })
@@ -205,8 +180,8 @@ pub async fn create_sample_books(db: &DatabaseConnection) -> Vec<book::Model> {
         .expect("Failed to insert book");
     books.push(book1);
 
-    let book2 = book::Entity::objects(db)
-        .create(book::Model {
+    let book2 = Book::objects(db)
+        .create(Book {
             title: "Advanced Rust".to_string(),
             author_id: 1,
             price: 5999,
@@ -217,8 +192,8 @@ pub async fn create_sample_books(db: &DatabaseConnection) -> Vec<book::Model> {
         .expect("Failed to insert book");
     books.push(book2);
 
-    let book3 = book::Entity::objects(db)
-        .create(book::Model {
+    let book3 = Book::objects(db)
+        .create(Book {
             title: "Web Development".to_string(),
             author_id: 2,
             price: 3999,

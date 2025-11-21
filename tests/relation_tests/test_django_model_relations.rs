@@ -25,7 +25,7 @@ pub mod book {
 
     #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
     #[sea_orm(table_name = "books")]
-    #[django(relations(author = "super::author::Entity"))]
+    #[django(relations(author = "super::Author"))]
     pub struct Model {
         #[sea_orm(primary_key)]
         pub id: i32,

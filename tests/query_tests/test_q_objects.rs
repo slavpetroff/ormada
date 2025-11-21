@@ -18,7 +18,7 @@ async fn test_q_all() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all();
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 3);
 }
@@ -30,7 +30,7 @@ async fn test_q_any() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::any();
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     // Q::any() with no conditions should match nothing
     assert_eq!(results.len(), 0);
@@ -46,9 +46,9 @@ async fn test_q_add_condition() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let q = Q::all().add(ColumnExt::eq(&author::Column::Id, authors[0].id));
+    let q = Q::all().add(ColumnExt::eq(&Author::Id, authors[0].id));
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].id, authors[0].id);
@@ -61,10 +61,10 @@ async fn test_q_add_multiple_conditions() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all()
-        .add(ColumnExt::gt(&author::Column::Id, 0))
-        .add(ColumnExt::lt(&author::Column::Age, 100));
+        .add(ColumnExt::gt(&Author::Id, 0))
+        .add(ColumnExt::lt(&Author::Age, 100));
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert!(results.len() > 0);
     for author in &results {
@@ -80,10 +80,10 @@ async fn test_q_not() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all()
-        .add(ColumnExt::eq(&author::Column::Id, authors[0].id))
+        .add(ColumnExt::eq(&Author::Id, authors[0].id))
         .not();
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 2);
     assert!(!results.iter().any(|a| a.id == authors[0].id));
@@ -100,10 +100,10 @@ async fn test_q_any_with_conditions() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::any()
-        .add(ColumnExt::eq(&author::Column::Id, authors[0].id))
-        .add(ColumnExt::eq(&author::Column::Id, authors[1].id));
+        .add(ColumnExt::eq(&Author::Id, authors[0].id))
+        .add(ColumnExt::eq(&Author::Id, authors[1].id));
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 2);
 }
@@ -115,10 +115,10 @@ async fn test_q_all_negated() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all()
-        .add(ColumnExt::gt(&author::Column::Id, authors[2].id))
+        .add(ColumnExt::gt(&Author::Id, authors[2].id))
         .not();
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     // Should get all authors with id <= authors[2].id
     assert_eq!(results.len(), 3);
@@ -130,9 +130,9 @@ async fn test_q_with_like_pattern() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let q = Q::all().add(ColumnExt::contains(&author::Column::Name, "Bob"));
+    let q = Q::all().add(ColumnExt::contains(&Author::Name, "Bob"));
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 1);
     assert!(results[0].name.contains("Bob"));
@@ -148,7 +148,7 @@ async fn test_q_empty_all() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all();
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     // Empty Q::all() should match everything
     assert_eq!(results.len(), 0);
@@ -161,11 +161,11 @@ async fn test_q_double_negation() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all()
-        .add(ColumnExt::eq(&author::Column::Id, authors[0].id))
+        .add(ColumnExt::eq(&Author::Id, authors[0].id))
         .not()
         .not();
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     // Double negation should return to original condition
     assert_eq!(results.len(), 1);
@@ -178,9 +178,9 @@ async fn test_q_any_single_condition() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let q = Q::any().add(ColumnExt::eq(&author::Column::Id, authors[0].id));
+    let q = Q::any().add(ColumnExt::eq(&Author::Id, authors[0].id));
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].id, authors[0].id);
@@ -193,11 +193,11 @@ async fn test_q_chain_multiple_adds() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let q = Q::all()
-        .add(ColumnExt::gt(&author::Column::Id, 0))
-        .add(ColumnExt::lt(&author::Column::Id, 1000))
-        .add(ColumnExt::gt(&author::Column::Age, 0));
+        .add(ColumnExt::gt(&Author::Id, 0))
+        .add(ColumnExt::lt(&Author::Id, 1000))
+        .add(ColumnExt::gt(&Author::Age, 0));
 
-    let results = author::Entity::objects(db).filter(q).all().await.unwrap();
+    let results = Author::objects(db).filter(q).all().await.unwrap();
 
     assert_eq!(results.len(), 3);
 }

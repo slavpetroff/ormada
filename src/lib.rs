@@ -230,11 +230,14 @@ pub mod aggregations;
 pub mod batching;
 pub mod cache;
 pub mod error;
+pub mod hooks;
+pub mod hooks_macro;
 pub mod query;
 pub mod relations;
 pub mod traits;
 pub mod transaction;
 pub mod types;
+pub mod upsert;
 pub mod write;
 
 /// Convenience re-exports for common usage
@@ -247,6 +250,7 @@ pub mod prelude {
     pub use crate::aggregations::AggregateExt;
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
+    pub use crate::hooks::{AsyncLifecycleHooks, LifecycleHooks};
     pub use crate::query::{Aggregation, Q, QueryExt, QuerySet};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
@@ -254,7 +258,7 @@ pub mod prelude {
     pub use crate::types::OnDelete;
     
     // Macros
-    pub use crate::{relations, tx};
+    pub use crate::{hooks, relations, tx};
 
     // Derive macros
     #[cfg(feature = "derive")]

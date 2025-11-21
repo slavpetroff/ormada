@@ -18,8 +18,8 @@ async fn test_prefetch_single_relation_via_macro() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Single relation prefetch
-    let books = book::Entity::objects(db)
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -38,8 +38,8 @@ async fn test_empty_relation_prefetch() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // No data, but should still work
-    let books = book::Entity::objects(db)
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -54,9 +54,9 @@ async fn test_prefetch_with_all_empty_results() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Filter to get no results
-    let books = book::Entity::objects(db)
-        .filter(ColumnTrait::eq(&book::Column::AuthorId, 99999))
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .filter(ColumnTrait::eq(&Book::AuthorId, 99999))
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -71,10 +71,10 @@ async fn test_relation_with_ordering_and_limit() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = book::Entity::objects(db)
-        .order_by_desc(book::Column::Id)
+    let books = Book::objects(db)
+        .order_by_desc(Book::Id)
         .limit(2)
-        .prefetch_related(relations![author::Entity])
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -92,10 +92,10 @@ async fn test_relation_with_complex_filter() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = book::Entity::objects(db)
-        .filter(ColumnTrait::eq(&book::Column::AuthorId, authors[0].id))
-        .filter(ColumnTrait::eq(&book::Column::Published, true))
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .filter(ColumnTrait::eq(&Book::AuthorId, authors[0].id))
+        .filter(ColumnTrait::eq(&Book::Published, true))
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -115,8 +115,8 @@ async fn test_count_with_prefetch_defined() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Count should ignore prefetch
-    let count = book::Entity::objects(db)
-        .prefetch_related(relations![author::Entity])
+    let count = Book::objects(db)
+        .prefetch_related(relations![Author])
         .count()
         .await
         .unwrap();
@@ -132,8 +132,8 @@ async fn test_exists_with_prefetch_defined() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Exists should ignore prefetch
-    let exists = book::Entity::objects(db)
-        .prefetch_related(relations![author::Entity])
+    let exists = Book::objects(db)
+        .prefetch_related(relations![Author])
         .exists()
         .await
         .unwrap();
@@ -148,9 +148,9 @@ async fn test_first_with_prefetch() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = book::Entity::objects(db)
-        .order_by_asc(book::Column::Id)
-        .prefetch_related(relations![author::Entity])
+    let book = Book::objects(db)
+        .order_by_asc(Book::Id)
+        .prefetch_related(relations![Author])
         .first()
         .await
         .unwrap();
@@ -165,9 +165,9 @@ async fn test_last_with_prefetch() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = book::Entity::objects(db)
-        .order_by_desc(book::Column::Id)
-        .prefetch_related(relations![author::Entity])
+    let book = Book::objects(db)
+        .order_by_desc(Book::Id)
+        .prefetch_related(relations![Author])
         .last()
         .await
         .unwrap();
@@ -181,7 +181,7 @@ async fn test_relation_none_when_fk_zero() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Create a book with no author (FK = 0 or default)
-    let book_without_author = book::Model {
+    let book_without_author = Book {
         title: "Standalone Book".to_string(),
         author_id: 0,
         price: 2000,
@@ -189,13 +189,13 @@ async fn test_relation_none_when_fk_zero() {
         ..Default::default()
     };
 
-    let created = book::Entity::objects(db).create(book_without_author).await;
+    let created = Book::objects(db).create(book_without_author).await;
 
     // This might fail due to FK constraints, which is expected
     if created.is_ok() {
-        let books = book::Entity::objects(db)
-            .filter(ColumnTrait::eq(&book::Column::AuthorId, 0))
-            .prefetch_related(relations![author::Entity])
+        let books = Book::objects(db)
+            .filter(ColumnTrait::eq(&Book::AuthorId, 0))
+            .prefetch_related(relations![Author])
             .all()
             .await
             .unwrap();
@@ -215,7 +215,7 @@ async fn test_multiple_books_same_author_efficient() {
 
     // Create 10 books with the same author
     let books_to_create: Vec<_> = (1..=10)
-        .map(|i| book::Model {
+        .map(|i| Book {
             title: format!("Book {}", i),
             author_id: authors[0].id,
             price: 1000 + i,
@@ -224,14 +224,14 @@ async fn test_multiple_books_same_author_efficient() {
         })
         .collect();
 
-    book::Entity::objects(db)
+    Book::objects(db)
         .bulk_create(books_to_create)
         .await
         .unwrap();
 
-    let books = book::Entity::objects(db)
-        .filter(ColumnTrait::eq(&book::Column::AuthorId, authors[0].id))
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .filter(ColumnTrait::eq(&Book::AuthorId, authors[0].id))
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -254,8 +254,8 @@ async fn test_relation_field_immutability() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = book::Entity::objects(db)
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
@@ -276,8 +276,8 @@ async fn test_prefetch_preserves_model_data() {
     let books_created = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = book::Entity::objects(db)
-        .prefetch_related(relations![author::Entity])
+    let books = Book::objects(db)
+        .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();

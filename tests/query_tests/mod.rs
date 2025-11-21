@@ -10,6 +10,7 @@ mod test_column_methods;
 mod test_concurrency;
 mod test_delete_performance;
 mod test_error_paths;
+mod test_explain;
 mod test_get_method;
 mod test_get_or_create;
 mod test_iterator_methods;

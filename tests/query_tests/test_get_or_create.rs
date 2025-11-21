@@ -6,9 +6,9 @@ async fn test_get_or_create_creates_when_not_exists() {
     let db = setup_test_db().await;
 
     // Try to get_or_create with non-existent email
-    let (author, created) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("newauthor@example.com"))
-        .get_or_create(|| author::Model {
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("newauthor@example.com"))
+        .get_or_create(|| Author {
             name: "New Author".to_string(),
             email: "newauthor@example.com".to_string(),
             age: 25,
@@ -22,8 +22,8 @@ async fn test_get_or_create_creates_when_not_exists() {
     assert_eq!(author.email, "newauthor@example.com");
 
     // Verify it was actually created
-    let found = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("newauthor@example.com"))
+    let found = Author::objects(&db)
+        .filter(Author::Email.eq("newauthor@example.com"))
         .first()
         .await
         .unwrap();
@@ -35,8 +35,8 @@ async fn test_get_or_create_gets_when_exists() {
     let db = setup_test_db().await;
 
     // Create an author first
-    let original = author::Entity::objects(&db)
-        .create(author::Model {
+    let original = Author::objects(&db)
+        .create(Author {
             name: "Existing".to_string(),
             email: "existing@example.com".to_string(),
             age: 30,
@@ -46,9 +46,9 @@ async fn test_get_or_create_gets_when_exists() {
         .unwrap();
 
     // Try to get_or_create - should get the existing one
-    let (author, created) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("existing@example.com"))
-        .get_or_create(|| author::Model {
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("existing@example.com"))
+        .get_or_create(|| Author {
             name: "Should Not Be Created".to_string(),
             email: "existing@example.com".to_string(),
             age: 99,
@@ -67,13 +67,13 @@ async fn test_update_or_create_creates_when_not_exists() {
     let db = setup_test_db().await;
 
     // Try to update_or_create with non-existent email
-    let (author, created) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("brand_new@example.com"))
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("brand_new@example.com"))
         .update_or_create(
             |model| {
                 model.age = 35;
             },
-            || author::Model {
+            || Author {
                 name: "Brand New".to_string(),
                 email: "brand_new@example.com".to_string(),
                 age: 28,
@@ -93,8 +93,8 @@ async fn test_update_or_create_updates_when_exists() {
     let db = setup_test_db().await;
 
     // Create an author first
-    let original = author::Entity::objects(&db)
-        .create(author::Model {
+    let original = Author::objects(&db)
+        .create(Author {
             name: "To Update".to_string(),
             email: "toupdate@example.com".to_string(),
             age: 30,
@@ -104,13 +104,13 @@ async fn test_update_or_create_updates_when_exists() {
         .unwrap();
 
     // Try to update_or_create - should update the existing one
-    let (author, created) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("toupdate@example.com"))
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("toupdate@example.com"))
         .update_or_create(
             |model| {
                 model.age = 45;
             },
-            || author::Model {
+            || Author {
                 name: "Should Not Be Used".to_string(),
                 email: "toupdate@example.com".to_string(),
                 age: 99,

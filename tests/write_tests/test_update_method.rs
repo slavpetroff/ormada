@@ -16,8 +16,8 @@ async fn test_update_method_executes() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let count = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .update(|author| {
             author.age = 999; // This won't actually update due to the bug
         })
@@ -35,8 +35,8 @@ async fn test_update_single_record() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let count = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .update(|author| {
             author.name = "Updated Name".to_string();
         })
@@ -45,8 +45,8 @@ async fn test_update_single_record() {
 
     assert_eq!(count, 1);
 
-    let updated = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let updated = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .first()
         .await
         .unwrap();
@@ -61,7 +61,7 @@ async fn test_update_multiple_records() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
+    let count = Author::objects(db)
         .update(|author| {
             author.age = 100;
         })
@@ -70,7 +70,7 @@ async fn test_update_multiple_records() {
 
     assert_eq!(count, 3);
 
-    let all_authors = author::Entity::objects(db).all().await.unwrap();
+    let all_authors = Author::objects(db).all().await.unwrap();
 
     for author in &all_authors {
         assert_eq!(author.age, 100);
@@ -84,8 +84,8 @@ async fn test_update_with_filter() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .filter(ColumnTrait::gt(&author::Column::Id, authors[0].id))
+    let count = Author::objects(db)
+        .filter(ColumnTrait::gt(&Author::Id, authors[0].id))
         .update(|author| {
             author.email = "updated@example.com".to_string();
         })
@@ -94,9 +94,9 @@ async fn test_update_with_filter() {
 
     assert_eq!(count, 2);
 
-    let updated_count = author::Entity::objects(db)
+    let updated_count = Author::objects(db)
         .filter(ColumnTrait::eq(
-            &author::Column::Email,
+            &Author::Email,
             "updated@example.com",
         ))
         .count()
@@ -113,8 +113,8 @@ async fn test_update_no_matches() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 99999))
+    let count = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 99999))
         .update(|author| {
             author.name = "Should Not Update".to_string();
         })
@@ -131,8 +131,8 @@ async fn test_update_with_exclude() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .exclude(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let count = Author::objects(db)
+        .exclude(ColumnTrait::eq(&Author::Id, authors[0].id))
         .update(|author| {
             author.age = 50;
         })
@@ -141,8 +141,8 @@ async fn test_update_with_exclude() {
 
     assert_eq!(count, 2);
 
-    let unchanged = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let unchanged = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .first()
         .await
         .unwrap();
@@ -157,8 +157,8 @@ async fn test_update_multiple_fields() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let count = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .update(|author| {
             author.name = "New Name".to_string();
             author.email = "new@example.com".to_string();
@@ -169,8 +169,8 @@ async fn test_update_multiple_fields() {
 
     assert_eq!(count, 1);
 
-    let updated = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let updated = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .first()
         .await
         .unwrap();
@@ -187,8 +187,8 @@ async fn test_update_with_ordering() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = author::Entity::objects(db)
-        .order_by_asc(author::Column::Id)
+    let count = Author::objects(db)
+        .order_by_asc(Author::Id)
         .limit(2)
         .update(|author| {
             author.age = 75;
@@ -198,8 +198,8 @@ async fn test_update_with_ordering() {
 
     assert_eq!(count, 2);
 
-    let updated_count = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Age, 75))
+    let updated_count = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Age, 75))
         .count()
         .await
         .unwrap();

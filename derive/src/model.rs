@@ -47,6 +47,9 @@ struct FieldConfig {
     auto_now: bool,
     auto_now_add: bool,
 
+    // Soft delete
+    soft_delete: bool,
+
     // Serialization
     skip_serializing: bool,
     skip_deserializing: bool,
@@ -122,6 +125,7 @@ fn parse_field_attributes(attrs: &[Attribute]) -> syn::Result<FieldConfig> {
             && !attr.path().is_ident("range")
             && !attr.path().is_ident("auto_now")
             && !attr.path().is_ident("auto_now_add")
+            && !attr.path().is_ident("soft_delete")
             && !attr.path().is_ident("skip_serializing")
             && !attr.path().is_ident("skip_deserializing")
         {
@@ -143,6 +147,9 @@ fn parse_field_attributes(attrs: &[Attribute]) -> syn::Result<FieldConfig> {
             }
             Meta::Path(ref path) if path.is_ident("auto_now_add") => {
                 config.auto_now_add = true;
+            }
+            Meta::Path(ref path) if path.is_ident("soft_delete") => {
+                config.soft_delete = true;
             }
             Meta::Path(ref path) if path.is_ident("skip_serializing") => {
                 config.skip_serializing = true;
@@ -296,6 +303,7 @@ pub fn impl_django_model(
     let mut has_primary_key = false;
     let mut primary_key_fields = Vec::new();
     let mut foreign_keys = Vec::new();
+    let mut soft_delete_field: Option<Ident> = None;
 
     for field in fields.named.iter_mut() {
         let config = parse_field_attributes(&field.attrs)?;
@@ -307,6 +315,15 @@ pub fn impl_django_model(
         }
         if let Some(ref fk) = config.foreign_key {
             foreign_keys.push((field.ident.as_ref().unwrap().clone(), fk.clone()));
+        }
+        if config.soft_delete {
+            if soft_delete_field.is_some() {
+                return Err(syn::Error::new(
+                    field.ident.as_ref().unwrap().span(),
+                    "Only one field can be marked with #[soft_delete]",
+                ));
+            }
+            soft_delete_field = Some(field.ident.as_ref().unwrap().clone());
         }
         
         // Store config before stripping attributes
@@ -364,9 +381,10 @@ pub fn impl_django_model(
     // Generate additional components
     let relation_enum = generate_relation_enum(&foreign_keys);
     let entity_impl = generate_entity_impl();
-    let django_entity_impl = generate_django_entity_impl(&field_configs, table_name)?;
+    let django_entity_impl = generate_django_entity_impl(&field_configs, table_name, soft_delete_field.as_ref())?;
     let has_relation_impls = generate_has_relation_impls(&foreign_keys);
     let model_save_impl = generate_model_save_impl(&field_configs)?;
+    let model_delete_impl = generate_model_delete_impl(soft_delete_field.as_ref())?;
     let model_convenience_impl = generate_model_convenience_methods(&input)?;
 
     // Generate code with nested module to avoid conflicts
@@ -411,6 +429,7 @@ pub fn impl_django_model(
         
         // Model instance methods (save, delete, etc.)
         #model_save_impl
+        #model_delete_impl
         
         // Model static methods and column constants
         #model_convenience_impl
@@ -470,6 +489,7 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
             && !attr.path().is_ident("range")
             && !attr.path().is_ident("auto_now")
             && !attr.path().is_ident("auto_now_add")
+            && !attr.path().is_ident("soft_delete")
             && !attr.path().is_ident("skip_serializing")
             && !attr.path().is_ident("skip_deserializing")
         {
@@ -654,6 +674,7 @@ fn generate_entity_impl() -> TokenStream {
 fn generate_django_entity_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
     table_name: &str,
+    soft_delete_field: Option<&Ident>,
 ) -> syn::Result<TokenStream> {
     let mut create_assignments = Vec::new();
     let mut validations = Vec::new();
@@ -743,6 +764,18 @@ fn generate_django_entity_impl(
         }
     }
 
+    // Generate soft_delete_column implementation if needed
+    let soft_delete_impl = if let Some(field) = soft_delete_field {
+        let field_str = field.to_string();
+        quote! {
+            fn soft_delete_column() -> Option<&'static str> {
+                Some(#field_str)
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         impl ::seaorm_django::traits::DjangoEntity for Entity {
             fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
@@ -761,6 +794,8 @@ fn generate_django_entity_impl(
             ) -> ::core::result::Result<Model, ::seaorm_django::error::DjangoOrmError> {
                 model.save(db).await
             }
+
+            #soft_delete_impl
         }
     })
 }
@@ -870,6 +905,89 @@ fn generate_model_save_impl(
             }
         }
     })
+}
+
+/// Generate delete methods with soft delete support
+fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<TokenStream> {
+    if let Some(field_name) = soft_delete_field {
+        // Soft delete implementation
+        Ok(quote! {
+            impl Model {
+                /// Soft delete this model (sets deleted_at timestamp).
+                ///
+                /// The record remains in the database but is excluded from queries by default.
+                /// Use `.with_deleted()` to include soft-deleted records in queries.
+                /// Use `.restore()` to un-delete a soft-deleted record.
+                pub async fn delete<C: ::sea_orm::ConnectionTrait>(
+                    self,
+                    db: &C,
+                ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
+                    use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
+                    
+                    // Convert to ActiveModel and set deleted_at
+                    let mut active = ActiveModel::from(self);
+                    active.#field_name = Set(::core::option::Option::Some(::chrono::Utc::now().fixed_offset()));
+                    
+                    // Update in database
+                    let updated = active.update(db).await?;
+                    
+                    ::core::result::Result::Ok(updated)
+                }
+                
+                /// Permanently delete this record from the database (hard delete).
+                ///
+                /// This cannot be undone. Use `.delete()` for soft delete instead.
+                pub async fn force_delete<C: ::sea_orm::ConnectionTrait>(
+                    self,
+                    db: &C,
+                ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
+                    use ::sea_orm::ActiveModelTrait;
+                    
+                    let active = ActiveModel::from(self);
+                    active.delete(db).await?;
+                    
+                    ::core::result::Result::Ok(())
+                }
+                
+                /// Restore a soft-deleted record (set deleted_at to NULL).
+                ///
+                /// Makes the record visible in queries again.
+                pub async fn restore<C: ::sea_orm::ConnectionTrait>(
+                    self,
+                    db: &C,
+                ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
+                    use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
+                    
+                    // Convert to ActiveModel and set deleted_at to NULL
+                    let mut active = ActiveModel::from(self);
+                    active.#field_name = Set(::core::option::Option::None);
+                    
+                    // Update in database
+                    let updated = active.update(db).await?;
+                    
+                    ::core::result::Result::Ok(updated)
+                }
+            }
+        })
+    } else {
+        // Hard delete implementation (no soft deletes)
+        Ok(quote! {
+            impl Model {
+                /// Delete this record from the database.
+                pub async fn delete<C: ::sea_orm::ConnectionTrait>(
+                    self,
+                    db: &C,
+                ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
+                    use ::sea_orm::ActiveModelTrait;
+                    
+                    let active = ActiveModel::from(self);
+                    active.delete(db).await?;
+                    
+                    ::core::result::Result::Ok(())
+                }
+            }
+        })
+    }
 }
 
 /// Generate convenience methods and constants on Model for better UX

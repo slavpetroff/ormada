@@ -17,8 +17,8 @@ async fn test_values_basic() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .values(vec![author::Column::Name, author::Column::Age])
+    let values = Author::objects(db)
+        .values(vec![Author::Name, Author::Age])
         .await
         .unwrap();
 
@@ -40,8 +40,8 @@ async fn test_values_single_column() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .values(vec![author::Column::Name])
+    let values = Author::objects(db)
+        .values(vec![Author::Name])
         .await
         .unwrap();
 
@@ -59,9 +59,9 @@ async fn test_values_with_filter() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
-        .values(vec![author::Column::Name, author::Column::Email])
+    let values = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
+        .values(vec![Author::Name, Author::Email])
         .await
         .unwrap();
 
@@ -78,9 +78,9 @@ async fn test_values_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 9999))
-        .values(vec![author::Column::Name])
+    let values = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 9999))
+        .values(vec![Author::Name])
         .await
         .unwrap();
 
@@ -93,7 +93,7 @@ async fn test_values_empty_columns() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db).values(vec![]).await.unwrap();
+    let values = Author::objects(db).values(vec![]).await.unwrap();
 
     assert_eq!(values.len(), 0);
 }
@@ -104,9 +104,9 @@ async fn test_values_with_ordering() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .order_by_desc(author::Column::Age)
-        .values(vec![author::Column::Name, author::Column::Age])
+    let values = Author::objects(db)
+        .order_by_desc(Author::Age)
+        .values(vec![Author::Name, Author::Age])
         .await
         .unwrap();
 
@@ -124,9 +124,9 @@ async fn test_values_with_limit() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
+    let values = Author::objects(db)
         .limit(2)
-        .values(vec![author::Column::Name])
+        .values(vec![Author::Name])
         .await
         .unwrap();
 
@@ -143,8 +143,8 @@ async fn test_values_list_basic() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .values_list(vec![author::Column::Name, author::Column::Age], false)
+    let values = Author::objects(db)
+        .values_list(vec![Author::Name, Author::Age], false)
         .await
         .unwrap();
 
@@ -164,8 +164,8 @@ async fn test_values_list_flat() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .values_list(vec![author::Column::Name], true)
+    let values = Author::objects(db)
+        .values_list(vec![Author::Name], true)
         .await
         .unwrap();
 
@@ -185,8 +185,8 @@ async fn test_values_list_flat_multiple_columns() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // flat=true with multiple columns should return arrays (flat is ignored)
-    let values = author::Entity::objects(db)
-        .values_list(vec![author::Column::Name, author::Column::Age], true)
+    let values = Author::objects(db)
+        .values_list(vec![Author::Name, Author::Age], true)
         .await
         .unwrap();
 
@@ -204,9 +204,9 @@ async fn test_values_list_with_filter() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .filter(ColumnTrait::gt(&author::Column::Age, 25))
-        .values_list(vec![author::Column::Name], true)
+    let values = Author::objects(db)
+        .filter(ColumnTrait::gt(&Author::Age, 25))
+        .values_list(vec![Author::Name], true)
         .await
         .unwrap();
 
@@ -221,9 +221,9 @@ async fn test_values_list_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 9999))
-        .values_list(vec![author::Column::Name], true)
+    let values = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 9999))
+        .values_list(vec![Author::Name], true)
         .await
         .unwrap();
 
@@ -236,7 +236,7 @@ async fn test_values_list_empty_columns() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
+    let values = Author::objects(db)
         .values_list(vec![], false)
         .await
         .unwrap();
@@ -250,9 +250,9 @@ async fn test_values_list_with_ordering() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .order_by_asc(author::Column::Name)
-        .values_list(vec![author::Column::Name], true)
+    let values = Author::objects(db)
+        .order_by_asc(Author::Name)
+        .values_list(vec![Author::Name], true)
         .await
         .unwrap();
 
@@ -272,11 +272,11 @@ async fn test_values_list_with_limit_offset() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = author::Entity::objects(db)
-        .order_by_asc(author::Column::Id)
+    let values = Author::objects(db)
+        .order_by_asc(Author::Id)
         .limit(2)
         .offset(1)
-        .values_list(vec![author::Column::Name], true)
+        .values_list(vec![Author::Name], true)
         .await
         .unwrap();
 
@@ -294,11 +294,11 @@ async fn test_values_vs_all() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Get all models
-    let all_count = author::Entity::objects(db).all().await.unwrap().len();
+    let all_count = Author::objects(db).all().await.unwrap().len();
 
     // Get values
-    let values_count = author::Entity::objects(db)
-        .values(vec![author::Column::Name])
+    let values_count = Author::objects(db)
+        .values(vec![Author::Name])
         .await
         .unwrap()
         .len();
@@ -313,14 +313,14 @@ async fn test_values_list_single_vs_multiple() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Single column flat
-    let single = author::Entity::objects(db)
-        .values_list(vec![author::Column::Name], true)
+    let single = Author::objects(db)
+        .values_list(vec![Author::Name], true)
         .await
         .unwrap();
 
     // Single column non-flat
-    let single_array = author::Entity::objects(db)
-        .values_list(vec![author::Column::Name], false)
+    let single_array = Author::objects(db)
+        .values_list(vec![Author::Name], false)
         .await
         .unwrap();
 

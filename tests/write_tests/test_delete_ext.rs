@@ -14,7 +14,7 @@ async fn test_model_delete_ext() {
     author.delete(&db).await.unwrap();
     
     // Verify deletion
-    let remaining = author::Entity::objects(&db)
+    let remaining = Author::objects(&db)
         .all()
         .await
         .unwrap();

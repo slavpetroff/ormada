@@ -16,8 +16,8 @@ async fn test_atomic_commit_single_insert() {
 
     // Transaction that succeeds
     let author = tx!(db, |txn| async move {
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "John Doe".to_string(),
                 email: "john@example.com".to_string(),
                 age: 30,
@@ -30,7 +30,7 @@ async fn test_atomic_commit_single_insert() {
     .unwrap();
 
     // Verify author was committed
-    let found = author::Entity::objects(&db).get(author.id).await;
+    let found = Author::objects(&db).get(author.id).await;
 
     assert!(found.is_ok());
     assert_eq!(found.unwrap().name, "John Doe");
@@ -43,8 +43,8 @@ async fn test_atomic_commit_multiple_inserts() {
     // Transaction with multiple operations
     let (author, book) = tx!(db, |txn| async move {
         // Create author using Django-style API
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "Jane Doe".to_string(),
                 email: "jane@example.com".to_string(),
                 age: 25,
@@ -53,8 +53,8 @@ async fn test_atomic_commit_multiple_inserts() {
             .await?;
 
         // Create book referencing the author
-        let book = book::Entity::objects(txn)
-            .create(book::Model {
+        let book = Book::objects(txn)
+            .create(Book {
                 title: "Rust Programming".to_string(),
                 author_id: author.id,
                 price: 2999,
@@ -69,10 +69,10 @@ async fn test_atomic_commit_multiple_inserts() {
     .unwrap();
 
     // Verify both were committed
-    let found_author = author::Entity::objects(&db).get(author.id).await;
+    let found_author = Author::objects(&db).get(author.id).await;
     assert!(found_author.is_ok());
 
-    let found_book = book::Entity::objects(&db).get(book.id).await;
+    let found_book = Book::objects(&db).get(book.id).await;
     assert!(found_book.is_ok());
     assert_eq!(found_book.unwrap().author_id, author.id);
 }
@@ -85,11 +85,11 @@ async fn test_atomic_commit_with_query() {
     // Transaction with query and insert
     let result = tx!(db, |txn| async move {
         // Query existing authors
-        let count = author::Entity::objects(txn).count().await?;
+        let count = Author::objects(txn).count().await?;
 
         // Create a new one
-        let new_author = author::Entity::objects(txn)
-            .create(author::Model {
+        let new_author = Author::objects(txn)
+            .create(Author {
                 name: "New Author".to_string(),
                 email: "new@example.com".to_string(),
                 age: 35,
@@ -113,7 +113,7 @@ async fn test_atomic_commit_with_update() {
 
     // Transaction with update
     let _ = tx!(db, |txn| async move {
-        let mut author = author::Entity::objects(txn).get(author_id).await?;
+        let mut author = Author::objects(txn).get(author_id).await?;
 
         author.age = 99;
 
@@ -125,7 +125,7 @@ async fn test_atomic_commit_with_update() {
     .unwrap();
 
     // Verify update was committed
-    let found = author::Entity::objects(&db).get(author_id).await.unwrap();
+    let found = Author::objects(&db).get(author_id).await.unwrap();
     assert_eq!(found.age, 99);
 }
 
@@ -138,10 +138,10 @@ async fn test_atomic_rollback_on_error() {
     let db = setup_test_db().await;
 
     // Transaction that fails
-    let result: Result<author::Model, DjangoOrmError> = tx!(db, |txn| async move {
+    let result: Result<Author, DjangoOrmError> = tx!(db, |txn| async move {
         // Create author
-        let _ = author::Entity::objects(txn)
-            .create(author::Model {
+        let _ = Author::objects(txn)
+            .create(Author {
                 name: "Will Rollback".to_string(),
                 email: "rollback@example.com".to_string(),
                 age: 30,
@@ -157,7 +157,7 @@ async fn test_atomic_rollback_on_error() {
     assert!(result.is_err());
 
     // Verify nothing was committed
-    let count = author::Entity::objects(&db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 0);
 }
 
@@ -168,8 +168,8 @@ async fn test_atomic_rollback_partial_operations() {
     // Transaction with multiple operations, fails midway
     let result: Result<(), DjangoOrmError> = tx!(db, |txn| async move {
         // Create first author - succeeds
-        let _author1 = author::Entity::objects(txn)
-            .create(author::Model {
+        let _author1 = Author::objects(txn)
+            .create(Author {
                 name: "Author 1".to_string(),
                 email: "author1@example.com".to_string(),
                 age: 30,
@@ -178,8 +178,8 @@ async fn test_atomic_rollback_partial_operations() {
             .await?;
 
         // Create second author - succeeds
-        let _author2 = author::Entity::objects(txn)
-            .create(author::Model {
+        let _author2 = Author::objects(txn)
+            .create(Author {
                 name: "Author 2".to_string(),
                 email: "author2@example.com".to_string(),
                 age: 25,
@@ -195,7 +195,7 @@ async fn test_atomic_rollback_partial_operations() {
     assert!(result.is_err());
 
     // Verify no authors were committed
-    let count = author::Entity::objects(&db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 0);
 }
 
@@ -205,8 +205,8 @@ async fn test_atomic_rollback_with_business_logic() {
 
     // Transaction with business logic validation
     let result = tx!(db, |txn| async move {
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "Too Young".to_string(),
                 email: "young@example.com".to_string(),
                 age: 15,
@@ -227,7 +227,7 @@ async fn test_atomic_rollback_with_business_logic() {
     assert!(result.unwrap_err().to_string().contains("18 or older"));
 
     // Verify rollback
-    let count = author::Entity::objects(&db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 0);
 }
 
@@ -239,8 +239,8 @@ async fn test_atomic_rollback_on_constraint_violation() {
     // Try to create book with invalid foreign key
     let _result = tx!(db, |txn| async move {
         // Valid author first
-        let _author = author::Entity::objects(txn)
-            .create(author::Model {
+        let _author = Author::objects(txn)
+            .create(Author {
                 name: "Valid Author".to_string(),
                 email: "valid@example.com".to_string(),
                 age: 30,
@@ -249,8 +249,8 @@ async fn test_atomic_rollback_on_constraint_violation() {
             .await?;
 
         // Book with non-existent author_id
-        let book = book::Entity::objects(txn)
-            .create(book::Model {
+        let book = Book::objects(txn)
+            .create(Book {
                 title: "Invalid Book".to_string(),
                 author_id: 99999, // Non-existent
                 price: 2999,
@@ -278,8 +278,8 @@ async fn test_nested_atomic_both_succeed() {
 
     let (_, book_count) = tx!(db, |txn| async move {
         // Outer transaction: create author
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "Nested Author".to_string(),
                 email: "nested@example.com".to_string(),
                 age: 30,
@@ -289,8 +289,8 @@ async fn test_nested_atomic_both_succeed() {
 
         // Inner transaction: create books
         let book_count = tx!(txn, |inner_txn| async move {
-            book::Entity::objects(inner_txn)
-                .create(book::Model {
+            Book::objects(inner_txn)
+                .create(Book {
                     title: "Book 1".to_string(),
                     author_id: author.id,
                     price: 1999,
@@ -299,8 +299,8 @@ async fn test_nested_atomic_both_succeed() {
                 })
                 .await?;
 
-            book::Entity::objects(inner_txn)
-                .create(book::Model {
+            Book::objects(inner_txn)
+                .create(Book {
                     title: "Book 2".to_string(),
                     author_id: author.id,
                     price: 2999,
@@ -321,10 +321,10 @@ async fn test_nested_atomic_both_succeed() {
     assert_eq!(book_count, 2);
 
     // Verify all committed
-    let author_count = author::Entity::objects(&db).count().await.unwrap();
+    let author_count = Author::objects(&db).count().await.unwrap();
     assert_eq!(author_count, 1);
 
-    let book_count = book::Entity::objects(&db).count().await.unwrap();
+    let book_count = Book::objects(&db).count().await.unwrap();
     assert_eq!(book_count, 2);
 }
 
@@ -335,8 +335,8 @@ async fn test_nested_atomic_inner_fails() {
     // Outer succeeds, inner fails
     let result = tx!(db, |txn| async move {
         // Create author in outer transaction
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "Outer Author".to_string(),
                 email: "outer@example.com".to_string(),
                 age: 30,
@@ -346,8 +346,8 @@ async fn test_nested_atomic_inner_fails() {
 
         // Inner transaction that fails
         let inner_result = tx!(txn, |inner_txn| async move {
-            book::Entity::objects(inner_txn)
-                .create(book::Model {
+            Book::objects(inner_txn)
+                .create(Book {
                     title: "Will Fail".to_string(),
                     author_id: author.id,
                     price: 1999,
@@ -406,8 +406,8 @@ async fn test_atomic_with_complex_return() {
 
     // Transaction returning complex type
     let result = tx!(db, |txn| async move {
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "Complex Return".to_string(),
                 email: "complex@example.com".to_string(),
                 age: 30,
@@ -431,8 +431,8 @@ async fn test_atomic_multiple_sequential() {
 
     // Multiple sequential transactions
     let author1 = tx!(db, |txn| async move {
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "First".to_string(),
                 email: "first@example.com".to_string(),
                 age: 30,
@@ -445,8 +445,8 @@ async fn test_atomic_multiple_sequential() {
     .unwrap();
 
     let author2 = tx!(db, |txn| async move {
-        let author = author::Entity::objects(txn)
-            .create(author::Model {
+        let author = Author::objects(txn)
+            .create(Author {
                 name: "Second".to_string(),
                 email: "second@example.com".to_string(),
                 age: 25,
@@ -461,6 +461,6 @@ async fn test_atomic_multiple_sequential() {
     assert_ne!(author1.id, author2.id);
 
     // Verify both committed
-    let count = author::Entity::objects(&db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 2);
 }

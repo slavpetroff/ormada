@@ -5,9 +5,9 @@ use seaorm_django::prelude::*;
 use crate::common::*;
 
 // Helper to create a test author
-async fn create_test_author(db: &sea_orm::DatabaseConnection) -> author::Model {
-    author::Entity::objects(db)
-        .create(author::Model {
+async fn create_test_author(db: &sea_orm::DatabaseConnection) -> Author {
+    Author::objects(db)
+        .create(Author {
             name: "Test Author".to_string(),
             email: "test@example.com".to_string(),
             age: 30,
@@ -26,8 +26,8 @@ async fn test_bulk_create_basic() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let models: Vec<author::Model> = (0..10)
-        .map(|i| author::Model {
+    let models: Vec<Author> = (0..10)
+        .map(|i| Author {
             name: format!("Author {}", i),
             email: format!("author{}@example.com", i),
             age: 20 + i,
@@ -35,14 +35,14 @@ async fn test_bulk_create_basic() {
         })
         .collect();
 
-    let count = author::Entity::objects(db)
+    let count = Author::objects(db)
         .bulk_create(models)
         .await
         .unwrap();
     assert_eq!(count, 10);
 
     // Verify count
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 10);
 }
 
@@ -51,8 +51,8 @@ async fn test_bulk_create_empty() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let models: Vec<author::Model> = vec![];
-    let count = author::Entity::objects(db)
+    let models: Vec<Author> = vec![];
+    let count = Author::objects(db)
         .bulk_create(models)
         .await
         .unwrap();
@@ -65,8 +65,8 @@ async fn test_bulk_create_large_batch() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let models: Vec<author::Model> = (0..100)
-        .map(|i| author::Model {
+    let models: Vec<Author> = (0..100)
+        .map(|i| Author {
             name: format!("Author {}", i),
             email: format!("author{}@example.com", i),
             age: 20 + (i % 50),
@@ -74,14 +74,14 @@ async fn test_bulk_create_large_batch() {
         })
         .collect();
 
-    let count = author::Entity::objects(db)
+    let count = Author::objects(db)
         .bulk_create(models)
         .await
         .unwrap();
     assert_eq!(count, 100);
 
     // Verify all inserted
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 100);
 }
 
@@ -94,8 +94,8 @@ async fn test_bulk_create_with_relationships() {
     let author = create_test_author(db).await;
 
     // Bulk create books
-    let books: Vec<book::Model> = (0..20)
-        .map(|i| book::Model {
+    let books: Vec<Book> = (0..20)
+        .map(|i| Book {
             title: format!("Book {}", i),
             author_id: author.id,
             price: 1000 + i * 100,
@@ -104,11 +104,11 @@ async fn test_bulk_create_with_relationships() {
         })
         .collect();
 
-    let count = book::Entity::objects(db).bulk_create(books).await.unwrap();
+    let count = Book::objects(db).bulk_create(books).await.unwrap();
     assert_eq!(count, 20);
 
     // Verify count
-    let total = book::Entity::objects(db).count().await.unwrap();
+    let total = Book::objects(db).count().await.unwrap();
     assert_eq!(total, 20);
 }
 
@@ -117,20 +117,20 @@ async fn test_bulk_create_single_record() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let models = vec![author::Model {
+    let models = vec![Author {
         name: "Single".to_string(),
         email: "single@example.com".to_string(),
         age: 30,
         ..Default::default()
     }];
 
-    let count = author::Entity::objects(db)
+    let count = Author::objects(db)
         .bulk_create(models)
         .await
         .unwrap();
     assert_eq!(count, 1);
 
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 1);
 }
 
@@ -141,8 +141,8 @@ async fn test_bulk_operations_in_transaction() {
 
     // Bulk create within transaction
     let count = tx!(db, |txn| async move {
-        let models: Vec<author::Model> = (0..10)
-            .map(|i| author::Model {
+        let models: Vec<Author> = (0..10)
+            .map(|i| Author {
                 name: format!("TX Author {}", i),
                 email: format!("tx{}@example.com", i),
                 age: 30 + i,
@@ -151,7 +151,7 @@ async fn test_bulk_operations_in_transaction() {
             .collect();
 
         // Use objects(txn) which now supports generics
-        let count = author::Entity::objects(txn).bulk_create(models).await?;
+        let count = Author::objects(txn).bulk_create(models).await?;
         Ok(count)
     })
     .await
@@ -160,7 +160,7 @@ async fn test_bulk_operations_in_transaction() {
     assert_eq!(count, 10);
 
     // Verify committed
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 10);
 }
 
@@ -170,8 +170,8 @@ async fn test_bulk_create_rollback_on_error() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let result: Result<(), DjangoOrmError> = tx!(db, |txn| async move {
-        let models: Vec<author::Model> = (0..5)
-            .map(|i| author::Model {
+        let models: Vec<Author> = (0..5)
+            .map(|i| Author {
                 name: format!("Rollback {}", i),
                 email: format!("rollback{}@example.com", i),
                 age: 30 + i,
@@ -179,7 +179,7 @@ async fn test_bulk_create_rollback_on_error() {
             })
             .collect();
 
-        let count = author::Entity::objects(txn).bulk_create(models).await?;
+        let count = Author::objects(txn).bulk_create(models).await?;
         assert_eq!(count, 5);
 
         // Force rollback
@@ -190,7 +190,7 @@ async fn test_bulk_create_rollback_on_error() {
     assert!(result.is_err());
 
     // Verify nothing was committed
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 0);
 }
 
@@ -202,8 +202,8 @@ async fn test_bulk_create_performance_comparison() {
 
     // Bulk insert
     let start = std::time::Instant::now();
-    let models: Vec<author::Model> = (0..count)
-        .map(|i| author::Model {
+    let models: Vec<Author> = (0..count)
+        .map(|i| Author {
             name: format!("Bulk {}", i),
             email: format!("bulk{}@example.com", i),
             age: 25 + i,
@@ -211,14 +211,14 @@ async fn test_bulk_create_performance_comparison() {
         })
         .collect();
 
-    author::Entity::objects(db)
+    Author::objects(db)
         .bulk_create(models)
         .await
         .unwrap();
     let bulk_duration = start.elapsed();
 
     // Verify
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, count as u64);
 
     println!("Bulk insert of {} records: {:?}", count, bulk_duration);
@@ -230,8 +230,8 @@ async fn test_bulk_create_duplicate_handling() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // First batch
-    let models1: Vec<author::Model> = (0..5)
-        .map(|i| author::Model {
+    let models1: Vec<Author> = (0..5)
+        .map(|i| Author {
             name: format!("Author {}", i),
             email: format!("author{}@example.com", i),
             age: 25,
@@ -239,15 +239,15 @@ async fn test_bulk_create_duplicate_handling() {
         })
         .collect();
 
-    let count1 = author::Entity::objects(db)
+    let count1 = Author::objects(db)
         .bulk_create(models1)
         .await
         .unwrap();
     assert_eq!(count1, 5);
 
     // Second batch with different data
-    let models2: Vec<author::Model> = (5..10)
-        .map(|i| author::Model {
+    let models2: Vec<Author> = (5..10)
+        .map(|i| Author {
             name: format!("Author {}", i),
             email: format!("author{}@example.com", i),
             age: 30,
@@ -255,13 +255,13 @@ async fn test_bulk_create_duplicate_handling() {
         })
         .collect();
 
-    let count2 = author::Entity::objects(db)
+    let count2 = Author::objects(db)
         .bulk_create(models2)
         .await
         .unwrap();
     assert_eq!(count2, 5);
 
     // Verify total
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 10);
 }

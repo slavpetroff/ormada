@@ -136,13 +136,21 @@ pub trait DeleteExt {
 // Blanket implementation for all model types
 impl<M> DeleteExt for M
 where
-    M: ModelTrait + Into<<M::Entity as EntityTrait>::ActiveModel>,
+    M: ModelTrait + Into<<M::Entity as EntityTrait>::ActiveModel> + crate::hooks::LifecycleHooks,
     <M::Entity as EntityTrait>::ActiveModel:
         ActiveModelTrait<Entity = M::Entity> + sea_orm::ActiveModelBehavior + Send,
 {
     async fn delete(self, db: &DatabaseConnection) -> Result<(), DjangoOrmError> {
+        // Call before_delete hook
+        self.before_delete(db).await?;
+        
         let active_model: <M::Entity as EntityTrait>::ActiveModel = self.into();
         active_model.delete(db).await?;
+        
+        // Call after_delete hook
+        // Note: We can't call hooks on the model after delete since it's consumed
+        // Users should do cleanup in before_delete hook instead
+        
         Ok(())
     }
 }

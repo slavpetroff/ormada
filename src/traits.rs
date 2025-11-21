@@ -31,6 +31,14 @@ pub trait DjangoEntity: EntityTrait {
         db: &C,
         model: Self::Model,
     ) -> Result<Self::Model, DjangoOrmError>;
+
+    /// Get the soft delete field name if this entity uses soft deletes
+    ///
+    /// Returns the column name used for soft deletes (e.g., "deleted_at").
+    /// If None, the entity uses hard deletes.
+    fn soft_delete_column() -> Option<&'static str> {
+        None  // Default: no soft delete
+    }
 }
 
 /// Trait for entities that support relation loading with the graph pattern

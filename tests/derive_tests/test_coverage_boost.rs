@@ -11,7 +11,7 @@ use crate::common::{author, book};
 #[tokio::test]
 async fn test_related_trait() {
     // This exercises the Related trait implementation in common/mod.rs
-    let _rel_def = <book::Entity as Related<author::Entity>>::to();
+    let _rel_def = <Book as Related<Author>>::to();
 
     // The fact that this compiles and runs means the trait impl is working
 }
@@ -26,7 +26,7 @@ async fn test_empty_tuple_relations() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Query without prefetch_related - uses () empty tuple
-    let authors = author::Entity::objects(db).all().await.unwrap();
+    let authors = Author::objects(db).all().await.unwrap();
 
     assert_eq!(authors.len(), 3);
 }

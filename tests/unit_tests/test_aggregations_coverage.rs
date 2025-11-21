@@ -12,7 +12,7 @@ async fn test_sum_on_empty_table() {
     
     // Test sum on empty table - should return None using our ORM!
     let result = Author::objects(&db)
-        .aggregate_sum(author::Column::Age)
+        .aggregate_sum(Author::Age)
         .await
         .unwrap();
     
@@ -25,7 +25,7 @@ async fn test_avg_on_empty_table() {
     
     // Test avg on empty table - should return None using our ORM!
     let result = Author::objects(&db)
-        .aggregate_avg(author::Column::Age)
+        .aggregate_avg(Author::Age)
         .await
         .unwrap();
     
@@ -38,7 +38,7 @@ async fn test_max_on_empty_table() {
     
     // Test max on empty table - should return None using our ORM!
     let result = Author::objects(&db)
-        .aggregate_max(author::Column::Age)
+        .aggregate_max(Author::Age)
         .await
         .unwrap();
     
@@ -51,7 +51,7 @@ async fn test_min_on_empty_table() {
     
     // Test min on empty table - should return None using our ORM!
     let result = Author::objects(&db)
-        .aggregate_min(author::Column::Age)
+        .aggregate_min(Author::Age)
         .await
         .unwrap();
     
@@ -63,7 +63,7 @@ async fn test_sum_on_float_column() {
     let db = setup_test_db().await;
     
     // Create author first to satisfy foreign key constraint
-    let author = Author::objects(&db).create(author::Model {
+    let author = Author::objects(&db).create(Author {
         id: 0,
         name: "Test Author".to_string(),
         email: "test@example.com".to_string(),
@@ -75,7 +75,7 @@ async fn test_sum_on_float_column() {
     .unwrap();
     
     // Create test data using our ORM's objects API!
-    let _book1 = Book::objects(&db).create(book::Model {
+    let _book1 = Book::objects(&db).create(Book {
         id: 0,
         title: "Book 1".to_string(),
         author_id: author.id,
@@ -87,7 +87,7 @@ async fn test_sum_on_float_column() {
     .await
     .unwrap();
     
-    let _book2 = Book::objects(&db).create(book::Model {
+    let _book2 = Book::objects(&db).create(Book {
         id: 0,
         title: "Book 2".to_string(),
         author_id: author.id,
@@ -101,7 +101,7 @@ async fn test_sum_on_float_column() {
     
     // Test sum on numeric column
     let result = Book::objects(&db)
-        .aggregate_sum(book::Column::Price)
+        .aggregate_sum(Book::Price)
         .await
         .unwrap();
     
@@ -114,7 +114,7 @@ async fn test_avg_returns_float() {
     let db = setup_test_db().await;
     
     // Create test authors with varying ages using our ORM!
-    let _author1 = Author::objects(&db).create(author::Model {
+    let _author1 = Author::objects(&db).create(Author {
         id: 0,
         name: "Author 1".to_string(),
         email: "author1@test.com".to_string(),
@@ -125,7 +125,7 @@ async fn test_avg_returns_float() {
     .await
     .unwrap();
     
-    let _author2 = Author::objects(&db).create(author::Model {
+    let _author2 = Author::objects(&db).create(Author {
         id: 0,
         name: "Author 2".to_string(),
         email: "author2@test.com".to_string(),
@@ -138,7 +138,7 @@ async fn test_avg_returns_float() {
     
     // Test avg - should return float
     let result = Author::objects(&db)
-        .aggregate_avg(author::Column::Age)
+        .aggregate_avg(Author::Age)
         .await
         .unwrap();
     
@@ -151,7 +151,7 @@ async fn test_max_with_multiple_values() {
     let db = setup_test_db().await;
     
     // Create test authors using our ORM!
-    let _author1 = Author::objects(&db).create(author::Model {
+    let _author1 = Author::objects(&db).create(Author {
         id: 0,
         name: "Young Author".to_string(),
         email: "young@test.com".to_string(),
@@ -162,7 +162,7 @@ async fn test_max_with_multiple_values() {
     .await
     .unwrap();
     
-    let _author2 = Author::objects(&db).create(author::Model {
+    let _author2 = Author::objects(&db).create(Author {
         id: 0,
         name: "Old Author".to_string(),
         email: "old@test.com".to_string(),
@@ -175,7 +175,7 @@ async fn test_max_with_multiple_values() {
     
     // Test max
     let result = Author::objects(&db)
-        .aggregate_max(author::Column::Age)
+        .aggregate_max(Author::Age)
         .await
         .unwrap();
     
@@ -188,7 +188,7 @@ async fn test_min_with_multiple_values() {
     let db = setup_test_db().await;
     
     // Create test authors using our ORM!
-    let _author1 = Author::objects(&db).create(author::Model {
+    let _author1 = Author::objects(&db).create(Author {
         id: 0,
         name: "Young Author".to_string(),
         email: "young@test.com".to_string(),
@@ -199,7 +199,7 @@ async fn test_min_with_multiple_values() {
     .await
     .unwrap();
     
-    let _author2 = Author::objects(&db).create(author::Model {
+    let _author2 = Author::objects(&db).create(Author {
         id: 0,
         name: "Old Author".to_string(),
         email: "old@test.com".to_string(),
@@ -212,7 +212,7 @@ async fn test_min_with_multiple_values() {
     
     // Test min
     let result = Author::objects(&db)
-        .aggregate_min(author::Column::Age)
+        .aggregate_min(Author::Age)
         .await
         .unwrap();
     
@@ -226,7 +226,7 @@ async fn test_aggregations_with_filter() {
     
     // Create test authors using our ORM!
     for i in 1..=5 {
-        Author::objects(&db).create(author::Model {
+        Author::objects(&db).create(Author {
             id: 0,
             name: format!("Author {}", i),
             email: format!("author{}@test.com", i),
@@ -240,8 +240,8 @@ async fn test_aggregations_with_filter() {
     
     // Test sum with filter (only authors with age > 40)
     let result = Author::objects(&db)
-        .filter(author::Column::Age.gt(40))
-        .aggregate_sum(author::Column::Age)
+        .filter(Author::Age.gt(40))
+        .aggregate_sum(Author::Age)
         .await
         .unwrap();
     

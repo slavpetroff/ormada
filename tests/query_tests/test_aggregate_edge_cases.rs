@@ -6,9 +6,9 @@ async fn test_aggregate_min_on_empty_table() {
     let db = setup_test_db().await;
 
     // Query empty table
-    let result = author::Entity::objects(&db)
-        .filter(author::Column::Age.gt(999)) // No matches
-        .aggregate_min(author::Column::Age)
+    let result = Author::objects(&db)
+        .filter(Author::Age.gt(999)) // No matches
+        .aggregate_min(Author::Age)
         .await
         .unwrap();
 
@@ -20,9 +20,9 @@ async fn test_aggregate_max_on_empty_table() {
     let db = setup_test_db().await;
 
     // Query empty table
-    let result = author::Entity::objects(&db)
-        .filter(author::Column::Age.gt(999)) // No matches
-        .aggregate_max(author::Column::Age)
+    let result = Author::objects(&db)
+        .filter(Author::Age.gt(999)) // No matches
+        .aggregate_max(Author::Age)
         .await
         .unwrap();
 
@@ -34,9 +34,9 @@ async fn test_aggregate_sum_on_empty_table() {
     let db = setup_test_db().await;
 
     // Query empty table
-    let result = author::Entity::objects(&db)
-        .filter(author::Column::Age.gt(999)) // No matches
-        .aggregate_sum(author::Column::Age)
+    let result = Author::objects(&db)
+        .filter(Author::Age.gt(999)) // No matches
+        .aggregate_sum(Author::Age)
         .await
         .unwrap();
 
@@ -48,9 +48,9 @@ async fn test_aggregate_avg_on_empty_table() {
     let db = setup_test_db().await;
 
     // Query empty table
-    let result = author::Entity::objects(&db)
-        .filter(author::Column::Age.gt(999)) // No matches
-        .aggregate_avg(author::Column::Age)
+    let result = Author::objects(&db)
+        .filter(Author::Age.gt(999)) // No matches
+        .aggregate_avg(Author::Age)
         .await
         .unwrap();
 
@@ -63,8 +63,8 @@ async fn test_aggregate_min_with_data() {
 
     // Create some authors
     for age in [25, 30, 35, 40] {
-        author::Entity::objects(&db)
-            .create(author::Model {
+        Author::objects(&db)
+            .create(Author {
                 name: format!("Author {}", age),
                 email: format!("author{}@example.com", age),
                 age,
@@ -74,8 +74,8 @@ async fn test_aggregate_min_with_data() {
             .unwrap();
     }
 
-    let result = author::Entity::objects(&db)
-        .aggregate_min(author::Column::Age)
+    let result = Author::objects(&db)
+        .aggregate_min(Author::Age)
         .await
         .unwrap();
 
@@ -88,8 +88,8 @@ async fn test_aggregate_max_with_data() {
 
     // Create some authors
     for age in [25, 30, 35, 40] {
-        author::Entity::objects(&db)
-            .create(author::Model {
+        Author::objects(&db)
+            .create(Author {
                 name: format!("Author {}", age),
                 email: format!("author{}@example.com", age),
                 age,
@@ -99,8 +99,8 @@ async fn test_aggregate_max_with_data() {
             .unwrap();
     }
 
-    let result = author::Entity::objects(&db)
-        .aggregate_max(author::Column::Age)
+    let result = Author::objects(&db)
+        .aggregate_max(Author::Age)
         .await
         .unwrap();
 
@@ -113,8 +113,8 @@ async fn test_aggregate_sum_with_data() {
 
     // Create some authors
     for age in [10, 20, 30] {
-        author::Entity::objects(&db)
-            .create(author::Model {
+        Author::objects(&db)
+            .create(Author {
                 name: format!("Author {}", age),
                 email: format!("author{}@example.com", age),
                 age,
@@ -124,8 +124,8 @@ async fn test_aggregate_sum_with_data() {
             .unwrap();
     }
 
-    let result = author::Entity::objects(&db)
-        .aggregate_sum(author::Column::Age)
+    let result = Author::objects(&db)
+        .aggregate_sum(Author::Age)
         .await
         .unwrap();
 
@@ -138,8 +138,8 @@ async fn test_aggregate_avg_with_data() {
 
     // Create some authors
     for age in [20, 30, 40] {
-        author::Entity::objects(&db)
-            .create(author::Model {
+        Author::objects(&db)
+            .create(Author {
                 name: format!("Author {}", age),
                 email: format!("author{}@example.com", age),
                 age,
@@ -149,8 +149,8 @@ async fn test_aggregate_avg_with_data() {
             .unwrap();
     }
 
-    let result = author::Entity::objects(&db)
-        .aggregate_avg(author::Column::Age)
+    let result = Author::objects(&db)
+        .aggregate_avg(Author::Age)
         .await
         .unwrap();
 

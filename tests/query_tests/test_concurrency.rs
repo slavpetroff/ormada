@@ -17,9 +17,9 @@ async fn test_get_or_create_concurrent_safe() {
     for i in 0..5 {
         tasks.spawn(async move {
             let email = "concurrent@example.com";
-            author::Entity::objects(db)
-                .filter(author::Column::Email.eq(email))
-                .get_or_create(|| author::Model {
+            Author::objects(db)
+                .filter(Author::Email.eq(email))
+                .get_or_create(|| Author {
                     id: 0,
                     name: format!("Concurrent Author {}", i),
                     email: email.to_string(),
@@ -51,8 +51,8 @@ async fn test_get_or_create_concurrent_safe() {
     }
 
     // Verify only one record exists in DB
-    let count = author::Entity::objects(db)
-        .filter(author::Column::Email.eq("concurrent@example.com"))
+    let count = Author::objects(db)
+        .filter(Author::Email.eq("concurrent@example.com"))
         .count()
         .await
         .unwrap();
@@ -70,13 +70,13 @@ async fn test_update_or_create_concurrent_safe() {
     for i in 0..5 {
         tasks.spawn(async move {
             let email = "update_concurrent@example.com";
-            author::Entity::objects(db)
-                .filter(author::Column::Email.eq(email))
+            Author::objects(db)
+                .filter(Author::Email.eq(email))
                 .update_or_create(
                     |model| {
                         model.age = 30 + i;
                     },
-                    || author::Model {
+                    || Author {
                         id: 0,
                         name: format!("Update Concurrent {}", i),
                         email: email.to_string(),
@@ -99,8 +99,8 @@ async fn test_update_or_create_concurrent_safe() {
     assert_eq!(results.len(), 5);
 
     // Verify only one record exists
-    let count = author::Entity::objects(db)
-        .filter(author::Column::Email.eq("update_concurrent@example.com"))
+    let count = Author::objects(db)
+        .filter(Author::Email.eq("update_concurrent@example.com"))
         .count()
         .await
         .unwrap();
@@ -112,9 +112,9 @@ async fn test_get_or_create_basic_still_works() {
     let db = setup_test_db().await;
 
     // Simple case - should work as before
-    let (author, created) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("simple@example.com"))
-        .get_or_create(|| author::Model {
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("simple@example.com"))
+        .get_or_create(|| Author {
             id: 0,
             name: "Simple Author".to_string(),
             email: "simple@example.com".to_string(),
@@ -129,9 +129,9 @@ async fn test_get_or_create_basic_still_works() {
     assert_eq!(author.name, "Simple Author");
 
     // Call again - should get existing
-    let (author2, created2) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("simple@example.com"))
-        .get_or_create(|| author::Model {
+    let (author2, created2) = Author::objects(&db)
+        .filter(Author::Email.eq("simple@example.com"))
+        .get_or_create(|| Author {
             id: 0,
             name: "Different Name".to_string(),
             email: "simple@example.com".to_string(),
@@ -152,11 +152,11 @@ async fn test_update_or_create_basic_still_works() {
     let db = setup_test_db().await;
 
     // Create initial record
-    let (author, created) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("update@example.com"))
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("update@example.com"))
         .update_or_create(
             |_model| {},
-            || author::Model {
+            || Author {
                 id: 0,
                 name: "Original Name".to_string(),
                 email: "update@example.com".to_string(),
@@ -172,13 +172,13 @@ async fn test_update_or_create_basic_still_works() {
     assert_eq!(author.age, 25);
 
     // Update it
-    let (author2, created2) = author::Entity::objects(&db)
-        .filter(author::Column::Email.eq("update@example.com"))
+    let (author2, created2) = Author::objects(&db)
+        .filter(Author::Email.eq("update@example.com"))
         .update_or_create(
             |model| {
                 model.age = 35;
             },
-            || author::Model {
+            || Author {
                 id: 0,
                 name: "Fallback Name".to_string(),
                 email: "update@example.com".to_string(),

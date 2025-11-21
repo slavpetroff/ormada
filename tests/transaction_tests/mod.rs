@@ -2,5 +2,5 @@
 mod common;
 
 mod test_atomic_macro;
-mod test_transactions;
 mod test_savepoints;
+mod test_transactions;

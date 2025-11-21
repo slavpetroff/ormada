@@ -17,8 +17,8 @@ async fn test_first_on_filtered_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 99999))
+    let result = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 99999))
         .first()
         .await;
 
@@ -31,8 +31,8 @@ async fn test_last_on_filtered_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 99999))
+    let result = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 99999))
         .last()
         .await;
 
@@ -45,7 +45,7 @@ async fn test_get_nonexistent_id() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = author::Entity::objects(db).get(99999).await;
+    let result = Author::objects(db).get(99999).await;
 
     assert!(result.is_err());
 
@@ -65,7 +65,7 @@ async fn test_limit_one() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db).limit(1).all().await.unwrap();
+    let results = Author::objects(db).limit(1).all().await.unwrap();
 
     assert_eq!(results.len(), 1);
 }
@@ -76,7 +76,7 @@ async fn test_offset_all() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db)
+    let results = Author::objects(db)
         .limit(100)
         .offset(authors.len() as u64)
         .all()
@@ -92,11 +92,11 @@ async fn test_count_with_limit_and_offset() {
     create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
 
     assert_eq!(total, 3); // We created 3 authors
 
-    let count_limited = author::Entity::objects(db)
+    let count_limited = Author::objects(db)
         .limit(1)
         .offset(1)
         .count()
@@ -117,9 +117,9 @@ async fn test_filter_with_exclude_same_condition() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
-        .exclude(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let results = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
+        .exclude(ColumnTrait::eq(&Author::Id, authors[0].id))
         .all()
         .await
         .unwrap();
@@ -133,10 +133,10 @@ async fn test_multiple_same_filters() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
+    let results = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .all()
         .await
         .unwrap();
@@ -153,8 +153,8 @@ async fn test_order_on_empty_result() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db)
-        .order_by_asc(author::Column::Id)
+    let results = Author::objects(db)
+        .order_by_asc(Author::Id)
         .all()
         .await
         .unwrap();
@@ -168,9 +168,9 @@ async fn test_order_with_single_result() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, authors[0].id))
-        .order_by_desc(author::Column::Id)
+    let results = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
+        .order_by_desc(Author::Id)
         .all()
         .await
         .unwrap();
@@ -189,8 +189,8 @@ async fn test_exists_with_exclude_all() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = author::Entity::objects(db)
-        .exclude(ColumnTrait::gt(&author::Column::Id, 0))
+    let exists = Author::objects(db)
+        .exclude(ColumnTrait::gt(&Author::Id, 0))
         .exists()
         .await
         .unwrap();
@@ -205,7 +205,7 @@ async fn test_exists_with_offset() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Exists should check if ANY records exist, regardless of offset
-    let exists = author::Entity::objects(db)
+    let exists = Author::objects(db)
         .limit(10)
         .offset(1000)
         .exists()
@@ -227,14 +227,14 @@ async fn test_very_long_filter_chain() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = author::Entity::objects(db)
-        .filter(ColumnTrait::gt(&author::Column::Id, 0))
-        .filter(ColumnTrait::lt(&author::Column::Id, 1000))
-        .filter(ColumnTrait::gt(&author::Column::Age, 0))
-        .filter(ColumnTrait::lt(&author::Column::Age, 200))
-        .exclude(ColumnTrait::eq(&author::Column::Id, -1))
-        .exclude(ColumnTrait::eq(&author::Column::Age, -1))
-        .order_by_asc(author::Column::Id)
+    let results = Author::objects(db)
+        .filter(ColumnTrait::gt(&Author::Id, 0))
+        .filter(ColumnTrait::lt(&Author::Id, 1000))
+        .filter(ColumnTrait::gt(&Author::Age, 0))
+        .filter(ColumnTrait::lt(&Author::Age, 200))
+        .exclude(ColumnTrait::eq(&Author::Id, -1))
+        .exclude(ColumnTrait::eq(&Author::Age, -1))
+        .order_by_asc(Author::Id)
         .limit(100)
         .all()
         .await
@@ -250,13 +250,13 @@ async fn test_count_after_complex_chain() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // First verify we have data
-    let total = author::Entity::objects(db).count().await.unwrap();
+    let total = Author::objects(db).count().await.unwrap();
     assert_eq!(total, 3);
 
-    let count = author::Entity::objects(db)
-        .filter(ColumnTrait::gt(&author::Column::Id, 0))
-        .exclude(ColumnTrait::eq(&author::Column::Id, -1))
-        .order_by_desc(author::Column::Age)
+    let count = Author::objects(db)
+        .filter(ColumnTrait::gt(&Author::Id, 0))
+        .exclude(ColumnTrait::eq(&Author::Id, -1))
+        .order_by_desc(Author::Age)
         .limit(1)
         .offset(1)
         .count()
@@ -279,8 +279,8 @@ async fn test_contains_empty_string() {
 
     use seaorm_django::query::ColumnExt;
 
-    let results = author::Entity::objects(db)
-        .filter(ColumnExt::contains(&author::Column::Name, ""))
+    let results = Author::objects(db)
+        .filter(ColumnExt::contains(&Author::Name, ""))
         .all()
         .await
         .unwrap();
@@ -298,8 +298,8 @@ async fn test_starts_with_full_string() {
     use seaorm_django::query::ColumnExt;
 
     let full_name = &authors[0].name;
-    let results = author::Entity::objects(db)
-        .filter(ColumnExt::starts_with(&author::Column::Name, full_name))
+    let results = Author::objects(db)
+        .filter(ColumnExt::starts_with(&Author::Name, full_name))
         .all()
         .await
         .unwrap();
@@ -317,8 +317,8 @@ async fn test_ends_with_full_string() {
     use seaorm_django::query::ColumnExt;
 
     let full_name = &authors[0].name;
-    let results = author::Entity::objects(db)
-        .filter(ColumnExt::ends_with(&author::Column::Name, full_name))
+    let results = Author::objects(db)
+        .filter(ColumnExt::ends_with(&Author::Name, full_name))
         .all()
         .await
         .unwrap();
@@ -337,11 +337,11 @@ async fn test_delete_with_no_filter() {
     create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let deleted = author::Entity::objects(db).delete().await.unwrap();
+    let deleted = Author::objects(db).delete().await.unwrap();
 
     assert_eq!(deleted, 3);
 
-    let count = author::Entity::objects(db).count().await.unwrap();
+    let count = Author::objects(db).count().await.unwrap();
 
     assert_eq!(count, 0);
 }
@@ -352,8 +352,8 @@ async fn test_delete_nonexistent() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let deleted = author::Entity::objects(db)
-        .filter(ColumnTrait::eq(&author::Column::Id, 99999))
+    let deleted = Author::objects(db)
+        .filter(ColumnTrait::eq(&Author::Id, 99999))
         .delete()
         .await
         .unwrap();

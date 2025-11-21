@@ -11,14 +11,14 @@ async fn test_savepoint_with_tx_macro() {
     
     // Create tables
     let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(author::Entity);
+    let stmt = schema.create_table_from_entity(Author);
     db.execute(&stmt)
         .await
         .unwrap();
     
     // Use our tx! macro for transactions!
     let result = tx!(&db, |txn| async move {
-        let _author = Author::objects(txn).create(author::Model {
+        let _author = Author::objects(txn).create(Author {
             id: 0,
             name: "Test Author".to_string(),
             email: "test@test.com".to_string(),
@@ -41,7 +41,7 @@ async fn test_nested_transaction_with_tx_macro() {
     
     // Create tables
     let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(author::Entity);
+    let stmt = schema.create_table_from_entity(Author);
     db.execute(&stmt)
         .await
         .unwrap();
@@ -49,7 +49,7 @@ async fn test_nested_transaction_with_tx_macro() {
     // Use our tx! macro for nested transactions!
     let result = tx!(&db, |txn| async move {
         // Create author in transaction
-        let _author = Author::objects(txn).create(author::Model {
+        let _author = Author::objects(txn).create(Author {
             id: 0,
             name: "Nested Author".to_string(),
             email: "nested@test.com".to_string(),
@@ -72,7 +72,7 @@ async fn test_transaction_rollback_with_tx_macro() {
     
     // Create tables
     let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(author::Entity);
+    let stmt = schema.create_table_from_entity(Author);
     db.execute(&stmt)
         .await
         .unwrap();
