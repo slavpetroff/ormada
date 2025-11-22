@@ -60,12 +60,12 @@ fn test_on_delete_debug() {
 #[test]
 fn test_on_delete_hash() {
     use std::collections::HashSet;
-    
+
     let mut set = HashSet::new();
     set.insert(OnDelete::Cascade);
     set.insert(OnDelete::SetNull);
     set.insert(OnDelete::Cascade); // Duplicate
-    
+
     assert_eq!(set.len(), 2); // Only 2 unique values
     assert!(set.contains(&OnDelete::Cascade));
     assert!(set.contains(&OnDelete::SetNull));
@@ -81,7 +81,7 @@ fn test_all_on_delete_variants() {
         OnDelete::SetDefault,
         OnDelete::NoAction,
     ];
-    
+
     for variant in variants {
         assert!(!variant.to_sql().is_empty());
     }

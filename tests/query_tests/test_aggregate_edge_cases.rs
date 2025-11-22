@@ -74,10 +74,7 @@ async fn test_aggregate_min_with_data() {
             .unwrap();
     }
 
-    let result = Author::objects(&db)
-        .aggregate_min(Author::Age)
-        .await
-        .unwrap();
+    let result = Author::objects(&db).aggregate_min(Author::Age).await.unwrap();
 
     assert_eq!(result, Some(25.0));
 }
@@ -99,10 +96,7 @@ async fn test_aggregate_max_with_data() {
             .unwrap();
     }
 
-    let result = Author::objects(&db)
-        .aggregate_max(Author::Age)
-        .await
-        .unwrap();
+    let result = Author::objects(&db).aggregate_max(Author::Age).await.unwrap();
 
     assert_eq!(result, Some(40.0));
 }
@@ -124,10 +118,7 @@ async fn test_aggregate_sum_with_data() {
             .unwrap();
     }
 
-    let result = Author::objects(&db)
-        .aggregate_sum(Author::Age)
-        .await
-        .unwrap();
+    let result = Author::objects(&db).aggregate_sum(Author::Age).await.unwrap();
 
     assert_eq!(result, Some(60.0));
 }
@@ -149,10 +140,7 @@ async fn test_aggregate_avg_with_data() {
             .unwrap();
     }
 
-    let result = Author::objects(&db)
-        .aggregate_avg(Author::Age)
-        .await
-        .unwrap();
+    let result = Author::objects(&db).aggregate_avg(Author::Age).await.unwrap();
 
     assert_eq!(result, Some(30.0));
 }

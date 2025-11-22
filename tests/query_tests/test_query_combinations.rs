@@ -46,9 +46,7 @@ async fn test_filter_exclude_combination() {
         .await
         .unwrap();
 
-    assert!(!results
-        .iter()
-        .any(|a| a.id == authors[0].id || a.id == authors[1].id));
+    assert!(!results.iter().any(|a| a.id == authors[0].id || a.id == authors[1].id));
 }
 
 #[tokio::test]
@@ -78,11 +76,7 @@ async fn test_order_by_desc() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
-        .order_by_desc(Author::Id)
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).order_by_desc(Author::Id).all().await.unwrap();
 
     if results.len() > 1 {
         // Descending order
@@ -134,11 +128,7 @@ async fn test_limit_offset_combination() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let all = Author::objects(db)
-        .order_by_asc(Author::Id)
-        .all()
-        .await
-        .unwrap();
+    let all = Author::objects(db).order_by_asc(Author::Id).all().await.unwrap();
 
     if all.len() >= 2 {
         let paginated = Author::objects(db)
@@ -163,12 +153,7 @@ async fn test_offset_with_limit_required() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // SQLite requires LIMIT with OFFSET
-    let results = Author::objects(db)
-        .limit(100)
-        .offset(1)
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).limit(100).offset(1).all().await.unwrap();
 
     assert_eq!(results.len(), 2); // 3 total - 1 offset
 }
@@ -292,17 +277,9 @@ async fn test_first_with_order() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let first_asc = Author::objects(db)
-        .order_by_asc(Author::Id)
-        .first()
-        .await
-        .unwrap();
+    let first_asc = Author::objects(db).order_by_asc(Author::Id).first().await.unwrap();
 
-    let all = Author::objects(db)
-        .order_by_asc(Author::Id)
-        .all()
-        .await
-        .unwrap();
+    let all = Author::objects(db).order_by_asc(Author::Id).all().await.unwrap();
 
     assert_eq!(first_asc.id, all[0].id);
 }
@@ -328,17 +305,9 @@ async fn test_last_with_order() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let last_desc = Author::objects(db)
-        .order_by_desc(Author::Id)
-        .last()
-        .await
-        .unwrap();
+    let last_desc = Author::objects(db).order_by_desc(Author::Id).last().await.unwrap();
 
-    let all = Author::objects(db)
-        .order_by_desc(Author::Id)
-        .all()
-        .await
-        .unwrap();
+    let all = Author::objects(db).order_by_desc(Author::Id).all().await.unwrap();
 
     assert_eq!(last_desc.id, all[all.len() - 1].id);
 }
@@ -421,11 +390,7 @@ async fn test_order_by_asc() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
-        .order_by_asc(Author::Id)
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).order_by_asc(Author::Id).all().await.unwrap();
 
     if results.len() > 1 {
         // Ascending order

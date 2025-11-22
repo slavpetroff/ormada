@@ -17,10 +17,7 @@ async fn test_values_basic() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = Author::objects(db)
-        .values(vec![Author::Name, Author::Age])
-        .await
-        .unwrap();
+    let values = Author::objects(db).values(vec![Author::Name, Author::Age]).await.unwrap();
 
     assert_eq!(values.len(), 3);
 
@@ -40,10 +37,7 @@ async fn test_values_single_column() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = Author::objects(db)
-        .values(vec![Author::Name])
-        .await
-        .unwrap();
+    let values = Author::objects(db).values(vec![Author::Name]).await.unwrap();
 
     assert_eq!(values.len(), 3);
 
@@ -66,10 +60,7 @@ async fn test_values_with_filter() {
         .unwrap();
 
     assert_eq!(values.len(), 1);
-    assert_eq!(
-        values[0].get("name").and_then(|v| v.as_str()),
-        Some(authors[0].name.as_str())
-    );
+    assert_eq!(values[0].get("name").and_then(|v| v.as_str()), Some(authors[0].name.as_str()));
 }
 
 #[tokio::test]
@@ -124,11 +115,7 @@ async fn test_values_with_limit() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = Author::objects(db)
-        .limit(2)
-        .values(vec![Author::Name])
-        .await
-        .unwrap();
+    let values = Author::objects(db).limit(2).values(vec![Author::Name]).await.unwrap();
 
     assert_eq!(values.len(), 2);
 }
@@ -164,10 +151,7 @@ async fn test_values_list_flat() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = Author::objects(db)
-        .values_list(vec![Author::Name], true)
-        .await
-        .unwrap();
+    let values = Author::objects(db).values_list(vec![Author::Name], true).await.unwrap();
 
     assert_eq!(values.len(), 3);
 
@@ -236,10 +220,7 @@ async fn test_values_list_empty_columns() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let values = Author::objects(db)
-        .values_list(vec![], false)
-        .await
-        .unwrap();
+    let values = Author::objects(db).values_list(vec![], false).await.unwrap();
 
     assert_eq!(values.len(), 0);
 }
@@ -297,11 +278,7 @@ async fn test_values_vs_all() {
     let all_count = Author::objects(db).all().await.unwrap().len();
 
     // Get values
-    let values_count = Author::objects(db)
-        .values(vec![Author::Name])
-        .await
-        .unwrap()
-        .len();
+    let values_count = Author::objects(db).values(vec![Author::Name]).await.unwrap().len();
 
     assert_eq!(all_count, values_count);
 }
@@ -313,16 +290,10 @@ async fn test_values_list_single_vs_multiple() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Single column flat
-    let single = Author::objects(db)
-        .values_list(vec![Author::Name], true)
-        .await
-        .unwrap();
+    let single = Author::objects(db).values_list(vec![Author::Name], true).await.unwrap();
 
     // Single column non-flat
-    let single_array = Author::objects(db)
-        .values_list(vec![Author::Name], false)
-        .await
-        .unwrap();
+    let single_array = Author::objects(db).values_list(vec![Author::Name], false).await.unwrap();
 
     assert_eq!(single.len(), single_array.len());
 

@@ -17,10 +17,7 @@ async fn test_first_on_filtered_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db)
-        .filter(ColumnTrait::eq(&Author::Id, 99999))
-        .first()
-        .await;
+    let result = Author::objects(db).filter(ColumnTrait::eq(&Author::Id, 99999)).first().await;
 
     assert!(result.is_err());
 }
@@ -31,10 +28,7 @@ async fn test_last_on_filtered_empty_result() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db)
-        .filter(ColumnTrait::eq(&Author::Id, 99999))
-        .last()
-        .await;
+    let result = Author::objects(db).filter(ColumnTrait::eq(&Author::Id, 99999)).last().await;
 
     assert!(result.is_err());
 }
@@ -76,12 +70,7 @@ async fn test_offset_all() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
-        .limit(100)
-        .offset(authors.len() as u64)
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).limit(100).offset(authors.len() as u64).all().await.unwrap();
 
     assert_eq!(results.len(), 0);
 }
@@ -96,12 +85,7 @@ async fn test_count_with_limit_and_offset() {
 
     assert_eq!(total, 3); // We created 3 authors
 
-    let count_limited = Author::objects(db)
-        .limit(1)
-        .offset(1)
-        .count()
-        .await
-        .unwrap();
+    let count_limited = Author::objects(db).limit(1).offset(1).count().await.unwrap();
 
     // Verify count was calculated
     assert!(count_limited >= 0);
@@ -153,11 +137,7 @@ async fn test_order_on_empty_result() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
-        .order_by_asc(Author::Id)
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).order_by_asc(Author::Id).all().await.unwrap();
 
     assert_eq!(results.len(), 0);
 }
@@ -205,12 +185,7 @@ async fn test_exists_with_offset() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Exists should check if ANY records exist, regardless of offset
-    let exists = Author::objects(db)
-        .limit(10)
-        .offset(1000)
-        .exists()
-        .await
-        .unwrap();
+    let exists = Author::objects(db).limit(10).offset(1000).exists().await.unwrap();
 
     // This might be true or false depending on implementation
     // Just verify it doesn't crash

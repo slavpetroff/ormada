@@ -1,5 +1,5 @@
-use seaorm_django::prelude::*;
 use sea_orm::Database;
+use seaorm_django::prelude::*;
 
 /// Test that specifying a non-existent column in ordering causes a compile-time error
 /// This test file itself demonstrates the compile-time safety
@@ -17,9 +17,9 @@ async fn test_ordering_with_valid_column() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
-    
+
     // Create table
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -27,7 +27,7 @@ async fn test_ordering_with_valid_column() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // This should compile and work fine
     let posts = valid_post::ValidPost::default_ordering(&db).all().await.unwrap();
     assert_eq!(posts.len(), 0);
@@ -45,7 +45,7 @@ async fn test_ordering_ascending() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -53,7 +53,7 @@ async fn test_ordering_ascending() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // Create posts in reverse alphabetical order
     for title in ["Zebra", "Mango", "Apple"] {
         asc_post::AscPost::objects(&db)
@@ -65,7 +65,7 @@ async fn test_ordering_ascending() {
             .await
             .unwrap();
     }
-    
+
     // default_ordering should return in ASC order by title
     let posts = asc_post::AscPost::default_ordering(&db).all().await.unwrap();
     assert_eq!(posts.len(), 3);
@@ -87,7 +87,7 @@ async fn test_ordering_descending() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -95,7 +95,7 @@ async fn test_ordering_descending() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // Create posts with different view counts
     for (title, views) in [("Low", 10), ("High", 100), ("Medium", 50)] {
         desc_post::DescPost::objects(&db)
@@ -108,7 +108,7 @@ async fn test_ordering_descending() {
             .await
             .unwrap();
     }
-    
+
     // default_ordering should return in DESC order by views
     let posts = desc_post::DescPost::default_ordering(&db).all().await.unwrap();
     assert_eq!(posts.len(), 3);
@@ -129,9 +129,9 @@ async fn test_no_ordering_specified() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
-    
+
     // Create table
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -139,11 +139,11 @@ async fn test_no_ordering_specified() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // Models without ordering don't have default_ordering method
     // This is a compile-time check - if we tried to call default_ordering() here,
     // it would fail to compile with "method not found"
-    
+
     // We can still use objects() normally
     let posts = no_order_post::NoOrderPost::objects(&db).all().await.unwrap();
     assert_eq!(posts.len(), 0);
@@ -164,7 +164,7 @@ async fn test_ordering_with_filter() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -172,7 +172,7 @@ async fn test_ordering_with_filter() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // Create posts
     for i in 1..=3 {
         filterable_post::FilterablePost::objects(&db)
@@ -184,17 +184,17 @@ async fn test_ordering_with_filter() {
             })
             .await
             .unwrap();
-        
+
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
-    
+
     // Combine default ordering with filter
     let published = filterable_post::FilterablePost::default_ordering(&db)
         .filter(filterable_post::FilterablePost::Published.eq(true))
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(published.len(), 1);
     assert_eq!(published[0].title, "Post 2");
 }
@@ -214,7 +214,7 @@ async fn test_ordering_override() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -222,7 +222,7 @@ async fn test_ordering_override() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // Create posts
     for (title, priority) in [("Low", 1), ("High", 3), ("Medium", 2)] {
         override_post::OverridePost::objects(&db)
@@ -235,14 +235,11 @@ async fn test_ordering_override() {
             .await
             .unwrap();
     }
-    
+
     // Default ordering by created_at DESC (newest first)
-    let by_default = override_post::OverridePost::default_ordering(&db)
-        .all()
-        .await
-        .unwrap();
+    let by_default = override_post::OverridePost::default_ordering(&db).all().await.unwrap();
     assert_eq!(by_default[0].title, "Medium");
-    
+
     // Override with explicit ordering by priority
     let by_priority = override_post::OverridePost::objects(&db)
         .order_by_desc(override_post::OverridePost::Priority)
@@ -255,7 +252,7 @@ async fn test_ordering_override() {
 }
 
 // COMPILE-TIME ERROR TEST EXAMPLES (commented out to avoid build failures):
-// 
+//
 // Uncommenting this will cause a COMPILE ERROR because "nonexistent" field doesn't exist:
 /*
 #[tokio::test]
@@ -270,7 +267,7 @@ async fn test_invalid_column_name() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
     // ERROR: no associated item named `Nonexistent` found for struct `Model`
     let posts = invalid_post::InvalidPost::default_ordering(&db).all().await.unwrap();
@@ -291,7 +288,7 @@ async fn test_typo_in_column() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     // ERROR: no associated item named `Titel` found
 }
 */

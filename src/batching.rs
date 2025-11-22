@@ -14,7 +14,7 @@ pub const DEFAULT_CHUNK_SIZE: usize = 100;
 /// Validates batch size and returns safe value
 pub fn validate_batch_size(size: Option<usize>) -> usize {
     match size {
-        Some(s) if s == 0 => DEFAULT_BATCH_SIZE,
+        Some(0) => DEFAULT_BATCH_SIZE,
         Some(s) if s > MAX_BATCH_SIZE => {
             eprintln!(
                 "Warning: batch_size {} exceeds maximum {}. Using {}",
@@ -30,7 +30,7 @@ pub fn validate_batch_size(size: Option<usize>) -> usize {
 /// Split a vector into batches
 pub fn batch_vec<T: Clone>(items: Vec<T>, batch_size: usize) -> Vec<Vec<T>> {
     let batch_size = validate_batch_size(Some(batch_size));
-    
+
     items
         .into_iter()
         .collect::<Vec<_>>()
@@ -55,7 +55,7 @@ mod tests {
     fn test_batch_vec() {
         let items: Vec<i32> = (1..=10).collect();
         let batches = batch_vec(items, 3);
-        
+
         assert_eq!(batches.len(), 4); // 3, 3, 3, 1
         assert_eq!(batches[0], vec![1, 2, 3]);
         assert_eq!(batches[3], vec![10]);

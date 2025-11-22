@@ -8,7 +8,7 @@ mod common;
 #[path = "query_tests"]
 mod query_tests {
     use super::common;
-    
+
     mod comprehensive_test_suite;
     mod integration_query;
     mod test_advanced_queryset;

@@ -1,0 +1,41 @@
+[build]
+# Build configuration
+
+[target.'cfg(all())']
+# Clippy lints configuration
+rustflags = [
+    # Deny common mistakes
+    "-Dclippy::unwrap_used",
+    "-Dclippy::expect_used",
+    "-Dclippy::panic",
+    "-Dclippy::todo",
+    "-Dclippy::unimplemented",
+    
+    # Deny unsafe code (except in explicitly marked modules)
+    "-Funsafe_code",
+    
+    # Performance lints
+    "-Wclippy::perf",
+    "-Wclippy::large_enum_variant",
+    "-Wclippy::large_stack_arrays",
+    
+    # Correctness lints (errors)
+    "-Dclippy::correctness",
+    
+    # Style lints
+    "-Wclippy::style",
+    "-Wclippy::nursery",
+    
+    # Complexity lints  
+    "-Wclippy::complexity",
+    
+    # Pedantic lints for high quality
+    "-Wclippy::pedantic",
+    
+    # Allow some pedantic lints that are too noisy
+    "-Aclippy::module_name_repetitions",
+    "-Aclippy::must_use_candidate",
+    "-Aclippy::return_self_not_must_use",
+    "-Aclippy::missing_errors_doc",
+    "-Aclippy::missing_panics_doc",
+]

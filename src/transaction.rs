@@ -496,14 +496,14 @@ macro_rules! atomic {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_atomic_ext_trait_on_database_connection() {
         // Compile-time test: DatabaseConnection implements AtomicExt
         fn assert_implements_atomic_ext<T: AtomicExt>() {}
         assert_implements_atomic_ext::<DatabaseConnection>();
     }
-    
+
     #[test]
     fn test_atomic_ext_trait_on_database_transaction() {
         // Compile-time test: DatabaseTransaction implements AtomicExt

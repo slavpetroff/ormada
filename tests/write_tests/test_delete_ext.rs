@@ -8,16 +8,13 @@ use seaorm_django::write::DeleteExt;
 async fn test_model_delete_ext() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    
+
     // Use DeleteExt directly
     let author = authors[0].clone();
     author.delete(&db).await.unwrap();
-    
+
     // Verify deletion
-    let remaining = Author::objects(&db)
-        .all()
-        .await
-        .unwrap();
-    
+    let remaining = Author::objects(&db).all().await.unwrap();
+
     assert_eq!(remaining.len(), 2);
 }

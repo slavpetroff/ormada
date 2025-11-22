@@ -53,9 +53,7 @@ mod benchmark_item {
 }
 
 async fn setup_db() -> DatabaseConnection {
-    let db = Database::connect("sqlite::memory:")
-        .await
-        .expect("Failed to connect");
+    let db = Database::connect("sqlite::memory:").await.expect("Failed to connect");
 
     // Create table using raw SQL
     use sea_orm::ConnectionTrait;
@@ -96,7 +94,7 @@ fn bench_cache_hit_vs_miss(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let mut group = c.benchmark_group("cache_performance");
-    
+
     // Apply benchmark configuration from module constants
     group.warm_up_time(Duration::from_secs(WARM_UP_TIME_SECS));
     group.measurement_time(Duration::from_secs(MEASUREMENT_TIME_SECS));

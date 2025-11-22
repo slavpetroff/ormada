@@ -5,10 +5,10 @@
 //! cleared when the scope ends, preventing stale data.
 
 use sea_orm::{DatabaseConnection, DbErr};
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, RwLock};
 
 /// Wrapper around DatabaseConnection that provides query result caching.
 ///
@@ -69,7 +69,9 @@ impl CachedConnection {
 
         // Try to get from cache
         {
-            let cache_read = self.cache.read()
+            let cache_read = self
+                .cache
+                .read()
                 .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {}", e)))?;
             if let Some(cached) = cache_read.get(&hash) {
                 return Ok(Arc::clone(cached));
@@ -82,7 +84,9 @@ impl CachedConnection {
 
         // Store in cache
         {
-            let mut cache_write = self.cache.write()
+            let mut cache_write = self
+                .cache
+                .write()
                 .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {}", e)))?;
             cache_write.insert(hash, Arc::clone(&result_arc));
         }

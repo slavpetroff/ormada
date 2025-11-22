@@ -231,9 +231,9 @@ pub mod batching;
 pub mod cache;
 pub mod error;
 pub mod hooks;
-pub mod hooks_macro;
 pub mod query;
 pub mod relations;
+pub mod router;
 pub mod traits;
 pub mod transaction;
 pub mod types;
@@ -251,12 +251,13 @@ pub mod prelude {
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
     pub use crate::hooks::{AsyncLifecycleHooks, LifecycleHooks};
-    pub use crate::query::{Aggregation, Q, QueryExt, QuerySet};
+    pub use crate::query::{Aggregation, QueryExt, QuerySet, Q};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
+    pub use crate::router::{ConsistencyContext, DatabaseRouter, RoutingStrategy};
     pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
     pub use crate::transaction::AtomicExt;
     pub use crate::types::OnDelete;
-    
+
     // Macros
     pub use crate::{hooks, relations, tx};
 
@@ -269,28 +270,45 @@ pub mod prelude {
 
     // SeaORM core types (explicit re-exports for clarity)
     pub use sea_orm::{
-        // Database connection
-        Database, DatabaseConnection, DatabaseTransaction,
-        
-        // Entity and model traits
-        EntityTrait, ModelTrait, ActiveModelTrait, PrimaryKeyTrait,
-        
-        // Column and query traits
-        ColumnTrait, QuerySelect, QueryFilter, QueryOrder, QueryTrait,
-        
-        // Query builders
-        Condition, JoinType, Order, RelationTrait,
-        
+        ActiveModelTrait,
         // Value types
-        ActiveValue, Value, Set, NotSet, Unchanged,
-        
+        ActiveValue,
+        // Column and query traits
+        ColumnTrait,
+        // Query builders
+        Condition,
+        // Database connection
+        Database,
+        DatabaseConnection,
+        DatabaseTransaction,
+
         // Error type
         DbErr,
-        
+
+        // Entity and model traits
+        EntityTrait,
         // Transaction isolation
-        IsolationLevel, TransactionTrait,
+        IsolationLevel,
+        JoinType,
+        ModelTrait,
+        NotSet,
+        Order,
+        PrimaryKeyTrait,
+
+        QueryFilter,
+        QueryOrder,
+        QuerySelect,
+        QueryTrait,
+
+        RelationTrait,
+
+        Set,
+        TransactionTrait,
+        Unchanged,
+
+        Value,
     };
-    
+
     // Re-export SeaORM module for advanced usage
     pub use sea_orm;
 

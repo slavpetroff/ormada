@@ -86,10 +86,7 @@ async fn test_aggregate_sum_basic() {
             .unwrap();
     }
 
-    let sum = Book::objects(db)
-        .aggregate_sum(Book::Price)
-        .await
-        .unwrap();
+    let sum = Book::objects(db).aggregate_sum(Book::Price).await.unwrap();
 
     assert_eq!(sum, Some(6000.0));
 }
@@ -128,10 +125,7 @@ async fn test_aggregate_sum_empty() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let sum = Book::objects(db)
-        .aggregate_sum(Book::Price)
-        .await
-        .unwrap();
+    let sum = Book::objects(db).aggregate_sum(Book::Price).await.unwrap();
 
     assert_eq!(sum, None);
 }
@@ -160,10 +154,7 @@ async fn test_aggregate_avg_basic() {
             .unwrap();
     }
 
-    let avg = Book::objects(db)
-        .aggregate_avg(Book::Price)
-        .await
-        .unwrap();
+    let avg = Book::objects(db).aggregate_avg(Book::Price).await.unwrap();
 
     assert_eq!(avg, Some(2000.0));
 }
@@ -202,10 +193,7 @@ async fn test_aggregate_avg_empty() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let avg = Book::objects(db)
-        .aggregate_avg(Book::Price)
-        .await
-        .unwrap();
+    let avg = Book::objects(db).aggregate_avg(Book::Price).await.unwrap();
 
     assert_eq!(avg, None);
 }
@@ -234,10 +222,7 @@ async fn test_aggregate_max_basic() {
             .unwrap();
     }
 
-    let max = Book::objects(db)
-        .aggregate_max(Book::Price)
-        .await
-        .unwrap();
+    let max = Book::objects(db).aggregate_max(Book::Price).await.unwrap();
 
     assert_eq!(max, Some(5000.0));
 }
@@ -276,10 +261,7 @@ async fn test_aggregate_max_empty() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let max = Book::objects(db)
-        .aggregate_max(Book::Price)
-        .await
-        .unwrap();
+    let max = Book::objects(db).aggregate_max(Book::Price).await.unwrap();
 
     assert_eq!(max, None);
 }
@@ -308,10 +290,7 @@ async fn test_aggregate_min_basic() {
             .unwrap();
     }
 
-    let min = Book::objects(db)
-        .aggregate_min(Book::Price)
-        .await
-        .unwrap();
+    let min = Book::objects(db).aggregate_min(Book::Price).await.unwrap();
 
     assert_eq!(min, Some(1000.0));
 }
@@ -350,10 +329,7 @@ async fn test_aggregate_min_empty() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let min = Book::objects(db)
-        .aggregate_min(Book::Price)
-        .await
-        .unwrap();
+    let min = Book::objects(db).aggregate_min(Book::Price).await.unwrap();
 
     assert_eq!(min, None);
 }
@@ -385,22 +361,10 @@ async fn test_aggregations_comprehensive() {
 
     // Test all aggregations on the same data
     let count = Book::objects(db).aggregate_count().await.unwrap();
-    let sum = Book::objects(db)
-        .aggregate_sum(Book::Price)
-        .await
-        .unwrap();
-    let avg = Book::objects(db)
-        .aggregate_avg(Book::Price)
-        .await
-        .unwrap();
-    let max = Book::objects(db)
-        .aggregate_max(Book::Price)
-        .await
-        .unwrap();
-    let min = Book::objects(db)
-        .aggregate_min(Book::Price)
-        .await
-        .unwrap();
+    let sum = Book::objects(db).aggregate_sum(Book::Price).await.unwrap();
+    let avg = Book::objects(db).aggregate_avg(Book::Price).await.unwrap();
+    let max = Book::objects(db).aggregate_max(Book::Price).await.unwrap();
+    let min = Book::objects(db).aggregate_min(Book::Price).await.unwrap();
 
     assert_eq!(count, 5);
     assert_eq!(sum, Some(15000.0));

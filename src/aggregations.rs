@@ -156,7 +156,9 @@ struct AggregateValueFloat {
     value: Option<f64>,
 }
 
-impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> AggregateExt<E> for QuerySet<'a, E, C> {
+impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> AggregateExt<E>
+    for QuerySet<'a, E, C>
+{
     async fn aggregate_count(self) -> Result<u64, DjangoOrmError> {
         // Use the existing count() method
         self.count().await
@@ -182,7 +184,7 @@ impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> Aggre
                 // If int parsing failed, rebuild query for float (reuse column_ref, cheaper than cloning Select)
                 let sum_expr = Func::sum(Expr::col(column_ref));
                 let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
-                
+
                 match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
                     Some(result) => Ok(result.value),
                     None => Ok(None),
@@ -202,11 +204,7 @@ impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> Aggre
         let query = self.inner.select.clone().select_only().expr_as(avg_expr, "value");
 
         // AVG always returns float
-        match query
-            .into_model::<AggregateValueFloat>()
-            .one(self.inner.db)
-            .await?
-        {
+        match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
             Some(result) => Ok(result.value),
             None => Ok(None),
         }
@@ -231,7 +229,7 @@ impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> Aggre
                 // Rebuild query for float type only if int failed (reuse column_ref)
                 let max_expr = Func::max(Expr::col(column_ref));
                 let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
-                
+
                 match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
                     Some(result) => Ok(result.value),
                     None => Ok(None),
@@ -261,7 +259,7 @@ impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> Aggre
                 // Rebuild query for float type only if int failed (reuse column_ref)
                 let min_expr = Func::min(Expr::col(column_ref));
                 let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
-                
+
                 match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
                     Some(result) => Ok(result.value),
                     None => Ok(None),
@@ -292,60 +290,54 @@ pub struct AggregateResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_aggregate_value_int_some() {
         let result = AggregateValueInt { value: Some(42) };
         assert_eq!(result.value, Some(42));
     }
-    
+
     #[test]
     fn test_aggregate_value_int_none() {
         let result = AggregateValueInt { value: None };
         assert_eq!(result.value, None);
     }
-    
+
     #[test]
     fn test_aggregate_value_float_some() {
         let result = AggregateValueFloat { value: Some(42.5) };
         assert_eq!(result.value, Some(42.5));
     }
-    
+
     #[test]
     fn test_aggregate_value_float_none() {
         let result = AggregateValueFloat { value: None };
         assert_eq!(result.value, None);
     }
-    
+
     #[test]
     fn test_aggregate_result_construction() {
         let mut sums = HashMap::new();
         sums.insert("price".to_string(), 100.0);
-        
+
         let mut averages = HashMap::new();
         averages.insert("price".to_string(), 50.0);
-        
+
         let mut maxes = HashMap::new();
         maxes.insert("price".to_string(), 75.0);
-        
+
         let mut mins = HashMap::new();
         mins.insert("price".to_string(), 25.0);
-        
-        let result = AggregateResult {
-            count: 10,
-            sums,
-            averages,
-            maxes,
-            mins,
-        };
-        
+
+        let result = AggregateResult { count: 10, sums, averages, maxes, mins };
+
         assert_eq!(result.count, 10);
         assert_eq!(result.sums.get("price"), Some(&100.0));
         assert_eq!(result.averages.get("price"), Some(&50.0));
         assert_eq!(result.maxes.get("price"), Some(&75.0));
         assert_eq!(result.mins.get("price"), Some(&25.0));
     }
-    
+
     #[test]
     fn test_aggregate_result_empty_maps() {
         let result = AggregateResult {
@@ -355,7 +347,7 @@ mod tests {
             maxes: HashMap::new(),
             mins: HashMap::new(),
         };
-        
+
         assert_eq!(result.count, 0);
         assert!(result.sums.is_empty());
         assert!(result.averages.is_empty());

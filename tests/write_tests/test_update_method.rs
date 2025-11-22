@@ -95,10 +95,7 @@ async fn test_update_with_filter() {
     assert_eq!(count, 2);
 
     let updated_count = Author::objects(db)
-        .filter(ColumnTrait::eq(
-            &Author::Email,
-            "updated@example.com",
-        ))
+        .filter(ColumnTrait::eq(&Author::Email, "updated@example.com"))
         .count()
         .await
         .unwrap();

@@ -6,6 +6,6 @@ mod common;
 mod derive_tests {
     #[allow(unused_imports)]
     use super::common;
-    
+
     mod test_coverage_boost;
 }

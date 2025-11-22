@@ -101,11 +101,7 @@ async fn test_gt_method() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
-        .filter(ColumnExt::gt(&Author::Id, 0))
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).filter(ColumnExt::gt(&Author::Id, 0)).all().await.unwrap();
 
     assert_eq!(results.len(), 3);
 }

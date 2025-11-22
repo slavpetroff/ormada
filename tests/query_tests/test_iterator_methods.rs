@@ -10,10 +10,7 @@ async fn test_values_iter_basic() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db)
-        .values_iter(vec![Author::Name], None)
-        .await
-        .unwrap();
+    let mut stream = Author::objects(db).values_iter(vec![Author::Name], None).await.unwrap();
 
     let mut count = 0;
     while let Some(value) = stream.next().await {
@@ -31,10 +28,7 @@ async fn test_values_iter_with_chunk_size() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db)
-        .values_iter(vec![Author::Name], Some(1))
-        .await
-        .unwrap();
+    let mut stream = Author::objects(db).values_iter(vec![Author::Name], Some(1)).await.unwrap();
 
     let mut count = 0;
     while let Some(value) = stream.next().await {
@@ -50,10 +44,7 @@ async fn test_values_iter_empty_columns() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db)
-        .values_iter(vec![], None)
-        .await
-        .unwrap();
+    let mut stream = Author::objects(db).values_iter(vec![], None).await.unwrap();
 
     assert!(stream.next().await.is_none());
 }

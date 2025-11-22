@@ -143,14 +143,14 @@ where
     async fn delete(self, db: &DatabaseConnection) -> Result<(), DjangoOrmError> {
         // Call before_delete hook
         self.before_delete(db).await?;
-        
+
         let active_model: <M::Entity as EntityTrait>::ActiveModel = self.into();
         active_model.delete(db).await?;
-        
+
         // Call after_delete hook
         // Note: We can't call hooks on the model after delete since it's consumed
         // Users should do cleanup in before_delete hook instead
-        
+
         Ok(())
     }
 }

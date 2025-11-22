@@ -12,10 +12,7 @@ async fn test_get_by_id_found() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = Author::objects(db)
-        .get(authors[0].id)
-        .await
-        .unwrap();
+    let author = Author::objects(db).get(authors[0].id).await.unwrap();
 
     assert_eq!(author.id, authors[0].id);
     assert_eq!(author.name, authors[0].name);

@@ -16,17 +16,13 @@ pub async fn setup_test_db() -> DatabaseConnection {
 /// Execute raw SQL on the database (for table creation, etc.)
 pub async fn execute_sql(db: &DatabaseConnection, sql: &str) {
     use sea_orm::ConnectionTrait;
-    
-    db.execute_unprepared(sql)
-        .await
-        .expect("Failed to execute SQL");
+
+    db.execute_unprepared(sql).await.expect("Failed to execute SQL");
 }
 
 /// Create a fixed UTC timestamp for testing
 pub fn test_timestamp() -> DateTime<FixedOffset> {
-    FixedOffset::east_opt(0)
-        .unwrap()
-        .from_utc_datetime(&Utc::now().naive_utc())
+    FixedOffset::east_opt(0).unwrap().from_utc_datetime(&Utc::now().naive_utc())
 }
 
 /// Create a timestamp N hours ago
@@ -64,7 +60,7 @@ pub mod columns {
 pub trait TestFactory {
     /// Create a test instance with default values
     fn test_default() -> Self;
-    
+
     /// Create a test instance with specific ID
     fn test_with_id(id: i32) -> Self;
 }
@@ -81,7 +77,7 @@ pub mod assertions {
             epsilon
         );
     }
-    
+
     /// Assert that a result is an error
     pub fn assert_is_error<T, E>(result: Result<T, E>) {
         assert!(result.is_err(), "Expected error but got Ok");

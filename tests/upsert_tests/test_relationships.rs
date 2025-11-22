@@ -38,7 +38,7 @@ async fn test_upsert_with_foreign_key_relationships() {
 
     let book1 = Book::objects(&db).get(1).await.unwrap();
     assert_eq!(book1.author_id, authors[0].id);
-    
+
     let book2 = Book::objects(&db).get(2).await.unwrap();
     assert_eq!(book2.author_id, authors[1].id);
 }

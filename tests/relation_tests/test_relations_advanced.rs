@@ -77,11 +77,7 @@ async fn test_prefetch_with_all_invalid_fks() {
             .unwrap();
     }
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // All books should have None for author
     assert!(books.len() >= 3);
@@ -122,11 +118,7 @@ async fn test_prefetch_partial_invalid_fks() {
         .await
         .unwrap();
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     let valid_book = books.iter().find(|b| b.title == "Valid Book").unwrap();
     let invalid_book = books.iter().find(|b| b.title == "Invalid Book").unwrap();
@@ -146,11 +138,7 @@ async fn test_first_with_relations_found() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
 
     assert!(book.id > 0);
 }
@@ -162,11 +150,7 @@ async fn test_last_with_relations_found() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .last()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).last().await.unwrap();
 
     assert!(book.id > 0);
 }
@@ -176,10 +160,7 @@ async fn test_first_with_relations_not_found() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await;
+    let result = Book::objects(db).prefetch_related(relations![Author]).first().await;
 
     assert!(result.is_err());
 }
@@ -189,10 +170,7 @@ async fn test_last_with_relations_not_found() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .last()
-        .await;
+    let result = Book::objects(db).prefetch_related(relations![Author]).last().await;
 
     assert!(result.is_err());
 }
@@ -208,11 +186,7 @@ async fn test_count_ignores_prefetch() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .count()
-        .await
-        .unwrap();
+    let count = Book::objects(db).prefetch_related(relations![Author]).count().await.unwrap();
 
     assert!(count > 0);
 }
@@ -224,11 +198,7 @@ async fn test_exists_ignores_prefetch() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .exists()
-        .await
-        .unwrap();
+    let exists = Book::objects(db).prefetch_related(relations![Author]).exists().await.unwrap();
 
     assert!(exists);
 }
@@ -369,11 +339,7 @@ async fn test_prefetch_batch_loading_efficiency() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Load all books with authors in one go
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // Verify batch loading worked by checking all relations are populated
     let mut authors_loaded = 0;
@@ -432,11 +398,7 @@ async fn test_cloned_model_preserves_relations() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     if let Some(book) = books.first() {
         let cloned = book.clone();

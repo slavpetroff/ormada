@@ -5,7 +5,7 @@ mod common;
 #[path = "relation_tests"]
 mod relation_tests {
     use super::common;
-    
+
     mod integration_relations;
     mod test_django_model_relations;
     mod test_minimal_relation;

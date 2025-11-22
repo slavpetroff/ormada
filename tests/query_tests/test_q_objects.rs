@@ -79,9 +79,7 @@ async fn test_q_not() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let q = Q::all()
-        .add(ColumnExt::eq(&Author::Id, authors[0].id))
-        .not();
+    let q = Q::all().add(ColumnExt::eq(&Author::Id, authors[0].id)).not();
 
     let results = Author::objects(db).filter(q).all().await.unwrap();
 
@@ -114,9 +112,7 @@ async fn test_q_all_negated() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let q = Q::all()
-        .add(ColumnExt::gt(&Author::Id, authors[2].id))
-        .not();
+    let q = Q::all().add(ColumnExt::gt(&Author::Id, authors[2].id)).not();
 
     let results = Author::objects(db).filter(q).all().await.unwrap();
 
@@ -160,10 +156,7 @@ async fn test_q_double_negation() {
     let authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let q = Q::all()
-        .add(ColumnExt::eq(&Author::Id, authors[0].id))
-        .not()
-        .not();
+    let q = Q::all().add(ColumnExt::eq(&Author::Id, authors[0].id)).not().not();
 
     let results = Author::objects(db).filter(q).all().await.unwrap();
 

@@ -1,7 +1,7 @@
 //! Integration tests for relation loading and prefetch_related
 
-use crate::common::Author as Author;
 use crate::common::book::{Entity as Book, Model as BookModel};
+use crate::common::Author;
 use crate::common::*;
 use seaorm_django::prelude::*;
 
@@ -17,22 +17,14 @@ async fn test_prefetch_related_loads_relations() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Load books with authors prefetched
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 3);
 
     // Verify we can access author field directly
     for book in &books {
         // Check that author field exists and is Some
-        assert!(
-            book.author.is_some(),
-            "Book '{}' should have author loaded",
-            book.title
-        );
+        assert!(book.author.is_some(), "Book '{}' should have author loaded", book.title);
     }
 }
 
@@ -43,11 +35,7 @@ async fn test_prefetch_related_direct_field_access() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // Direct field access to book fields
     assert_eq!(book.title, "Rust Programming");
@@ -119,11 +107,7 @@ async fn test_prefetch_related_first() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
 
     assert!(book.author.is_some());
     assert_eq!(book.author.as_ref().unwrap().name, "Alice Johnson");
@@ -136,11 +120,7 @@ async fn test_prefetch_related_last() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .last()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).last().await.unwrap();
 
     assert!(book.author.is_some());
 }
@@ -152,11 +132,7 @@ async fn test_prefetch_related_count() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .count()
-        .await
-        .unwrap();
+    let count = Book::objects(db).prefetch_related(relations![Author]).count().await.unwrap();
 
     assert_eq!(count, 3);
 }
@@ -168,11 +144,7 @@ async fn test_prefetch_related_exists() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .exists()
-        .await
-        .unwrap();
+    let exists = Book::objects(db).prefetch_related(relations![Author]).exists().await.unwrap();
 
     assert!(exists);
 }
@@ -188,11 +160,7 @@ async fn test_related_author_fields_accessible() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // Book 1 - Alice Johnson
     let book1 = &books[0];
@@ -303,9 +271,7 @@ async fn test_book_with_invalid_author_id() {
 
     // Disable foreign key constraints for SQLite to allow invalid FK
     use sea_orm::ConnectionTrait;
-    db.execute_unprepared("PRAGMA foreign_keys = OFF")
-        .await
-        .unwrap();
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
 
     // Create a book with non-existent author_id
     let orphan_book = BookModel {
@@ -349,11 +315,7 @@ async fn test_prefetch_batches_correctly() {
     // This should execute 2 queries total:
     // 1. SELECT * FROM books
     // 2. SELECT * FROM authors WHERE id IN (1, 2) -- batch query
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 3);
 
@@ -395,11 +357,7 @@ async fn test_model_with_relations_has_all_fields() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // All original book fields accessible
     assert_eq!(book.id, 1);
@@ -422,19 +380,12 @@ async fn test_model_with_relations_clone() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // ModelWithRelations implements Clone
     let book_clone = book.clone();
 
     assert_eq!(book.id, book_clone.id);
     assert_eq!(book.title, book_clone.title);
-    assert_eq!(
-        book.author.as_ref().unwrap().name,
-        book_clone.author.as_ref().unwrap().name
-    );
+    assert_eq!(book.author.as_ref().unwrap().name, book_clone.author.as_ref().unwrap().name);
 }

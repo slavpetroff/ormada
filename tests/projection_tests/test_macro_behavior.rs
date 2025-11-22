@@ -11,7 +11,7 @@ use seaorm_django::prelude::*;
 
 mod user_model {
     use super::*;
-    
+
     #[django_model(table = "users")]
     pub struct User {
         #[primary_key]
@@ -42,17 +42,19 @@ struct UserWithOptional {
 #[tokio::test]
 async fn test_model_without_projection() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db, 
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Test basic CRUD with full model
     user_model::User::objects(&db)
         .create(user_model::User {
@@ -64,12 +66,9 @@ async fn test_model_without_projection() {
         })
         .await
         .unwrap();
-    
-    let users: Vec<user_model::User> = user_model::User::objects(&db)
-        .all()
-        .await
-        .unwrap();
-    
+
+    let users: Vec<user_model::User> = user_model::User::objects(&db).all().await.unwrap();
+
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
     assert_eq!(users[0].email, "alice@test.com");
@@ -79,17 +78,19 @@ async fn test_model_without_projection() {
 #[tokio::test]
 async fn test_filters_ordering_limit() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert test data
     for i in 1..=10 {
         user_model::User::objects(&db)
@@ -103,7 +104,7 @@ async fn test_filters_ordering_limit() {
             .await
             .unwrap();
     }
-    
+
     // Test complex filter chain
     let results: Vec<user_model::User> = user_model::User::objects(&db)
         .filter(user_model::User::Age.gte(25))
@@ -113,7 +114,7 @@ async fn test_filters_ordering_limit() {
         .all()
         .await
         .unwrap();
-    
+
     assert_eq!(results.len(), 3);
     assert!(results.iter().all(|u| u.age >= 25 && u.age < 30));
 }
@@ -121,17 +122,19 @@ async fn test_filters_ordering_limit() {
 #[tokio::test]
 async fn test_optional_fields() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert with NULL
     user_model::User::objects(&db)
         .create(user_model::User {
@@ -143,7 +146,7 @@ async fn test_optional_fields() {
         })
         .await
         .unwrap();
-    
+
     // Insert with value
     user_model::User::objects(&db)
         .create(user_model::User {
@@ -155,12 +158,9 @@ async fn test_optional_fields() {
         })
         .await
         .unwrap();
-    
-    let users: Vec<user_model::User> = user_model::User::objects(&db)
-        .all()
-        .await
-        .unwrap();
-    
+
+    let users: Vec<user_model::User> = user_model::User::objects(&db).all().await.unwrap();
+
     assert_eq!(users.len(), 2);
     assert!(users[0].bio.is_none());
     assert_eq!(users[1].bio.as_ref().unwrap(), "My bio");

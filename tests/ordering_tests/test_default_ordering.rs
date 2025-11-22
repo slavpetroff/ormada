@@ -1,6 +1,6 @@
-use seaorm_django::prelude::*;
-use sea_orm::{ Database, DatabaseConnection};
 use chrono::{DateTime, FixedOffset, Utc};
+use sea_orm::{Database, DatabaseConnection};
+use seaorm_django::prelude::*;
 
 // Test model WITH default ordering
 pub mod post {
@@ -40,20 +40,16 @@ async fn setup_test_db() -> DatabaseConnection {
     // Create tables
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    
+
     let post_stmt = schema.create_table_from_entity(post::Entity);
     let comment_stmt = schema.create_table_from_entity(comment::Entity);
-    
+
     use sea_orm::ConnectionTrait;
     let sql = post_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql)
-        .await
-        .expect("Failed to create posts table");
-    
+    db.execute_unprepared(&sql).await.expect("Failed to create posts table");
+
     let sql = comment_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql)
-        .await
-        .expect("Failed to create comments table");
+    db.execute_unprepared(&sql).await.expect("Failed to create comments table");
 
     db
 }
@@ -61,7 +57,7 @@ async fn setup_test_db() -> DatabaseConnection {
 #[tokio::test]
 async fn test_default_ordering_method_exists() {
     let db = setup_test_db().await;
-    
+
     // Create posts with different timestamps
     for i in 1..=3 {
         Post::objects(&db)
@@ -73,14 +69,14 @@ async fn test_default_ordering_method_exists() {
             })
             .await
             .unwrap();
-        
+
         // Small delay to ensure different timestamps
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
-    
-    // Use default_ordering() method  
+
+    // Use default_ordering() method
     let posts = Post::default_ordering(&db).all().await.unwrap();
-    
+
     // Should be ordered by created_at DESC (newest first)
     assert_eq!(posts.len(), 3);
     assert_eq!(posts[0].id, 3, "Newest post should be first");
@@ -91,7 +87,7 @@ async fn test_default_ordering_method_exists() {
 #[tokio::test]
 async fn test_default_ordering_with_filter() {
     let db = setup_test_db().await;
-    
+
     // Create posts
     for i in 1..=5 {
         Post::objects(&db)
@@ -103,17 +99,13 @@ async fn test_default_ordering_with_filter() {
             })
             .await
             .unwrap();
-        
+
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
     }
-    
+
     // Default ordering with filter
-    let posts = Post::default_ordering(&db)
-        .filter(Post::Views.gte(30))
-        .all()
-        .await
-        .unwrap();
-    
+    let posts = Post::default_ordering(&db).filter(Post::Views.gte(30)).all().await.unwrap();
+
     // Should have posts 3,4,5 in DESC order (5,4,3)
     assert_eq!(posts.len(), 3);
     assert_eq!(posts[0].id, 5);
@@ -124,7 +116,7 @@ async fn test_default_ordering_with_filter() {
 #[tokio::test]
 async fn test_explicit_ordering_overrides_default() {
     let db = setup_test_db().await;
-    
+
     // Create posts
     for i in 1..=3 {
         Post::objects(&db)
@@ -137,14 +129,10 @@ async fn test_explicit_ordering_overrides_default() {
             .await
             .unwrap();
     }
-    
+
     // Explicit ordering should override default
-    let posts = Post::objects(&db)
-        .order_by_asc(Post::Views)
-        .all()
-        .await
-        .unwrap();
-    
+    let posts = Post::objects(&db).order_by_asc(Post::Views).all().await.unwrap();
+
     // Should be ordered by views ASC
     assert_eq!(posts[0].views, 10);
     assert_eq!(posts[1].views, 20);
@@ -154,7 +142,7 @@ async fn test_explicit_ordering_overrides_default() {
 #[tokio::test]
 async fn test_model_without_default_ordering() {
     let db = setup_test_db().await;
-    
+
     // Create comments
     for i in 1..=3 {
         Comment::objects(&db)
@@ -167,10 +155,10 @@ async fn test_model_without_default_ordering() {
             .await
             .unwrap();
     }
-    
+
     // Model without default ordering - just returns objects
     let comments = Comment::objects(&db).all().await.unwrap();
-    
+
     // No guaranteed order (database default)
     assert_eq!(comments.len(), 3);
 }
@@ -180,7 +168,7 @@ async fn test_ascending_default_ordering() {
     // Create a model with ASC ordering
     pub mod article {
         use super::*;
-        #[django_model(table = "articles", ordering = "title")]  // No '-' means ASC
+        #[django_model(table = "articles", ordering = "title")] // No '-' means ASC
         pub struct Article {
             #[primary_key]
             pub id: i32,
@@ -188,7 +176,7 @@ async fn test_ascending_default_ordering() {
         }
         impl AsyncLifecycleHooks for Model {}
     }
-    
+
     let db = Database::connect("sqlite::memory:").await.unwrap();
     use sea_orm::Schema;
     let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
@@ -196,7 +184,7 @@ async fn test_ascending_default_ordering() {
     use sea_orm::ConnectionTrait;
     let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
     db.execute_unprepared(&sql).await.unwrap();
-    
+
     // Create articles in random order
     for title in ["Zebra", "Apple", "Mango"] {
         article::Article::objects(&db)
@@ -208,10 +196,10 @@ async fn test_ascending_default_ordering() {
             .await
             .unwrap();
     }
-    
+
     // Use default ordering (should be ASC by title)
     let articles = article::Article::default_ordering(&db).all().await.unwrap();
-    
+
     assert_eq!(articles[0].title, "Apple");
     assert_eq!(articles[1].title, "Mango");
     assert_eq!(articles[2].title, "Zebra");

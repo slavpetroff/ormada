@@ -5,7 +5,7 @@ use seaorm_django::prelude::*;
 
 mod order_model {
     use super::*;
-    
+
     #[django_model(table = "orders")]
     pub struct Order {
         #[primary_key]
@@ -50,8 +50,9 @@ struct CustomerSummary {
 #[tokio::test]
 async fn test_projection_with_group_by_and_aggregation() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -59,9 +60,10 @@ async fn test_projection_with_group_by_and_aggregation() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert orders for multiple customers
     let orders = vec![
         (1, "Product A", 2, 1000, "completed"),
@@ -70,7 +72,7 @@ async fn test_projection_with_group_by_and_aggregation() {
         (2, "Product C", 3, 2000, "completed"),
         (3, "Product A", 1, 1000, "completed"),
     ];
-    
+
     for (cust_id, product, qty, price, status) in orders {
         order_model::Order::objects(&db)
             .create(order_model::Order {
@@ -84,7 +86,7 @@ async fn test_projection_with_group_by_and_aggregation() {
             .await
             .unwrap();
     }
-    
+
     // Group by customer and compute aggregates
     let stats: Vec<CustomerOrderStats> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
@@ -96,19 +98,19 @@ async fn test_projection_with_group_by_and_aggregation() {
         .project::<CustomerOrderStats>()
         .await
         .unwrap();
-    
+
     assert_eq!(stats.len(), 3);
-    
+
     // Customer 1: 2 orders
     let cust1 = stats.iter().find(|s| s.customer_id == 1).unwrap();
     assert_eq!(cust1.order_count, 2);
     assert_eq!(cust1.total_quantity, Some(3));
-    
+
     // Customer 2: 2 orders
     let cust2 = stats.iter().find(|s| s.customer_id == 2).unwrap();
     assert_eq!(cust2.order_count, 2);
     assert_eq!(cust2.total_quantity, Some(8));
-    
+
     // Customer 3: 1 order
     let cust3 = stats.iter().find(|s| s.customer_id == 3).unwrap();
     assert_eq!(cust3.order_count, 1);
@@ -118,8 +120,9 @@ async fn test_projection_with_group_by_and_aggregation() {
 #[tokio::test]
 async fn test_projection_single_computed_field() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -127,9 +130,10 @@ async fn test_projection_single_computed_field() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     for i in 1..=10 {
         order_model::Order::objects(&db)
             .create(order_model::Order {
@@ -143,14 +147,14 @@ async fn test_projection_single_computed_field() {
             .await
             .unwrap();
     }
-    
+
     let counts: Vec<CustomerOrderCount> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
         .annotate([("order_count", Aggregation::count_all())])
         .project::<CustomerOrderCount>()
         .await
         .unwrap();
-    
+
     assert_eq!(counts.len(), 3);
     for count in &counts {
         assert!(count.order_count > 0);
@@ -160,8 +164,9 @@ async fn test_projection_single_computed_field() {
 #[tokio::test]
 async fn test_projection_with_filter_then_aggregate() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -169,9 +174,10 @@ async fn test_projection_with_filter_then_aggregate() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert completed and pending orders
     for i in 1..=20 {
         order_model::Order::objects(&db)
@@ -186,7 +192,7 @@ async fn test_projection_with_filter_then_aggregate() {
             .await
             .unwrap();
     }
-    
+
     // Only count completed orders per customer
     let stats: Vec<CustomerOrderCount> = order_model::Order::objects(&db)
         .filter(order_model::Order::Status.eq("completed"))
@@ -195,7 +201,7 @@ async fn test_projection_with_filter_then_aggregate() {
         .project::<CustomerOrderCount>()
         .await
         .unwrap();
-    
+
     assert!(stats.len() > 0);
     assert!(stats.len() <= 5);
 }
@@ -203,8 +209,9 @@ async fn test_projection_with_filter_then_aggregate() {
 #[tokio::test]
 async fn test_projection_mixing_regular_and_computed() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -212,9 +219,10 @@ async fn test_projection_mixing_regular_and_computed() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     let statuses = vec!["completed", "pending", "cancelled"];
     for i in 1..=15 {
         order_model::Order::objects(&db)
@@ -229,7 +237,7 @@ async fn test_projection_mixing_regular_and_computed() {
             .await
             .unwrap();
     }
-    
+
     // Group by customer_id AND status, count orders
     let summaries: Vec<CustomerSummary> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
@@ -238,7 +246,7 @@ async fn test_projection_mixing_regular_and_computed() {
         .project::<CustomerSummary>()
         .await
         .unwrap();
-    
+
     assert!(summaries.len() > 0);
     for summary in &summaries {
         assert!(summary.customer_id > 0);
@@ -250,8 +258,9 @@ async fn test_projection_mixing_regular_and_computed() {
 #[tokio::test]
 async fn test_projection_aggregation_with_having() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -259,9 +268,10 @@ async fn test_projection_aggregation_with_having() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Create customers with varying order counts
     for i in 1..=30 {
         order_model::Order::objects(&db)
@@ -276,7 +286,7 @@ async fn test_projection_aggregation_with_having() {
             .await
             .unwrap();
     }
-    
+
     // Get all customer order counts
     let counts: Vec<CustomerOrderCount> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
@@ -284,7 +294,7 @@ async fn test_projection_aggregation_with_having() {
         .project::<CustomerOrderCount>()
         .await
         .unwrap();
-    
+
     assert_eq!(counts.len(), 10);
     // Each customer should have 3 orders (30 orders / 10 customers)
     for count in &counts {
@@ -295,8 +305,9 @@ async fn test_projection_aggregation_with_having() {
 #[tokio::test]
 async fn test_projection_multiple_aggregations() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -304,9 +315,10 @@ async fn test_projection_multiple_aggregations() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert varied data
     for i in 1..=20 {
         order_model::Order::objects(&db)
@@ -321,7 +333,7 @@ async fn test_projection_multiple_aggregations() {
             .await
             .unwrap();
     }
-    
+
     let stats: Vec<CustomerOrderStats> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
         .annotate([
@@ -332,9 +344,9 @@ async fn test_projection_multiple_aggregations() {
         .project::<CustomerOrderStats>()
         .await
         .unwrap();
-    
+
     assert_eq!(stats.len(), 5);
-    
+
     for stat in &stats {
         assert!(stat.order_count > 0);
         assert!(stat.total_quantity.is_some());
@@ -345,8 +357,9 @@ async fn test_projection_multiple_aggregations() {
 #[tokio::test]
 async fn test_projection_aggregation_empty_group() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -354,9 +367,10 @@ async fn test_projection_aggregation_empty_group() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // No data - aggregation on empty set
     let stats: Vec<CustomerOrderCount> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
@@ -364,15 +378,16 @@ async fn test_projection_aggregation_empty_group() {
         .project::<CustomerOrderCount>()
         .await
         .unwrap();
-    
+
     assert_eq!(stats.len(), 0);
 }
 
 #[tokio::test]
 async fn test_projection_aggregation_with_ordering() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE orders (
             id INTEGER PRIMARY KEY,
             customer_id INTEGER NOT NULL,
@@ -380,12 +395,19 @@ async fn test_projection_aggregation_with_ordering() {
             quantity INTEGER NOT NULL,
             price INTEGER NOT NULL,
             status TEXT NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert data with different counts per customer
     for i in 1..=15 {
-        let customer_id = if i <= 5 { 1 } else if i <= 10 { 2 } else { 3 };
+        let customer_id = if i <= 5 {
+            1
+        } else if i <= 10 {
+            2
+        } else {
+            3
+        };
         order_model::Order::objects(&db)
             .create(order_model::Order {
                 id: 0,
@@ -398,7 +420,7 @@ async fn test_projection_aggregation_with_ordering() {
             .await
             .unwrap();
     }
-    
+
     // Group and order by customer_id
     let counts: Vec<CustomerOrderCount> = order_model::Order::objects(&db)
         .group_by(order_model::Order::CustomerId)
@@ -407,7 +429,7 @@ async fn test_projection_aggregation_with_ordering() {
         .project::<CustomerOrderCount>()
         .await
         .unwrap();
-    
+
     assert_eq!(counts.len(), 3);
     assert_eq!(counts[0].customer_id, 1);
     assert_eq!(counts[1].customer_id, 2);

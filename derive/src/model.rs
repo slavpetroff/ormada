@@ -58,7 +58,7 @@ struct FieldConfig {
 
 #[derive(Clone)]
 struct ForeignKeyConfig {
-    entity: syn::Path,  // Can be Author or super::author::Entity
+    entity: syn::Path, // Can be Author or super::author::Entity
     on_delete: Option<Ident>,
     default: Option<Expr>,
 }
@@ -259,7 +259,7 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
             // First positional argument is the Model type (e.g., Author)
             // User should NEVER provide Entity - we auto-convert Model -> Entity
             let path = meta.path.clone();
-            
+
             // Convert Model type to Entity path
             // If user provides "Author", we convert to "super::author::Entity"
             // If user provides path like "super::author::Author", extract the module name
@@ -280,7 +280,7 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
                     segments,
                 }
             };
-            
+
             model_type = Some(entity_path);
         } else if meta.path.is_ident("on_delete") {
             let _: Token![=] = meta.input.parse()?;
@@ -293,18 +293,16 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
     })?;
 
     Ok(ForeignKeyConfig {
-        entity: model_type
-            .ok_or_else(|| syn::Error::new_spanned(meta_list, "foreign_key requires a Model type"))?,
+        entity: model_type.ok_or_else(|| {
+            syn::Error::new_spanned(meta_list, "foreign_key requires a Model type")
+        })?,
         on_delete,
         default,
     })
 }
 
 /// Main implementation of the django_model attribute macro
-pub fn impl_django_model(
-    attr: TokenStream,
-    input: TokenStream,
-) -> syn::Result<TokenStream> {
+pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
     let config: ModelConfig = syn::parse2(attr)?;
     let mut input: DeriveInput = syn::parse2(input)?;
 
@@ -323,10 +321,7 @@ pub fn impl_django_model(
             }
         },
         _ => {
-            return Err(syn::Error::new_spanned(
-                struct_name,
-                "django_model only supports structs",
-            ));
+            return Err(syn::Error::new_spanned(struct_name, "django_model only supports structs"));
         }
     };
 
@@ -339,28 +334,40 @@ pub fn impl_django_model(
 
     for field in fields.named.iter_mut() {
         let config = parse_field_attributes(&field.attrs)?;
-        
+
+        // Get field identifier early - all named fields must have idents
+        let field_ident = match &field.ident {
+            Some(ident) => ident.clone(),
+            None => return Err(syn::Error::new_spanned(&*field, "Field must have a name")),
+        };
+
+        let field_type = field.ty.clone();
+
         // Validation
         if config.is_primary_key {
             has_primary_key = true;
-            primary_key_fields.push(field.ident.as_ref().unwrap().clone());
+            primary_key_fields.push(field_ident.clone());
         }
         if let Some(ref fk) = config.foreign_key {
-            foreign_keys.push((field.ident.as_ref().unwrap().clone(), fk.clone()));
+            foreign_keys.push((field_ident.clone(), fk.clone()));
         }
         if config.soft_delete {
             if soft_delete_field.is_some() {
                 return Err(syn::Error::new(
-                    field.ident.as_ref().unwrap().span(),
+                    field_ident.span(),
                     "Only one field can be marked with #[soft_delete]",
                 ));
             }
-            soft_delete_field = Some(field.ident.as_ref().unwrap().clone());
+            soft_delete_field = Some(field_ident.clone());
         }
-        
+
         // Store config before stripping attributes
-        field_configs.push((field.ident.as_ref().unwrap().clone(), field.ty.clone(), config.clone()));
-        
+        field_configs.push((
+            field_ident,
+            field_type,
+            config.clone(),
+        ));
+
         // Strip our custom attributes, keep only SeaORM/serde ones
         strip_django_attributes(field, &config);
     }
@@ -394,18 +401,18 @@ pub fn impl_django_model(
     input.attrs.push(syn::parse_quote! {
         #[derive(Clone, Debug, PartialEq, Eq, ::sea_orm::entity::prelude::DeriveEntityModel, Default)]
     });
-    
+
     // Add sea_orm table_name attribute
     input.attrs.push(syn::parse_quote! {
         #[sea_orm(table_name = #table_name)]
     });
-    
+
     // Keep original name for convenience alias
     let original_name = input.ident.clone();
-    
+
     // Generate snake_case module name from struct name
     let module_name = format_ident!("{}", to_snake_case(&original_name.to_string()));
-    
+
     // Rename struct to Model (SeaORM convention) and make it public
     input.ident = format_ident!("Model");
     input.vis = syn::Visibility::Public(syn::token::Pub::default());
@@ -413,7 +420,8 @@ pub fn impl_django_model(
     // Generate additional components
     let relation_enum = generate_relation_enum(&foreign_keys);
     let entity_impl = generate_entity_impl();
-    let django_entity_impl = generate_django_entity_impl(&field_configs, table_name, soft_delete_field.as_ref())?;
+    let django_entity_impl =
+        generate_django_entity_impl(&field_configs, table_name, soft_delete_field.as_ref())?;
     let has_relation_impls = generate_has_relation_impls(&foreign_keys);
     let with_relations_trait_impl = generate_with_relations_trait(&foreign_keys);
     let model_save_impl = generate_model_save_impl(&field_configs)?;
@@ -434,57 +442,57 @@ pub fn impl_django_model(
             use ::sea_orm::PrimaryKeyToColumn;
             use ::seaorm_django::prelude::DateTimeWithTimeZone;
             use ::seaorm_django::types::OnDelete;
-            
+
             // The Model struct with DeriveEntityModel (this generates Entity internally)
             #input
-            
+
             // Relation enum
             #relation_enum
-            
+
             // ActiveModelBehavior implementation
             #entity_impl
-            
+
             // Django entity trait implementation
             #django_entity_impl
-            
+
             // HasRelation implementations for foreign keys
             #has_relation_impls
-            
+
             // WithRelationsTrait implementation (required for relations system)
             #with_relations_trait_impl
         }
-        
+
         // Export Model as the primary type - this is what users work with!
         pub use _internal::Model;
-        
+
         // Also export other types for advanced use (including Entity for trait implementations)
         pub use _internal::{Entity, ActiveModel, Column, PrimaryKey, Relation};
-        
+
         // Alias for convenience in generated code
         use _internal::Entity as _Entity;
-        
+
         // Model instance methods (save, delete, etc.)
         #model_save_impl
         #model_delete_impl
-        
+
         // Model static methods and column constants
         #model_convenience_impl
-        
+
         // Implement HasEntityType trait so relations! macro can extract Entity from Model
         impl ::seaorm_django::relations::HasEntityType for Model {
             type __Entity = Entity;
         }
-        
+
         // Forward DjangoEntity methods to Entity
         impl Model {
             /// Validate and convert Model to ActiveModel for creation
-            /// 
+            ///
             /// This is a convenience method that forwards to the Entity implementation.
             pub fn to_active_model_for_create(model: Self) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
                 <Entity as ::seaorm_django::traits::DjangoEntity>::to_active_model_for_create(model)
             }
         }
-        
+
         // Main export: Author = Model (the data struct users work with)
         pub type #original_name = Model;
     };
@@ -496,7 +504,7 @@ pub fn impl_django_model(
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c.is_uppercase() {
             if !result.is_empty() {
@@ -507,7 +515,7 @@ fn to_snake_case(s: &str) -> String {
             result.push(c);
         }
     }
-    
+
     result
 }
 
@@ -515,10 +523,10 @@ fn to_snake_case(s: &str) -> String {
 fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     // Make field public
     field.vis = syn::Visibility::Public(syn::token::Pub::default());
-    
+
     // Keep only attributes that SeaORM and serde understand
     let mut new_attrs = Vec::new();
-    
+
     for attr in &field.attrs {
         // Keep doc comments and other non-django attributes
         if !attr.path().is_ident("primary_key")
@@ -537,12 +545,12 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
             new_attrs.push(attr.clone());
         }
     }
-    
+
     // Add SeaORM attributes based on config
     if config.is_primary_key {
         new_attrs.push(syn::parse_quote! { #[sea_orm(primary_key)] });
     }
-    
+
     // TODO: Add serde attributes back when we properly handle serde dependency
     // if config.skip_deserializing {
     //     new_attrs.push(syn::parse_quote! { #[serde(skip_deserializing)] });
@@ -550,7 +558,7 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     // if config.skip_serializing {
     //     new_attrs.push(syn::parse_quote! { #[serde(skip_serializing)] });
     // }
-    
+
     field.attrs = new_attrs;
 }
 
@@ -563,7 +571,7 @@ fn generate_model_struct(
     for (field, config) in field_configs {
         let field_name = &field.ident;
         let field_type = &field.ty;
-        
+
         // Only include attributes that SeaORM and serde understand
         // Our custom attributes (max_length, etc.) are stripped
         let mut field_attrs = Vec::new();
@@ -650,21 +658,22 @@ fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenSt
             // e.g., crate::author::author::Entity -> use second-to-last "author"
             // or super::author::Entity -> use "author"
             let segments: Vec<_> = fk.entity.segments.iter().collect();
-            let variant_name = if segments.len() >= 2 && segments.last().unwrap().ident == "Entity" {
+            let variant_name = if segments.len() >= 2 && segments.last().unwrap().ident == "Entity"
+            {
                 // Path ends with ::Entity, use the segment before it
                 &segments[segments.len() - 2].ident
             } else {
                 // Otherwise use last segment
                 &segments.last().unwrap().ident
             };
-            
+
             // Generate Column name (PascalCase from field_name)
             let column_name_str = to_pascal_case(&field_name.to_string());
-            
+
             // Convert entity path to string for all three attributes
             let entity_path = &fk.entity;
             let entity_path_str = quote!(#entity_path).to_string().replace(" ", "");
-            
+
             // For "to" path, we need to reference Column in the same module as Entity
             // e.g., "crate::author::Entity" -> "crate::author::Column::Id"
             // Remove "::Entity" suffix and add "::Column::Id"
@@ -675,18 +684,15 @@ fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenSt
                 // Fallback: just append ::Column::Id
                 format!("{}::Column::Id", entity_path_str)
             };
-            
+
             // All three values must be string literals
             let belongs_to_lit = syn::LitStr::new(&entity_path_str, proc_macro2::Span::call_site());
             let from_path = syn::LitStr::new(
                 &format!("Column::{}", column_name_str),
-                proc_macro2::Span::call_site()
+                proc_macro2::Span::call_site(),
             );
-            let to_path = syn::LitStr::new(
-                &to_path_str,
-                proc_macro2::Span::call_site()
-            );
-            
+            let to_path = syn::LitStr::new(&to_path_str, proc_macro2::Span::call_site());
+
             quote! {
                 #[sea_orm(
                     belongs_to = #belongs_to_lit,
@@ -723,7 +729,7 @@ fn generate_django_entity_impl(
     for (field_name, field_type, config) in field_configs {
         // Generate validation code
         let field_name_str = field_name.to_string();
-        
+
         // String length validations
         if config.max_length.is_some() || config.min_length.is_some() {
             let type_str = quote!(#field_type).to_string();
@@ -756,7 +762,7 @@ fn generate_django_entity_impl(
                 }
             }
         }
-        
+
         // Numeric range validations
         if config.range_min.is_some() || config.range_max.is_some() {
             if let Some(min) = config.range_min {
@@ -788,7 +794,7 @@ fn generate_django_entity_impl(
                 });
             }
         }
-        
+
         // Generate field assignment
         if config.auto_now_add {
             create_assignments.push(quote! {
@@ -822,7 +828,7 @@ fn generate_django_entity_impl(
             fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
                 // Validation logic
                 #(#validations)*
-                
+
                 let now = ::chrono::Utc::now().fixed_offset();
                 ::core::result::Result::Ok(ActiveModel {
                     #(#create_assignments,)*
@@ -872,7 +878,7 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
             quote! {
                 impl ::seaorm_django::relations::HasRelation<#entity> for Entity {
                     type RelatedPK = i32; // TODO: Detect actual type
-                    
+
                     fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
                         model.#field_name
                     }
@@ -987,17 +993,17 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     db: &C,
                 ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
-                    
+
                     // Convert to ActiveModel and set deleted_at
                     let mut active = ActiveModel::from(self);
                     active.#field_name = Set(::core::option::Option::Some(::chrono::Utc::now().fixed_offset()));
-                    
+
                     // Update in database
                     let updated = active.update(db).await?;
-                    
+
                     ::core::result::Result::Ok(updated)
                 }
-                
+
                 /// Permanently delete this record from the database (hard delete).
                 ///
                 /// This cannot be undone. Use `.delete()` for soft delete instead.
@@ -1006,13 +1012,13 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     db: &C,
                 ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::ActiveModelTrait;
-                    
+
                     let active = ActiveModel::from(self);
                     active.delete(db).await?;
-                    
+
                     ::core::result::Result::Ok(())
                 }
-                
+
                 /// Restore a soft-deleted record (set deleted_at to NULL).
                 ///
                 /// Makes the record visible in queries again.
@@ -1021,14 +1027,14 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     db: &C,
                 ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
-                    
+
                     // Convert to ActiveModel and set deleted_at to NULL
                     let mut active = ActiveModel::from(self);
                     active.#field_name = Set(::core::option::Option::None);
-                    
+
                     // Update in database
                     let updated = active.update(db).await?;
-                    
+
                     ::core::result::Result::Ok(updated)
                 }
             }
@@ -1043,10 +1049,10 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     db: &C,
                 ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::ActiveModelTrait;
-                    
+
                     let active = ActiveModel::from(self);
                     active.delete(db).await?;
-                    
+
                     ::core::result::Result::Ok(())
                 }
             }
@@ -1070,12 +1076,7 @@ fn generate_model_convenience_methods(
                 ))
             }
         },
-        _ => {
-            return Err(syn::Error::new_spanned(
-                input,
-                "Only structs are supported",
-            ))
-        }
+        _ => return Err(syn::Error::new_spanned(input, "Only structs are supported")),
     };
 
     // Generate column constants: Book::Title = Column::Title
@@ -1095,7 +1096,7 @@ fn generate_model_convenience_methods(
         let desc = ordering_str.starts_with('-');
         let column_name = ordering_str.trim_start_matches('-');
         let column_ident = format_ident!("{}", to_pascal_case(column_name));
-        
+
         if desc {
             quote! {
                 /// Apply default ordering (from #[django_model(ordering = "...")])
@@ -1125,13 +1126,13 @@ fn generate_model_convenience_methods(
         impl Model {
             // Column constants for convenient access: Book::Title instead of book::Column::Title
             #(#column_constants)*
-            
+
             /// Get a QuerySet for this model (Django's Model.objects equivalent)
-            /// 
+            ///
             /// # Example
             /// ```
             /// use crate::models::Book;
-            /// 
+            ///
             /// let books: Vec<Book> = Book::objects(db)
             ///     .filter(Book::Title.contains("Django"))
             ///     .all().await?;
@@ -1142,7 +1143,7 @@ fn generate_model_convenience_methods(
                 use ::seaorm_django::query::QueryExt;
                 _Entity::objects(db)
             }
-            
+
             #default_ordering_method
         }
     })

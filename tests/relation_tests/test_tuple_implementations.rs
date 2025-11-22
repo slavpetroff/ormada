@@ -27,11 +27,7 @@ async fn test_single_relation() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert!(books.len() > 0);
 }
@@ -54,11 +50,7 @@ async fn test_relations_with_empty_books() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Query books (which don't exist) with author relation
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 0);
 }
@@ -73,10 +65,7 @@ async fn test_book_without_author_relation() {
 
     // Query a specific book
     let books = Book::objects(db)
-        .filter(sea_orm::ColumnTrait::eq(
-            &Book::AuthorId,
-            authors[0].id,
-        ))
+        .filter(sea_orm::ColumnTrait::eq(&Book::AuthorId, authors[0].id))
         .prefetch_related(relations![Author])
         .all()
         .await

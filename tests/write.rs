@@ -6,7 +6,7 @@ mod common;
 mod write_tests {
     #[allow(unused_imports)]
     use super::common;
-    
+
     mod integration_write;
     mod test_bulk_operations;
     mod test_delete_ext;

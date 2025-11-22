@@ -53,12 +53,7 @@ async fn test_offset_beyond_data() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     // SQLite requires LIMIT with OFFSET
-    let results = Author::objects(db)
-        .limit(100)
-        .offset(1000)
-        .all()
-        .await
-        .unwrap();
+    let results = Author::objects(db).limit(100).offset(1000).all().await.unwrap();
 
     assert_eq!(results.len(), 0);
 }
@@ -164,11 +159,7 @@ async fn test_prefetch_empty_result() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 0);
 }
@@ -267,11 +258,7 @@ async fn test_model_with_relations_has_all_fields() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     for book in &books {
         // Test field access
@@ -293,11 +280,7 @@ async fn test_model_with_relations_clone() {
     let _books = create_sample_books(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
 
     if let Some(book) = books.first() {
         let cloned = book.clone();

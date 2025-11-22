@@ -121,7 +121,7 @@ pub enum DjangoOrmError {
         /// Identifier that was searched for
         id: String,
     },
-    
+
     /// Field validation error
     ///
     /// Raised when model field validation fails (max_length, range, etc.)
@@ -164,7 +164,6 @@ pub enum DjangoOrmError {
     /// })
     /// ```
     Custom(String),
-    
 }
 
 impl fmt::Display for DjangoOrmError {
@@ -211,10 +210,7 @@ impl DjangoOrmError {
     /// return Err(DjangoOrmError::not_found("Book", id.to_string()));
     /// ```
     pub fn not_found(entity: &'static str, id: impl ToString) -> Self {
-        Self::NotFound {
-            entity,
-            id: id.to_string(),
-        }
+        Self::NotFound { entity, id: id.to_string() }
     }
 
     /// Create a Validation error
@@ -228,11 +224,7 @@ impl DjangoOrmError {
     ///     "must not be empty"
     /// ));
     /// ```
-    pub fn validation(
-        entity: &'static str,
-        field: &'static str,
-        reason: impl ToString,
-    ) -> Self {
+    pub fn validation(entity: &'static str, field: &'static str, reason: impl ToString) -> Self {
         Self::Validation {
             entity,
             field,
@@ -331,11 +323,8 @@ mod tests {
 
     #[test]
     fn test_not_found_pattern_matching() {
-        let error = DjangoOrmError::NotFound {
-            entity: "Author",
-            id: "456".to_string(),
-        };
-        
+        let error = DjangoOrmError::NotFound { entity: "Author", id: "456".to_string() };
+
         match error {
             DjangoOrmError::NotFound { entity, id } => {
                 assert_eq!(entity, "Author");
@@ -361,7 +350,7 @@ mod tests {
             field: "title",
             reason: "too long".to_string(),
         };
-        
+
         match error {
             DjangoOrmError::Validation { entity, field, reason } => {
                 assert_eq!(entity, "Book");
@@ -377,7 +366,7 @@ mod tests {
         let not_found = DjangoOrmError::not_found("Book", 1);
         let validation = DjangoOrmError::validation("Book", "title", "required");
         let custom = DjangoOrmError::Custom("custom".to_string());
-        
+
         assert!(matches!(not_found, DjangoOrmError::NotFound { .. }));
         assert!(matches!(validation, DjangoOrmError::Validation { .. }));
         assert!(matches!(custom, DjangoOrmError::Custom(_)));

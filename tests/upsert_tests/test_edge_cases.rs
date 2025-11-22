@@ -118,16 +118,14 @@ async fn test_upsert_idempotent() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
 
-    let books = vec![
-        Book {
-            id: 1,
-            title: "Book 1".to_string(),
-            author_id: 1,
-            price: 1000,
-            published: true,
-            ..Default::default()
-        },
-    ];
+    let books = vec![Book {
+        id: 1,
+        title: "Book 1".to_string(),
+        author_id: 1,
+        price: 1000,
+        published: true,
+        ..Default::default()
+    }];
 
     for _ in 0..3 {
         Book::objects(&db)

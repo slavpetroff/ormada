@@ -12,8 +12,8 @@
 //! Relation definitions and generates the extended struct at compile time.
 
 use crate::error::DjangoOrmError;
-use sea_orm::{ConnectionTrait, EntityTrait, Select};
 use rustc_hash::FxHashMap;
+use sea_orm::{ConnectionTrait, EntityTrait, Select};
 
 // /// Note: RelationGraph has been removed in favor of compile-time typed relations
 // See LoadRelations trait and HasRelation trait for the new zero-cost approach
@@ -62,9 +62,7 @@ pub struct RelationSpec<E: sea_orm::EntityTrait> {
 impl<E: sea_orm::EntityTrait> RelationSpec<E> {
     /// Create a new relation specification (zero-cost, compile-time only)
     pub const fn new() -> Self {
-        Self {
-            _marker: std::marker::PhantomData,
-        }
+        Self { _marker: std::marker::PhantomData }
     }
 }
 

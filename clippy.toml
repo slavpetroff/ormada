@@ -1,0 +1,23 @@
+# Clippy configuration
+# Enforce strict code quality standards
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Disallowed methods - forbid dangerous operations
+disallowed-methods = [
+    { path = "std::option::Option::unwrap", reason = "Use `?` operator or proper error handling instead" },
+    { path = "std::result::Result::unwrap", reason = "Use `?` operator or proper error handling instead" },
+    { path = "std::option::Option::expect", reason = "Use `?` operator or proper error handling with context" },
+    { path = "std::result::Result::expect", reason = "Use `?` operator or proper error handling with context" },
+    { path = "std::panic::panic", reason = "Return errors instead of panicking" },
+]
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Too many arguments threshold
+too-many-arguments-threshold = 7
+
+# Avoid breaking exported API
+avoid-breaking-exported-api = true

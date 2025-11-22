@@ -162,16 +162,14 @@ async fn test_upsert_respects_foreign_key_constraints() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
 
-    let books = vec![
-        Book {
-            id: 1,
-            title: "Valid Book".to_string(),
-            author_id: authors[0].id, // Valid author
-            price: 1000,
-            published: true,
-            ..Default::default()
-        },
-    ];
+    let books = vec![Book {
+        id: 1,
+        title: "Valid Book".to_string(),
+        author_id: authors[0].id, // Valid author
+        price: 1000,
+        published: true,
+        ..Default::default()
+    }];
 
     // This should succeed - valid foreign key
     let result = Book::objects(&db)
@@ -184,16 +182,14 @@ async fn test_upsert_respects_foreign_key_constraints() {
     assert!(result.is_ok(), "Valid foreign key should succeed");
 
     // This should fail - invalid foreign key
-    let invalid_books = vec![
-        Book {
-            id: 2,
-            title: "Invalid Book".to_string(),
-            author_id: 99999, // Non-existent author
-            price: 1000,
-            published: true,
-            ..Default::default()
-        },
-    ];
+    let invalid_books = vec![Book {
+        id: 2,
+        title: "Invalid Book".to_string(),
+        author_id: 99999, // Non-existent author
+        price: 1000,
+        published: true,
+        ..Default::default()
+    }];
 
     let result = Book::objects(&db)
         .upsert_many(invalid_books)

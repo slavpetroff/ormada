@@ -264,9 +264,7 @@ pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
 // Implement Clone for QuerySet (cheap Arc clone)
 impl<'a, E: EntityTrait, C: ConnectionTrait> Clone for QuerySet<'a, E, C> {
     fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-        }
+        Self { inner: Arc::clone(&self.inner) }
     }
 }
 
@@ -294,7 +292,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             }),
         }
     }
-    
+
     /// Create a new QuerySet with modified soft delete mode
     fn with_soft_delete_mode(&self, mode: SoftDeleteMode) -> Self {
         Self {
@@ -306,31 +304,31 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             }),
         }
     }
-    
+
     /// Apply soft delete filter to the query based on current mode
-    fn apply_soft_delete_filter(&self, mut select: Select<E>) -> Select<E> 
+    fn apply_soft_delete_filter(&self, mut select: Select<E>) -> Select<E>
     where
         E: crate::traits::DjangoEntity,
     {
         // Check if this entity has soft deletes enabled
         if let Some(field_name) = E::soft_delete_column() {
-            use sea_orm::sea_query::{Alias, SimpleExpr, NullOrdering};
-            
+            use sea_orm::sea_query::{Alias, SimpleExpr};
+
             match self.inner.soft_delete_mode {
                 SoftDeleteMode::ExcludeDeleted => {
                     // Filter WHERE deleted_at IS NULL
                     // Construct: Expr::col(field_name).is_null()
                     let condition = SimpleExpr::Binary(
-                        Box::new(Expr::col(Alias::new(field_name)).into()),
+                        Box::new(Expr::col(Alias::new(field_name))),
                         sea_orm::sea_query::BinOper::Is,
                         Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
                     );
                     select = select.filter(condition);
                 }
                 SoftDeleteMode::OnlyDeleted => {
-                    // Filter WHERE deleted_at IS NOT NULL  
+                    // Filter WHERE deleted_at IS NOT NULL
                     let condition = SimpleExpr::Binary(
-                        Box::new(Expr::col(Alias::new(field_name)).into()),
+                        Box::new(Expr::col(Alias::new(field_name))),
                         sea_orm::sea_query::BinOper::IsNot,
                         Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
                     );
@@ -360,7 +358,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let new_select = self.inner.select.clone().filter(cond.not());
         self.with_select(new_select)
     }
-    
+
     /// Include soft-deleted records in query results
     ///
     /// By default, models with `#[soft_delete]` automatically exclude deleted records.
@@ -377,7 +375,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     pub fn with_deleted(&self) -> Self {
         self.with_soft_delete_mode(SoftDeleteMode::IncludeDeleted)
     }
-    
+
     /// Only show soft-deleted records
     ///
     /// Filters to show ONLY records where the soft delete field is NOT NULL.
@@ -527,7 +525,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// ```rust,ignore
     /// let books_again = qs.all().await?;  // Cache hit! No DB query
     /// ```
-    pub async fn all(&self) -> Result<Vec<E::Model>, DjangoOrmError> 
+    pub async fn all(&self) -> Result<Vec<E::Model>, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
     {
@@ -541,7 +539,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
         // Apply soft delete filter before executing
         let query = self.apply_soft_delete_filter(self.inner.select.clone());
-        
+
         // Cache miss - execute query and cache results
         let results = query.all(self.inner.db).await?;
         let results_arc = Arc::new(results.clone());
@@ -600,7 +598,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Caching
     ///
     /// Uses the same cache as `.all()`. If cache exists, returns first element.
-    pub async fn first(&self) -> Result<E::Model, DjangoOrmError> 
+    pub async fn first(&self) -> Result<E::Model, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
     {
@@ -617,7 +615,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
         // Apply soft delete filter before executing
         let query = self.apply_soft_delete_filter(self.inner.select.clone());
-        
+
         // Cache miss - execute query for single record
         query
             .one(self.inner.db)
@@ -708,10 +706,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         E: crate::traits::DjangoEntity,
     {
         let id_str = format!("{}", &id);
-        
+
         // Build the query with soft delete filter
         let query = self.apply_soft_delete_filter(E::find_by_id(id));
-        
+
         query
             .one(self.inner.db)
             .await?
@@ -844,13 +842,13 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// This uses a SQL `COUNT(*)` query which is optimized by the database.
     /// Much faster than loading all records and counting in memory.
-    pub async fn count(&self) -> Result<u64, DjangoOrmError> 
+    pub async fn count(&self) -> Result<u64, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
     {
         // Apply soft delete filter first
         let filtered = self.apply_soft_delete_filter(self.inner.select.clone());
-        
+
         // Get count using SeaORM's built-in count functionality
         use sea_orm::QuerySelect;
         let count_select = filtered.select_only().column_as(
@@ -909,20 +907,17 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// Uses `LIMIT 1` internally, so it stops as soon as it finds any match.
     /// This is much faster than counting all records when you just need to know
     /// if any exist.
-    pub async fn exists(&self) -> Result<bool, DjangoOrmError> 
+    pub async fn exists(&self) -> Result<bool, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
     {
         use sea_orm::QuerySelect;
-        
+
         // Apply soft delete filter first
         let filtered = self.apply_soft_delete_filter(self.inner.select.clone());
-        
+
         // Use LIMIT 1 for efficiency
-        let result = filtered
-            .limit(1)
-            .one(self.inner.db)
-            .await?;
+        let result = filtered.limit(1).one(self.inner.db).await?;
         Ok(result.is_some())
     }
 
@@ -964,13 +959,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let txn = self.inner.db.begin().await?;
 
         // Use SELECT FOR UPDATE to lock rows and prevent concurrent modifications
-        let models = self
-            .inner
-            .select
-            .clone()
-            .lock(LockType::Update)
-            .all(&txn)
-            .await?;
+        let models = self.inner.select.clone().lock(LockType::Update).all(&txn).await?;
         let mut count = 0u64;
 
         for mut model in models {
@@ -1187,22 +1176,22 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     {
         use crate::hooks::LifecycleHooks;
         use sea_orm::ActiveModelTrait;
-        
+
         // Call before_save hook (common to both create and update)
         model.before_save().await?;
-        
+
         // Call before_create hook (specific to create)
         model.before_create().await?;
-        
+
         let active_model = E::to_active_model_for_create(model)?;
         let result = active_model.insert(self.inner.db).await?;
-        
+
         // Call after_create hook
         result.after_create(self.inner.db).await?;
-        
+
         // Call after_save hook (common to both create and update)
         result.after_save(self.inner.db).await?;
-        
+
         Ok(result)
     }
 
@@ -1265,10 +1254,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let count = models.len() as u64;
 
         // Convert models to ActiveModels using DjangoEntity logic (handles IDs/timestamps)
-        let active_models: Result<Vec<E::ActiveModel>, DjangoOrmError> = models
-            .into_iter()
-            .map(|model| E::to_active_model_for_create(model))
-            .collect();
+        let active_models: Result<Vec<E::ActiveModel>, DjangoOrmError> =
+            models.into_iter().map(|model| E::to_active_model_for_create(model)).collect();
         let active_models = active_models?;
 
         // Use SeaORM's insert_many
@@ -1411,10 +1398,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 condition = condition.add(row_condition);
             }
 
-            E::delete_many()
-                .filter(condition)
-                .exec(self.inner.db)
-                .await?;
+            E::delete_many().filter(condition).exec(self.inner.db).await?;
         }
 
         Ok(count)
@@ -1813,16 +1797,11 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                     select = select.column(*col);
                 }
 
-                let results: Vec<serde_json::Value> = match select
-                    .limit(chunk_size)
-                    .offset(offset)
-                    .into_json()
-                    .all(db)
-                    .await
-                {
-                    Ok(r) => r,
-                    Err(e) => return Some((Err(DjangoOrmError::from(e)), (offset, true))),
-                };
+                let results: Vec<serde_json::Value> =
+                    match select.limit(chunk_size).offset(offset).into_json().all(db).await {
+                        Ok(r) => r,
+                        Err(e) => return Some((Err(DjangoOrmError::from(e)), (offset, true))),
+                    };
 
                 let is_done = results.len() < chunk_size as usize;
                 let next_offset = offset + results.len() as u64;
@@ -2005,10 +1984,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// ```
     pub fn debug_sql(&self) -> String {
         use sea_orm::QueryTrait;
-        let stmt = self
-            .inner
-            .select
-            .build(self.inner.db.get_database_backend());
+        let stmt = self.inner.select.build(self.inner.db.get_database_backend());
         stmt.to_string()
     }
 
@@ -2027,7 +2003,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .filter(User::Age.gte(18))
     ///     .explain()
     ///     .await?;
-    /// 
+    ///
     /// println!("Execution Plan:\n{}", plan);
     /// // Output shows if indexes are used, scan type, etc.
     /// ```
@@ -2050,17 +2026,17 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// - `.explain_analyze()` - Runs query and provides actual timings
     /// - `.debug_sql()` - Shows the raw SQL query
-    pub async fn explain(&self) -> Result<String, DjangoOrmError> 
+    pub async fn explain(&self) -> Result<String, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
     {
         use sea_orm::QueryTrait;
-        
+
         // Get the SQL for the current query
         let backend = self.inner.db.get_database_backend();
         let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
         let sql = stmt.to_string();
-        
+
         // Construct EXPLAIN query based on database backend
         let explain_sql = match backend {
             sea_orm::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {}", sql),
@@ -2068,7 +2044,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             sea_orm::DatabaseBackend::MySql => format!("EXPLAIN {}", sql),
             _ => format!("EXPLAIN {}", sql), // Fallback for any future database backends
         };
-        
+
         // Return the SQL that would be explained
         // Full EXPLAIN output requires database-specific result parsing
         Ok(format!("EXPLAIN output for query:\n{}\n\nTo run: {}", sql, explain_sql))
@@ -2091,7 +2067,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .join(Author::Entity)
     ///     .explain_analyze()
     ///     .await?;
-    /// 
+    ///
     /// println!("Execution Analysis:\n{}", analysis);
     /// // Shows actual timings, rows processed, buffer hits, etc.
     /// ```
@@ -2116,17 +2092,17 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// - **SQLite**: Limited - same as `explain()`
     /// - **PostgreSQL**: `EXPLAIN ANALYZE` - full statistics
     /// - **MySQL**: `EXPLAIN ANALYZE` (MySQL 8.0.18+)
-    pub async fn explain_analyze(&self) -> Result<String, DjangoOrmError> 
+    pub async fn explain_analyze(&self) -> Result<String, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
     {
         use sea_orm::QueryTrait;
-        
+
         // Get the SQL for the current query
         let backend = self.inner.db.get_database_backend();
         let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
         let sql = stmt.to_string();
-        
+
         // Construct EXPLAIN ANALYZE query based on database backend
         let explain_sql = match backend {
             sea_orm::DatabaseBackend::Sqlite => {
@@ -2140,9 +2116,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             }
             _ => format!("EXPLAIN ANALYZE {}", sql), // Fallback for any future database backends
         };
-        
+
         // Return the EXPLAIN ANALYZE SQL for manual execution
-        Ok(format!("EXPLAIN ANALYZE output for query:\n{}\n\nRun this command directly:\n{}", sql, explain_sql))
+        Ok(format!(
+            "EXPLAIN ANALYZE output for query:\n{}\n\nRun this command directly:\n{}",
+            sql, explain_sql
+        ))
     }
 
     /// Type-safe projection query (alternative to JSON-based values())
@@ -2174,13 +2153,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     {
         // Simply use into_model without select_only()
         // SeaORM's FromQueryResult will map the available columns to T's fields
-        Ok(self
-            .inner
-            .select
-            .clone()
-            .into_model::<T>()
-            .all(self.inner.db)
-            .await?)
+        Ok(self.inner.select.clone().into_model::<T>().all(self.inner.db).await?)
     }
 
     /// Group query results by one or more columns (Django's .group_by())
@@ -2467,9 +2440,7 @@ impl Q {
     /// // SQL: WHERE published = true AND price < 50
     /// ```
     pub fn all() -> Self {
-        Self {
-            condition: Condition::all(),
-        }
+        Self { condition: Condition::all() }
     }
 
     /// Create a Q object with ANY conditions (OR logic)
@@ -2488,9 +2459,7 @@ impl Q {
     /// // SQL: WHERE title LIKE '%Rust%' OR title LIKE '%Python%'
     /// ```
     pub fn any() -> Self {
-        Self {
-            condition: Condition::any(),
-        }
+        Self { condition: Condition::any() }
     }
 
     /// Add a condition to this Q object

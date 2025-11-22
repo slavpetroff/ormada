@@ -13,7 +13,7 @@ async fn test_get_or_create_concurrent_safe() {
 
     // Launch multiple concurrent get_or_create operations for the same email
     let mut tasks = JoinSet::new();
-    
+
     for i in 0..5 {
         tasks.spawn(async move {
             let email = "concurrent@example.com";
@@ -66,7 +66,7 @@ async fn test_update_or_create_concurrent_safe() {
 
     // Launch multiple concurrent update_or_create operations
     let mut tasks = JoinSet::new();
-    
+
     for i in 0..5 {
         tasks.spawn(async move {
             let email = "update_concurrent@example.com";

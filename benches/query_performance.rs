@@ -114,10 +114,7 @@ fn bench_aggregations(c: &mut Criterion) {
         b.to_async(&rt).iter(|| async {
             use seaorm_django::aggregations::AggregateExt;
             use seaorm_django::query::QueryExt;
-            let sum = Entity::objects(&db)
-                .aggregate_sum(Column::Value)
-                .await
-                .expect("Sum failed");
+            let sum = Entity::objects(&db).aggregate_sum(Column::Value).await.expect("Sum failed");
             black_box(sum)
         });
     });
@@ -195,10 +192,8 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
             use futures::StreamExt;
             use seaorm_django::query::QueryExt;
 
-            let mut stream = Entity::objects(&db)
-                .iterator(Some(500))
-                .await
-                .expect("Iterator failed");
+            let mut stream =
+                Entity::objects(&db).iterator(Some(500)).await.expect("Iterator failed");
 
             let mut count = 0;
             while let Some(result) = stream.next().await {

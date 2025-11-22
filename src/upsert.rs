@@ -2,8 +2,7 @@
 
 use crate::error::DjangoOrmError;
 use sea_orm::{
-    sea_query::{Expr, IntoIden, OnConflict, SimpleExpr},
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel,
+    sea_query::OnConflict, ActiveModelTrait, ConnectionTrait, EntityTrait, IntoActiveModel,
 };
 
 /// Builder for bulk upsert operations
@@ -78,19 +77,15 @@ where
 
         // Convert to ActiveModels using IntoActiveModel (NOT to_active_model_for_create)
         // For upsert, we want all fields Set (including ID) so they can be used in ON CONFLICT
-        let active_models: Vec<E::ActiveModel> = self
-            .models
-            .into_iter()
-            .map(|model| model.into_active_model())
-            .collect();
+        let active_models: Vec<E::ActiveModel> =
+            self.models.into_iter().map(|model| model.into_active_model()).collect();
 
         let mut query = E::insert_many(active_models);
 
         // Build ON CONFLICT clause
         // For SQLite, use update_columns which should set each column to EXCLUDED.column_name
-        let on_conflict = OnConflict::columns(conflict_columns)
-            .update_columns(update_columns)
-            .to_owned();
+        let on_conflict =
+            OnConflict::columns(conflict_columns).update_columns(update_columns).to_owned();
 
         query = query.on_conflict(on_conflict);
 

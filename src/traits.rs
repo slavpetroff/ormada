@@ -37,7 +37,7 @@ pub trait DjangoEntity: EntityTrait {
     /// Returns the column name used for soft deletes (e.g., "deleted_at").
     /// If None, the entity uses hard deletes.
     fn soft_delete_column() -> Option<&'static str> {
-        None  // Default: no soft delete
+        None // Default: no soft delete
     }
 }
 
@@ -70,21 +70,21 @@ pub trait WithRelationsTrait {
 mod tests {
     use super::*;
     use sea_orm::DatabaseConnection;
-    
+
     #[test]
     fn test_django_connection_trait_exists() {
         // This is a compile-time test - if it compiles, the trait works
         fn assert_django_connection<T: DjangoConnection>() {}
-        
+
         // Test that DatabaseConnection implements DjangoConnection
         assert_django_connection::<DatabaseConnection>();
     }
-    
+
     #[test]
     fn test_trait_bound_convenience() {
         // Verify that DjangoConnection can be used as a single bound
         fn generic_with_django_connection<C: DjangoConnection>() {}
-        
+
         // This should compile with DjangoConnection instead of multiple bounds
         generic_with_django_connection::<DatabaseConnection>();
     }

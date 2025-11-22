@@ -5,7 +5,7 @@ use seaorm_django::prelude::*;
 
 mod user_model {
     use super::*;
-    
+
     #[django_model(table = "users")]
     pub struct User {
         #[primary_key]
@@ -41,17 +41,19 @@ struct UserId {
 #[tokio::test]
 async fn test_basic_projection_returns_subset() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert test data
     user_model::User::objects(&db)
         .create(user_model::User {
@@ -63,13 +65,11 @@ async fn test_basic_projection_returns_subset() {
         })
         .await
         .unwrap();
-    
+
     // Use projection to get only id and name
-    let users: Vec<UserBasic> = user_model::User::objects(&db)
-        .project::<UserBasic>()
-        .await
-        .unwrap();
-    
+    let users: Vec<UserBasic> =
+        user_model::User::objects(&db).project::<UserBasic>().await.unwrap();
+
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
     // UserBasic doesn't have email, age, or bio fields - that's the point!
@@ -78,17 +78,19 @@ async fn test_basic_projection_returns_subset() {
 #[tokio::test]
 async fn test_projection_with_optional_field() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert with bio
     user_model::User::objects(&db)
         .create(user_model::User {
@@ -100,7 +102,7 @@ async fn test_projection_with_optional_field() {
         })
         .await
         .unwrap();
-    
+
     // Insert without bio
     user_model::User::objects(&db)
         .create(user_model::User {
@@ -112,13 +114,11 @@ async fn test_projection_with_optional_field() {
         })
         .await
         .unwrap();
-    
+
     // Project to type with optional field
-    let users: Vec<UserWithBio> = user_model::User::objects(&db)
-        .project::<UserWithBio>()
-        .await
-        .unwrap();
-    
+    let users: Vec<UserWithBio> =
+        user_model::User::objects(&db).project::<UserWithBio>().await.unwrap();
+
     assert_eq!(users.len(), 2);
     assert_eq!(users[0].bio, Some("Engineer".into()));
     assert_eq!(users[1].bio, None);
@@ -127,17 +127,19 @@ async fn test_projection_with_optional_field() {
 #[tokio::test]
 async fn test_projection_with_filters() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert multiple users
     for i in 1..=10 {
         user_model::User::objects(&db)
@@ -151,14 +153,14 @@ async fn test_projection_with_filters() {
             .await
             .unwrap();
     }
-    
+
     // Filter and project
     let users: Vec<UserBasic> = user_model::User::objects(&db)
         .filter(user_model::User::Age.gte(25))
         .project::<UserBasic>()
         .await
         .unwrap();
-    
+
     assert_eq!(users.len(), 6);
     // Verify we got projection type, not full model
     for user in &users {
@@ -170,17 +172,19 @@ async fn test_projection_with_filters() {
 #[tokio::test]
 async fn test_projection_with_ordering() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     let names = vec!["Zoe", "Alice", "Mike"];
     for name in names {
         user_model::User::objects(&db)
@@ -194,14 +198,14 @@ async fn test_projection_with_ordering() {
             .await
             .unwrap();
     }
-    
+
     // Order and project
     let users: Vec<UserBasic> = user_model::User::objects(&db)
         .order_by_asc(user_model::User::Name)
         .project::<UserBasic>()
         .await
         .unwrap();
-    
+
     assert_eq!(users.len(), 3);
     assert_eq!(users[0].name, "Alice");
     assert_eq!(users[1].name, "Mike");
@@ -211,17 +215,19 @@ async fn test_projection_with_ordering() {
 #[tokio::test]
 async fn test_projection_with_limit() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert 20 users
     for i in 1..=20 {
         user_model::User::objects(&db)
@@ -235,14 +241,11 @@ async fn test_projection_with_limit() {
             .await
             .unwrap();
     }
-    
+
     // Limit and project
-    let users: Vec<UserId> = user_model::User::objects(&db)
-        .limit(5)
-        .project::<UserId>()
-        .await
-        .unwrap();
-    
+    let users: Vec<UserId> =
+        user_model::User::objects(&db).limit(5).project::<UserId>().await.unwrap();
+
     assert_eq!(users.len(), 5);
     // UserId only has id field
     for user in &users {
@@ -253,17 +256,19 @@ async fn test_projection_with_limit() {
 #[tokio::test]
 async fn test_single_field_projection() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     for i in 1..=100 {
         user_model::User::objects(&db)
             .create(user_model::User {
@@ -276,13 +281,10 @@ async fn test_single_field_projection() {
             .await
             .unwrap();
     }
-    
+
     // Project to just IDs - minimal data transfer
-    let ids: Vec<UserId> = user_model::User::objects(&db)
-        .project::<UserId>()
-        .await
-        .unwrap();
-    
+    let ids: Vec<UserId> = user_model::User::objects(&db).project::<UserId>().await.unwrap();
+
     assert_eq!(ids.len(), 100);
     assert_eq!(ids[0].id, 1);
     assert_eq!(ids[99].id, 100);
@@ -291,40 +293,42 @@ async fn test_single_field_projection() {
 #[tokio::test]
 async fn test_projection_empty_results() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // No data - project returns empty vec
-    let users: Vec<UserBasic> = user_model::User::objects(&db)
-        .project::<UserBasic>()
-        .await
-        .unwrap();
-    
+    let users: Vec<UserBasic> =
+        user_model::User::objects(&db).project::<UserBasic>().await.unwrap();
+
     assert_eq!(users.len(), 0);
 }
 
 #[tokio::test]
 async fn test_projection_with_complex_filters() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE users (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             age INTEGER NOT NULL,
             bio TEXT
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     // Insert various ages
     for i in 1..=50 {
         user_model::User::objects(&db)
@@ -338,20 +342,20 @@ async fn test_projection_with_complex_filters() {
             .await
             .unwrap();
     }
-    
+
     // Complex filter: age between 30-40 AND has bio
     let q = Q::all()
         .add(user_model::User::Age.gte(30))
         .add(user_model::User::Age.lte(40))
         .add(user_model::User::Bio.is_not_null());
-    
+
     let users: Vec<UserWithBio> = user_model::User::objects(&db)
         .filter(q)
         .order_by_asc(user_model::User::Name)
         .project::<UserWithBio>()
         .await
         .unwrap();
-    
+
     // Verify all match criteria
     for user in &users {
         assert!(user.bio.is_some());

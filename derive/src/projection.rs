@@ -3,10 +3,10 @@
 //! Provides type-safe field projections with compile-time validation.
 
 use proc_macro2::TokenStream;
-use quote::{quote, format_ident, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    Data, DeriveInput, Fields, Ident, Token, Attribute, Meta,
+    Attribute, Data, DeriveInput, Fields, Ident, Meta, Token,
 };
 
 /// Configuration for the `#[django_projection]` attribute
@@ -74,26 +74,20 @@ fn to_pascal_case(s: &str) -> String {
 }
 
 /// Generate the projection implementation
-pub fn generate_projection(
-    attr: TokenStream,
-    input: TokenStream,
-) -> syn::Result<TokenStream> {
+pub fn generate_projection(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
     let config: ProjectionConfig = syn::parse2(attr)?;
     let input: DeriveInput = syn::parse2(input)?;
 
     let struct_name = &input.ident;
     let model_path = &config.model;
-    
+
     // Get the module path (everything before the last ::)
     // If model_path is user_model::User, we need user_model::Column
     let model_str = model_path.to_token_stream().to_string();
     let parts: Vec<&str> = model_str.rsplitn(2, "::").collect();
-    let module_path = if parts.len() == 2 {
-        syn::parse_str::<syn::Path>(parts[1])?
-    } else {
-        model_path.clone()
-    };
-    
+    let module_path =
+        if parts.len() == 2 { syn::parse_str::<syn::Path>(parts[1])? } else { model_path.clone() };
+
     let column_path = quote! { #module_path::Column };
 
     // Extract fields from struct
@@ -167,4 +161,3 @@ pub fn generate_projection(
         }
     })
 }
-

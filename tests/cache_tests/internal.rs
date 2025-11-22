@@ -2,9 +2,8 @@
 //!
 //! Tests for the cache module's internal functions
 
-
-use super::common::test_helpers::*;
 use super::common::fixtures::simple_item;
+use super::common::test_helpers::*;
 use seaorm_django::prelude::*;
 
 #[tokio::test]
@@ -16,11 +15,11 @@ async fn test_cache_populated_on_first_all() {
     simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
 
     let queryset = simple_item::Entity::objects(&db);
-    
+
     // First call populates cache
     let results = queryset.all().await.unwrap();
     assert_eq!(results.len(), 10);
-    
+
     // Cache should now be populated (verified by second call returning same data)
     let results2 = queryset.all().await.unwrap();
     assert_eq!(results.len(), results2.len());
@@ -34,11 +33,9 @@ async fn test_cache_not_shared_between_different_queries() {
     let items = simple_item::sample_items(50);
     simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
 
-    let query1 = simple_item::Entity::objects(&db)
-        .filter(simple_item::Column::Value.lt(25));
-    
-    let query2 = simple_item::Entity::objects(&db)
-        .filter(simple_item::Column::Value.gte(25));
+    let query1 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.lt(25));
+
+    let query2 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.gte(25));
 
     // Populate both caches
     let results1 = query1.all().await.unwrap();
@@ -64,7 +61,7 @@ async fn test_builder_methods_create_new_queryset() {
     simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
 
     let base = simple_item::Entity::objects(&db);
-    
+
     // Each builder method should create a new QuerySet with new cache
     let filtered = base.filter(simple_item::Column::Value.lt(50));
     let limited = filtered.limit(10);
@@ -90,9 +87,8 @@ async fn test_first_without_prior_cache() {
     let items = simple_item::sample_items(10);
     simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
 
-    let queryset = simple_item::Entity::objects(&db)
-        .order_by_asc(simple_item::Column::Value);
-    
+    let queryset = simple_item::Entity::objects(&db).order_by_asc(simple_item::Column::Value);
+
     // Call first() without calling all() first
     let first = queryset.first().await.unwrap();
     assert_eq!(first.value, 0);
@@ -109,10 +105,7 @@ async fn test_get_without_cache() {
         .unwrap();
 
     // Get by ID (doesn't use cache)
-    let retrieved = simple_item::Entity::objects(&db)
-        .get(item.id)
-        .await
-        .unwrap();
+    let retrieved = simple_item::Entity::objects(&db).get(item.id).await.unwrap();
 
     assert_eq!(retrieved.value, 42);
 }
@@ -195,7 +188,7 @@ async fn test_cache_cleared_on_query_modification() {
     simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
 
     let base = simple_item::Entity::objects(&db);
-    
+
     // Populate base cache
     let base_results = base.all().await.unwrap();
     assert_eq!(base_results.len(), 100);
@@ -255,8 +248,7 @@ async fn test_offset_creates_new_cache() {
     let items = simple_item::sample_items(100);
     simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
 
-    let base = simple_item::Entity::objects(&db)
-        .order_by_asc(simple_item::Column::Value);
+    let base = simple_item::Entity::objects(&db).order_by_asc(simple_item::Column::Value);
 
     let page1 = base.limit(10);
     let page2 = base.limit(10).offset(10);
@@ -294,7 +286,7 @@ async fn test_distinct_creates_new_cache() {
 
     // All has duplicates
     assert_eq!(all_results.len(), 10);
-    
+
     // Distinct may or may not reduce count depending on implementation
     // Just verify it executes
     assert!(distinct_results.len() > 0);

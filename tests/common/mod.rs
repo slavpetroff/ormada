@@ -39,8 +39,8 @@
 //! ```
 
 // New modular test infrastructure
-pub mod test_helpers;
 pub mod fixtures;
+pub mod test_helpers;
 
 // Test utilities using OUR django_model macro
 use sea_orm::{Database, DatabaseConnection, DbBackend, Schema};
@@ -49,7 +49,7 @@ use seaorm_django::prelude::*;
 /// Test Author model - properly using django_model macro
 pub mod author {
     use super::*;
-    
+
     #[django_model(table = "authors")]
     pub struct Author {
         #[primary_key]
@@ -57,21 +57,21 @@ pub mod author {
         pub name: String,
         pub email: String,
         pub age: i32,
-        
+
         #[auto_now_add]
         pub created_at: DateTimeWithTimeZone,
-        
+
         #[auto_now]
         pub updated_at: DateTimeWithTimeZone,
     }
-    
+
     impl AsyncLifecycleHooks for Model {}
 }
 
 /// Test Book model - properly using django_model macro
 pub mod book {
     use super::*;
-    
+
     #[django_model(table = "books")]
     pub struct Book {
         #[primary_key]
@@ -81,14 +81,14 @@ pub mod book {
         pub author_id: i32,
         pub price: i32,
         pub published: bool,
-        
+
         #[auto_now_add]
         pub created_at: DateTimeWithTimeZone,
-        
+
         #[auto_now]
         pub updated_at: DateTimeWithTimeZone,
     }
-    
+
     impl AsyncLifecycleHooks for Model {}
 }
 
@@ -111,16 +111,12 @@ pub async fn setup_test_db() -> DatabaseConnection {
 
     use sea_orm::ConnectionTrait;
     use sea_orm::Statement;
-    
+
     let sql = author_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql)
-        .await
-        .expect("Failed to create authors table");
+    db.execute_unprepared(&sql).await.expect("Failed to create authors table");
 
     let sql = book_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql)
-        .await
-        .expect("Failed to create books table");
+    db.execute_unprepared(&sql).await.expect("Failed to create books table");
 
     db
 }

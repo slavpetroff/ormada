@@ -35,10 +35,7 @@ async fn test_bulk_create_basic() {
         })
         .collect();
 
-    let count = Author::objects(db)
-        .bulk_create(models)
-        .await
-        .unwrap();
+    let count = Author::objects(db).bulk_create(models).await.unwrap();
     assert_eq!(count, 10);
 
     // Verify count
@@ -52,10 +49,7 @@ async fn test_bulk_create_empty() {
     let db: &'static _ = Box::leak(Box::new(db));
 
     let models: Vec<Author> = vec![];
-    let count = Author::objects(db)
-        .bulk_create(models)
-        .await
-        .unwrap();
+    let count = Author::objects(db).bulk_create(models).await.unwrap();
 
     assert_eq!(count, 0);
 }
@@ -74,10 +68,7 @@ async fn test_bulk_create_large_batch() {
         })
         .collect();
 
-    let count = Author::objects(db)
-        .bulk_create(models)
-        .await
-        .unwrap();
+    let count = Author::objects(db).bulk_create(models).await.unwrap();
     assert_eq!(count, 100);
 
     // Verify all inserted
@@ -124,10 +115,7 @@ async fn test_bulk_create_single_record() {
         ..Default::default()
     }];
 
-    let count = Author::objects(db)
-        .bulk_create(models)
-        .await
-        .unwrap();
+    let count = Author::objects(db).bulk_create(models).await.unwrap();
     assert_eq!(count, 1);
 
     let total = Author::objects(db).count().await.unwrap();
@@ -211,10 +199,7 @@ async fn test_bulk_create_performance_comparison() {
         })
         .collect();
 
-    Author::objects(db)
-        .bulk_create(models)
-        .await
-        .unwrap();
+    Author::objects(db).bulk_create(models).await.unwrap();
     let bulk_duration = start.elapsed();
 
     // Verify
@@ -239,10 +224,7 @@ async fn test_bulk_create_duplicate_handling() {
         })
         .collect();
 
-    let count1 = Author::objects(db)
-        .bulk_create(models1)
-        .await
-        .unwrap();
+    let count1 = Author::objects(db).bulk_create(models1).await.unwrap();
     assert_eq!(count1, 5);
 
     // Second batch with different data
@@ -255,10 +237,7 @@ async fn test_bulk_create_duplicate_handling() {
         })
         .collect();
 
-    let count2 = Author::objects(db)
-        .bulk_create(models2)
-        .await
-        .unwrap();
+    let count2 = Author::objects(db).bulk_create(models2).await.unwrap();
     assert_eq!(count2, 5);
 
     // Verify total

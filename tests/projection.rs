@@ -7,9 +7,9 @@ mod common;
 #[path = "projection_tests"]
 mod projection_tests {
     use super::common;
-    
+
     mod test_macro_behavior;
-    mod test_projection_usage;
     mod test_projection_aggregations;
+    mod test_projection_usage;
     mod test_projection_validations;
 }

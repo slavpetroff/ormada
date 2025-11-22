@@ -5,7 +5,7 @@ use seaorm_django::prelude::*;
 
 mod product_model {
     use super::*;
-    
+
     #[django_model(table = "products")]
     pub struct Product {
         #[primary_key]
@@ -76,8 +76,9 @@ fn test_all_projection_types_compile() {
 #[tokio::test]
 async fn test_projection_all_fields() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -86,9 +87,10 @@ async fn test_projection_all_fields() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     product_model::Product::objects(&db)
         .create(product_model::Product {
             id: 0,
@@ -101,12 +103,10 @@ async fn test_projection_all_fields() {
         })
         .await
         .unwrap();
-    
-    let full: Vec<ProductFull> = product_model::Product::objects(&db)
-        .project::<ProductFull>()
-        .await
-        .unwrap();
-    
+
+    let full: Vec<ProductFull> =
+        product_model::Product::objects(&db).project::<ProductFull>().await.unwrap();
+
     assert_eq!(full.len(), 1);
     assert_eq!(full[0].name, "Test Product");
     assert_eq!(full[0].price, 1000);
@@ -118,8 +118,9 @@ async fn test_projection_all_fields() {
 #[tokio::test]
 async fn test_projection_field_order_independent() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -128,9 +129,10 @@ async fn test_projection_field_order_independent() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     product_model::Product::objects(&db)
         .create(product_model::Product {
             id: 0,
@@ -143,12 +145,12 @@ async fn test_projection_field_order_independent() {
         })
         .await
         .unwrap();
-    
+
     let reordered: Vec<ProductReordered> = product_model::Product::objects(&db)
         .project::<ProductReordered>()
         .await
         .unwrap();
-    
+
     assert_eq!(reordered.len(), 1);
     assert_eq!(reordered[0].name, "Product A");
     assert_eq!(reordered[0].price, 500);
@@ -157,8 +159,9 @@ async fn test_projection_field_order_independent() {
 #[tokio::test]
 async fn test_projection_boolean_field() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -167,9 +170,10 @@ async fn test_projection_boolean_field() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     product_model::Product::objects(&db)
         .create(product_model::Product {
             id: 0,
@@ -182,7 +186,7 @@ async fn test_projection_boolean_field() {
         })
         .await
         .unwrap();
-    
+
     product_model::Product::objects(&db)
         .create(product_model::Product {
             id: 0,
@@ -195,13 +199,13 @@ async fn test_projection_boolean_field() {
         })
         .await
         .unwrap();
-    
+
     let active_only: Vec<ProductActive> = product_model::Product::objects(&db)
         .filter(product_model::Product::Active.eq(true))
         .project::<ProductActive>()
         .await
         .unwrap();
-    
+
     assert_eq!(active_only.len(), 1);
     assert_eq!(active_only[0].name, "Active Product");
     assert_eq!(active_only[0].active, true);
@@ -210,8 +214,9 @@ async fn test_projection_boolean_field() {
 #[tokio::test]
 async fn test_projection_with_null_handling() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -220,9 +225,10 @@ async fn test_projection_with_null_handling() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     for i in 1..=10 {
         product_model::Product::objects(&db)
             .create(product_model::Product {
@@ -237,17 +243,17 @@ async fn test_projection_with_null_handling() {
             .await
             .unwrap();
     }
-    
+
     let with_optional: Vec<ProductWithOptional> = product_model::Product::objects(&db)
         .project::<ProductWithOptional>()
         .await
         .unwrap();
-    
+
     assert_eq!(with_optional.len(), 10);
-    
+
     let with_desc = with_optional.iter().filter(|p| p.description.is_some()).count();
     let without_desc = with_optional.iter().filter(|p| p.description.is_none()).count();
-    
+
     assert_eq!(with_desc, 3);
     assert_eq!(without_desc, 7);
 }
@@ -255,8 +261,9 @@ async fn test_projection_with_null_handling() {
 #[tokio::test]
 async fn test_projection_large_dataset() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -265,9 +272,10 @@ async fn test_projection_large_dataset() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     for i in 1..=500 {
         product_model::Product::objects(&db)
             .create(product_model::Product {
@@ -282,20 +290,19 @@ async fn test_projection_large_dataset() {
             .await
             .unwrap();
     }
-    
-    let ids: Vec<ProductId> = product_model::Product::objects(&db)
-        .project::<ProductId>()
-        .await
-        .unwrap();
-    
+
+    let ids: Vec<ProductId> =
+        product_model::Product::objects(&db).project::<ProductId>().await.unwrap();
+
     assert_eq!(ids.len(), 500);
 }
 
 #[tokio::test]
 async fn test_projection_with_distinct() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -304,9 +311,10 @@ async fn test_projection_with_distinct() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     for i in 1..=20 {
         product_model::Product::objects(&db)
             .create(product_model::Product {
@@ -321,21 +329,22 @@ async fn test_projection_with_distinct() {
             .await
             .unwrap();
     }
-    
+
     let products: Vec<ProductBasic> = product_model::Product::objects(&db)
         .distinct()
         .project::<ProductBasic>()
         .await
         .unwrap();
-    
+
     assert_eq!(products.len(), 20);
 }
 
 #[tokio::test]
 async fn test_projection_with_complex_filters() {
     let db = setup_test_db().await;
-    
-    execute_sql(&db,
+
+    execute_sql(
+        &db,
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -344,9 +353,10 @@ async fn test_projection_with_complex_filters() {
             category TEXT NOT NULL,
             description TEXT,
             active INTEGER NOT NULL
-        )"
-    ).await;
-    
+        )",
+    )
+    .await;
+
     for i in 1..=50 {
         product_model::Product::objects(&db)
             .create(product_model::Product {
@@ -361,19 +371,19 @@ async fn test_projection_with_complex_filters() {
             .await
             .unwrap();
     }
-    
+
     let q = Q::all()
         .add(product_model::Product::Price.gt(1000))
         .add(product_model::Product::Stock.lt(30))
         .add(product_model::Product::Active.eq(true));
-    
+
     let filtered: Vec<ProductBasic> = product_model::Product::objects(&db)
         .filter(q)
         .order_by_asc(product_model::Product::Price)
         .project::<ProductBasic>()
         .await
         .unwrap();
-    
+
     for product in &filtered {
         assert!(product.price > 1000);
     }

@@ -140,11 +140,7 @@ async fn test_filter_with_gt() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db)
-        .filter(AuthorColumn::Age.gt(30))
-        .all()
-        .await
-        .unwrap();
+    let authors = Author::objects(db).filter(AuthorColumn::Age.gt(30)).all().await.unwrap();
 
     assert_eq!(authors.len(), 2); // Alice (35) and Bob (42)
 }
@@ -155,11 +151,7 @@ async fn test_filter_with_lt() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db)
-        .filter(AuthorColumn::Age.lt(35))
-        .all()
-        .await
-        .unwrap();
+    let authors = Author::objects(db).filter(AuthorColumn::Age.lt(35)).all().await.unwrap();
 
     assert_eq!(authors.len(), 1); // Charlie (28)
 }
@@ -201,11 +193,7 @@ async fn test_order_by_asc() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db)
-        .order_by_asc(AuthorColumn::Age)
-        .all()
-        .await
-        .unwrap();
+    let authors = Author::objects(db).order_by_asc(AuthorColumn::Age).all().await.unwrap();
 
     assert_eq!(authors[0].age, 28); // Charlie
     assert_eq!(authors[1].age, 35); // Alice
@@ -218,11 +206,7 @@ async fn test_order_by_desc() {
     let _authors = create_sample_authors(&db).await;
     let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db)
-        .order_by_desc(AuthorColumn::Age)
-        .all()
-        .await
-        .unwrap();
+    let authors = Author::objects(db).order_by_desc(AuthorColumn::Age).all().await.unwrap();
 
     assert_eq!(authors[0].age, 42); // Bob
     assert_eq!(authors[1].age, 35); // Alice

@@ -6,7 +6,7 @@ mod common;
 mod unit_tests {
     #[allow(unused_imports)]
     use super::common;
-    
-    mod unit_error;
+
     mod test_aggregations_coverage;
+    mod unit_error;
 }

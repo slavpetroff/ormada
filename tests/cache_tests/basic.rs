@@ -2,15 +2,14 @@
 //!
 //! Verifies Django-like automatic caching with concurrency safety
 
-
 use super::common::test_helpers::*;
+use sea_orm::DatabaseConnection;
 use seaorm_django::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Barrier;
-use sea_orm::DatabaseConnection;
 
 // Re-export for convenience
-use cache_test_item::{Entity, Model, Column};
+use cache_test_item::{Column, Entity, Model};
 
 // Define model in the test module
 mod cache_test_item {
@@ -30,13 +29,15 @@ mod cache_test_item {
 
 // Helper to create table for this specific test
 async fn create_cache_test_table(db: &DatabaseConnection) {
-    super::common::test_helpers::execute_sql(db, 
+    super::common::test_helpers::execute_sql(
+        db,
         "CREATE TABLE IF NOT EXISTS cache_test_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             value INTEGER NOT NULL,
             data TEXT NOT NULL
-        )"
-    ).await;
+        )",
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -53,14 +54,10 @@ async fn test_query_caching_basic() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
     // Create QuerySet
-    let queryset = Entity::objects(&db)
-        .filter(Column::Value.lt(10));
+    let queryset = Entity::objects(&db).filter(Column::Value.lt(10));
 
     // First call - should hit DB
     let results1 = queryset.all().await.expect("First query failed");
@@ -89,10 +86,7 @@ async fn test_separate_caches_for_different_queries() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
     // Create base QuerySet
     let base = Entity::objects(&db);
@@ -129,13 +123,9 @@ async fn test_cache_with_first_method() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset = Entity::objects(&db)
-        .order_by_asc(Column::Value);
+    let queryset = Entity::objects(&db).order_by_asc(Column::Value);
 
     // First call should populate cache
     let _all = queryset.all().await.expect("all() failed");
@@ -159,13 +149,9 @@ async fn test_concurrent_cache_access() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset = Entity::objects(&db)
-        .filter(Column::Value.lt(50));
+    let queryset = Entity::objects(&db).filter(Column::Value.lt(50));
 
     // Populate cache
     let _ = queryset.all().await.expect("Initial query failed");
@@ -173,10 +159,10 @@ async fn test_concurrent_cache_access() {
     // Test concurrent access by spawning tasks synchronously
     // (Since QuerySet borrows db, we can't move it into async tasks easily)
     let barrier = Arc::new(Barrier::new(5));
-    
+
     // Use join_all instead of spawning to avoid lifetime issues
     use futures::future::join_all;
-    
+
     let futures: Vec<_> = (0..5)
         .map(|_| {
             let qs = queryset.clone();
@@ -184,7 +170,7 @@ async fn test_concurrent_cache_access() {
             async move {
                 // Wait for all tasks to be ready
                 barrier.wait().await;
-                
+
                 // All tasks access cache simultaneously
                 qs.all().await.expect("Concurrent query failed")
             }
@@ -192,7 +178,7 @@ async fn test_concurrent_cache_access() {
         .collect();
 
     let results_vec = join_all(futures).await;
-    
+
     // All tasks should succeed
     for results in results_vec {
         assert_eq!(results.len(), 50);
@@ -213,13 +199,9 @@ async fn test_modified_query_creates_new_cache() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let base = Entity::objects(&db)
-        .filter(Column::Value.lt(50));
+    let base = Entity::objects(&db).filter(Column::Value.lt(50));
 
     // Populate base cache
     let base_results = base.all().await.expect("Base query failed");
@@ -253,13 +235,9 @@ async fn test_cache_with_count() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset = Entity::objects(&db)
-        .filter(Column::Value.lt(25));
+    let queryset = Entity::objects(&db).filter(Column::Value.lt(25));
 
     // count() doesn't populate the all() cache
     let count = queryset.count().await.expect("count() failed");
@@ -285,8 +263,7 @@ async fn test_cache_with_exists() {
         .await
         .expect("Failed to create");
 
-    let queryset = Entity::objects(&db)
-        .filter(Column::Value.eq(42));
+    let queryset = Entity::objects(&db).filter(Column::Value.eq(42));
 
     // exists() should work
     let exists = queryset.exists().await.expect("exists() failed");
@@ -311,13 +288,9 @@ async fn test_queryset_clone_shares_cache() {
         })
         .collect();
 
-    Entity::objects(&db)
-        .bulk_create(items)
-        .await
-        .expect("Failed to seed");
+    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset1 = Entity::objects(&db)
-        .filter(Column::Value.lt(5));
+    let queryset1 = Entity::objects(&db).filter(Column::Value.lt(5));
 
     // Clone the QuerySet
     let queryset2 = queryset1.clone();

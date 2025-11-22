@@ -18,7 +18,7 @@ pub mod simple_item {
 
     pub async fn create_table(db: &DatabaseConnection) {
         use crate::common::test_helpers::execute_sql;
-        
+
         execute_sql(
             db,
             "CREATE TABLE IF NOT EXISTS simple_items (
@@ -30,12 +30,7 @@ pub mod simple_item {
     }
 
     pub fn sample_items(count: usize) -> Vec<Model> {
-        (0..count)
-            .map(|i| Model {
-                id: 0,
-                value: i as i32,
-            })
-            .collect()
+        (0..count).map(|i| Model { id: 0, value: i as i32 }).collect()
     }
 }
 
@@ -55,7 +50,7 @@ pub mod rich_item {
 
     pub async fn create_table(db: &DatabaseConnection) {
         use crate::common::test_helpers::execute_sql;
-        
+
         execute_sql(
             db,
             "CREATE TABLE IF NOT EXISTS rich_items (
@@ -71,7 +66,7 @@ pub mod rich_item {
     pub fn sample_items(count: usize, base_name: &str) -> Vec<Model> {
         use crate::common::test_helpers::test_timestamp;
         let timestamp = test_timestamp();
-        
+
         (0..count)
             .map(|i| Model {
                 id: 0,
@@ -98,7 +93,7 @@ pub mod agg_item {
 
     pub async fn create_table(db: &DatabaseConnection) {
         use crate::common::test_helpers::execute_sql;
-        
+
         execute_sql(
             db,
             "CREATE TABLE IF NOT EXISTS agg_items (

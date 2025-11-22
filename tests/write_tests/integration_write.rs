@@ -177,11 +177,7 @@ async fn test_queryset_delete_filtered() {
     use crate::common::author::Column;
 
     // Delete authors with age > 35
-    let deleted_count = Author::objects(db)
-        .filter(Column::Age.gt(35))
-        .delete()
-        .await
-        .unwrap();
+    let deleted_count = Author::objects(db).filter(Column::Age.gt(35)).delete().await.unwrap();
 
     assert_eq!(deleted_count, 1); // Only Bob (42)
 
@@ -198,11 +194,7 @@ async fn test_queryset_delete_no_matches() {
     use crate::common::author::Column;
 
     // Try to delete non-existent records
-    let deleted_count = Author::objects(db)
-        .filter(Column::Age.gt(100))
-        .delete()
-        .await
-        .unwrap();
+    let deleted_count = Author::objects(db).filter(Column::Age.gt(100)).delete().await.unwrap();
 
     assert_eq!(deleted_count, 0); // No matches
 

@@ -289,7 +289,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
             quote! {
                 impl ::seaorm_django::relations::HasRelation<#related_entity> for Entity {
                     type RelatedPK = <<#related_entity as ::sea_orm::EntityTrait>::PrimaryKey as ::sea_orm::PrimaryKeyTrait>::ValueType;
-                    
+
                     fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
                         model.#fk_field
                     }
