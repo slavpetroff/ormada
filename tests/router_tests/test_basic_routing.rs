@@ -1,4 +1,3 @@
-use sea_orm::Database;
 use seaorm_django::prelude::*;
 
 // Test models
@@ -28,30 +27,27 @@ pub mod book {
 }
 pub use book::Book;
 
-async fn setup_test_db() -> DatabaseConnection {
+/// Create a test database connection (not wrapped in router)
+async fn setup_test_connection() -> DatabaseConnection {
     let db = Database::connect("sqlite::memory:").await.expect("Failed to connect");
-
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-
-    use sea_orm::ConnectionTrait;
-    let sql = schema
-        .create_table_from_entity(author::Entity)
-        .to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
-
-    let sql = schema
-        .create_table_from_entity(book::Entity)
-        .to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
-
+    
+    // Create tables using a temporary router
+    let temp_router = DatabaseRouter::new_single(db.clone());
+    Author::create_table(&temp_router).await.expect("Failed to create authors table");
+    Book::create_table(&temp_router).await.expect("Failed to create books table");
+    
     db
+}
+
+/// Create a test database router (single connection)
+async fn setup_test_router() -> DatabaseRouter {
+    let db = setup_test_connection().await;
+    DatabaseRouter::new_single(db)
 }
 
 #[tokio::test]
 async fn test_single_database_works() {
-    let db = setup_test_db().await;
-    let router = DatabaseRouter::new_single(db);
+    let router = setup_test_router().await;
 
     // Create author using router's write connection
     let author = Author::objects(router.write_connection())
@@ -75,8 +71,8 @@ async fn test_single_database_works() {
 
 #[tokio::test]
 async fn test_read_after_write_consistency() {
-    let primary = setup_test_db().await;
-    let replica = setup_test_db().await;
+    let primary = setup_test_connection().await;
+    let replica = setup_test_connection().await;
     let router = DatabaseRouter::new_with_replicas(primary, vec![replica]);
 
     // Initially no writes
@@ -105,8 +101,8 @@ async fn test_read_after_write_consistency() {
 
 #[tokio::test]
 async fn test_pure_reads_use_replica() {
-    let primary = setup_test_db().await;
-    let replica = setup_test_db().await;
+    let primary = setup_test_connection().await;
+    let replica = setup_test_connection().await;
     let router = DatabaseRouter::new_with_replicas(primary, vec![replica]);
 
     // Pure read - no writes in this context
@@ -125,7 +121,7 @@ async fn test_pure_reads_use_replica() {
 
 #[tokio::test]
 async fn test_write_connection_marks_context() {
-    let primary = setup_test_db().await;
+    let primary = setup_test_connection().await;
     let router = DatabaseRouter::new_single(primary);
 
     // Initially no writes
@@ -152,8 +148,7 @@ async fn test_write_connection_marks_context() {
 
 #[tokio::test]
 async fn test_filter_and_query_operations() {
-    let db = setup_test_db().await;
-    let router = DatabaseRouter::new_single(db);
+    let router = setup_test_router().await;
 
     let write_conn = router.write_connection();
 
@@ -190,8 +185,7 @@ async fn test_filter_and_query_operations() {
 
 #[tokio::test]
 async fn test_consistency_context_reset() {
-    let db = setup_test_db().await;
-    let router = DatabaseRouter::new_single(db);
+    let router = setup_test_router().await;
 
     // Perform write
     Author::objects(router.write_connection())
@@ -213,8 +207,7 @@ async fn test_consistency_context_reset() {
 
 #[tokio::test]
 async fn test_foreign_key_with_router() {
-    let db = setup_test_db().await;
-    let router = DatabaseRouter::new_single(db);
+    let router = setup_test_router().await;
     let write_conn = router.write_connection();
 
     // Create author

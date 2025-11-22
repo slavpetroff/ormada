@@ -15,9 +15,8 @@ use crate::common::*;
 async fn test_starts_with() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::starts_with(&Author::Name, "Alice"))
         .all()
         .await
@@ -31,9 +30,8 @@ async fn test_starts_with() {
 async fn test_ends_with() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::ends_with(&Author::Name, "Johnson"))
         .all()
         .await
@@ -47,9 +45,8 @@ async fn test_ends_with() {
 async fn test_contains() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::contains(&Author::Name, "Bob"))
         .all()
         .await
@@ -67,9 +64,8 @@ async fn test_contains() {
 async fn test_eq_method() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::eq(&Author::Id, authors[0].id))
         .all()
         .await
@@ -83,9 +79,8 @@ async fn test_eq_method() {
 async fn test_ne_method() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::ne(&Author::Id, authors[0].id))
         .all()
         .await
@@ -99,9 +94,8 @@ async fn test_ne_method() {
 async fn test_gt_method() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db).filter(ColumnExt::gt(&Author::Id, 0)).all().await.unwrap();
+    let results = Author::objects(&db).filter(ColumnExt::gt(&Author::Id, 0)).all().await.unwrap();
 
     assert_eq!(results.len(), 3);
 }
@@ -110,9 +104,8 @@ async fn test_gt_method() {
 async fn test_gte_method() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::gte(&Author::Id, authors[1].id))
         .all()
         .await
@@ -125,9 +118,8 @@ async fn test_gte_method() {
 async fn test_lt_method() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::lt(&Author::Id, authors[2].id))
         .all()
         .await
@@ -140,9 +132,8 @@ async fn test_lt_method() {
 async fn test_lte_method() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::lte(&Author::Id, authors[1].id))
         .all()
         .await
@@ -159,10 +150,9 @@ async fn test_lte_method() {
 async fn test_in_values_method() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let ids = vec![authors[0].id, authors[2].id];
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::in_values(&Author::Id, ids))
         .all()
         .await
@@ -181,10 +171,9 @@ async fn test_in_values_method() {
 async fn test_is_null_method() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create author with null email (if possible)
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::is_null(&Author::Email))
         .all()
         .await
@@ -198,9 +187,8 @@ async fn test_is_null_method() {
 async fn test_is_not_null_method() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnExt::is_not_null(&Author::Name))
         .all()
         .await

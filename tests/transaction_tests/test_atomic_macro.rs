@@ -7,7 +7,7 @@ use crate::common::*;
 // Test macro with explicit concrete type (Clean UX for end users)
 #[atomic(db)]
 async fn create_author_atomic(
-    db: &sea_orm::DatabaseConnection,
+    db: &DatabaseRouter,
     name: String,
 ) -> Result<Author, DjangoOrmError> {
     // This uses Entity::objects(db).create which handles auto fields
@@ -43,9 +43,8 @@ where
 #[tokio::test]
 async fn test_atomic_macro_success() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = create_author_atomic(db, "Atomic Author".to_string()).await;
+    let result = create_author_atomic(&db, "Atomic Author".to_string()).await;
     assert!(result.is_ok());
 
     let author = result.unwrap();
@@ -53,12 +52,12 @@ async fn test_atomic_macro_success() {
     assert!(author.id > 0); // ID should be auto-generated
 
     // Verify it persists using OUR api
-    let count = Author::objects(db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 1);
 }
 
 #[atomic(db)]
-async fn create_author_atomic_fail(db: &sea_orm::DatabaseConnection) -> Result<(), DjangoOrmError> {
+async fn create_author_atomic_fail(db: &DatabaseRouter) -> Result<(), DjangoOrmError> {
     Author::objects(db)
         .create(Author {
             name: "Rollback".to_string(),
@@ -75,19 +74,18 @@ async fn create_author_atomic_fail(db: &sea_orm::DatabaseConnection) -> Result<(
 #[tokio::test]
 async fn test_atomic_macro_rollback() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = create_author_atomic_fail(db).await;
+    let result = create_author_atomic_fail(&db).await;
     assert!(result.is_err());
 
     // Verify rollback using OUR api
-    let count = Author::objects(db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 0);
 }
 
 // Test nested transactions
 #[atomic(db)]
-async fn nested_atomic(db: &sea_orm::DatabaseConnection) -> Result<(), DjangoOrmError> {
+async fn nested_atomic(db: &DatabaseRouter) -> Result<(), DjangoOrmError> {
     // Outer insert
     Author::objects(db)
         .create(Author {
@@ -107,11 +105,10 @@ async fn nested_atomic(db: &sea_orm::DatabaseConnection) -> Result<(), DjangoOrm
 #[tokio::test]
 async fn test_atomic_macro_nested() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = nested_atomic(db).await;
+    let result = nested_atomic(&db).await;
     assert!(result.is_ok());
 
-    let count = Author::objects(db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 2);
 }

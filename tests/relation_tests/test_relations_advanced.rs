@@ -2,7 +2,7 @@
 //!
 //! Tests multiple relations, error paths, and edge cases
 
-use sea_orm::ColumnTrait;
+use sea_orm::{ColumnTrait, ConnectionTrait};
 use seaorm_django::prelude::*;
 
 use crate::common::*;
@@ -16,12 +16,11 @@ async fn test_get_with_relations() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Find a book that has an author
     let book_with_author = books.iter().find(|b| b.author_id == authors[0].id).unwrap();
 
-    let book = Book::objects(db)
+    let book = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::Id, book_with_author.id))
         .prefetch_related(relations![Author])
         .first()
@@ -37,10 +36,9 @@ async fn test_get_without_relations_none() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Get book without prefetch
-    let book = Book::objects(db)
+    let book = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::Id, books[0].id))
         .first()
         .await
@@ -60,11 +58,12 @@ async fn test_get_without_relations_none() {
 #[tokio::test]
 async fn test_prefetch_with_all_invalid_fks() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
+    // Disable FK constraints for this edge case test
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
 
     // Create books with invalid author IDs
     for i in 1..=3 {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Orphan Book {}", i),
                 author_id: 99900 + i, // Invalid FK
@@ -76,7 +75,7 @@ async fn test_prefetch_with_all_invalid_fks() {
             .unwrap();
     }
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // All books should have None for author
     assert!(books.len() >= 3);
@@ -90,11 +89,12 @@ async fn test_prefetch_with_all_invalid_fks() {
 #[tokio::test]
 async fn test_prefetch_partial_invalid_fks() {
     let db = setup_test_db().await;
+    // Disable FK constraints for this edge case test
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create one valid and one invalid
-    Book::objects(db)
+    Book::objects(&db)
         .create(Book {
             title: "Valid Book".to_string(),
             author_id: authors[0].id,
@@ -105,7 +105,7 @@ async fn test_prefetch_partial_invalid_fks() {
         .await
         .unwrap();
 
-    Book::objects(db)
+    Book::objects(&db)
         .create(Book {
             title: "Invalid Book".to_string(),
             author_id: 99999,
@@ -116,7 +116,7 @@ async fn test_prefetch_partial_invalid_fks() {
         .await
         .unwrap();
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     let valid_book = books.iter().find(|b| b.title == "Valid Book").unwrap();
     let invalid_book = books.iter().find(|b| b.title == "Invalid Book").unwrap();
@@ -134,9 +134,8 @@ async fn test_first_with_relations_found() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     assert!(book.id > 0);
 }
@@ -146,9 +145,8 @@ async fn test_last_with_relations_found() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).last().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).last().await.unwrap();
 
     assert!(book.id > 0);
 }
@@ -156,9 +154,8 @@ async fn test_last_with_relations_found() {
 #[tokio::test]
 async fn test_first_with_relations_not_found() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Book::objects(db).prefetch_related(relations![Author]).first().await;
+    let result = Book::objects(&db).prefetch_related(relations![Author]).first().await;
 
     assert!(result.is_err());
 }
@@ -166,9 +163,8 @@ async fn test_first_with_relations_not_found() {
 #[tokio::test]
 async fn test_last_with_relations_not_found() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Book::objects(db).prefetch_related(relations![Author]).last().await;
+    let result = Book::objects(&db).prefetch_related(relations![Author]).last().await;
 
     assert!(result.is_err());
 }
@@ -182,9 +178,8 @@ async fn test_count_ignores_prefetch() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Book::objects(db).prefetch_related(relations![Author]).count().await.unwrap();
+    let count = Book::objects(&db).prefetch_related(relations![Author]).count().await.unwrap();
 
     assert!(count > 0);
 }
@@ -194,9 +189,8 @@ async fn test_exists_ignores_prefetch() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = Book::objects(db).prefetch_related(relations![Author]).exists().await.unwrap();
+    let exists = Book::objects(&db).prefetch_related(relations![Author]).exists().await.unwrap();
 
     assert!(exists);
 }
@@ -210,9 +204,8 @@ async fn test_relation_field_access_consistency() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::AuthorId, authors[0].id))
         .prefetch_related(relations![Author])
         .all()
@@ -236,11 +229,10 @@ async fn test_relation_field_access_consistency() {
 async fn test_prefetch_deduplicates_related_models() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create multiple books with same author
     for i in 1..=5 {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Same Author Book {}", i),
                 author_id: authors[0].id,
@@ -252,7 +244,7 @@ async fn test_prefetch_deduplicates_related_models() {
             .unwrap();
     }
 
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::AuthorId, authors[0].id))
         .prefetch_related(relations![Author])
         .all()
@@ -278,9 +270,8 @@ async fn test_prefetch_with_complex_parent_filter() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::AuthorId, authors[0].id))
         .exclude(ColumnTrait::eq(&Book::Id, 99999))
         .order_by_desc(Book::Id)
@@ -303,16 +294,15 @@ async fn test_prefetch_preserves_parent_order() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books_asc = Book::objects(db)
+    let books_asc = Book::objects(&db)
         .order_by_asc(Book::Id)
         .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
 
-    let books_desc = Book::objects(db)
+    let books_desc = Book::objects(&db)
         .order_by_desc(Book::Id)
         .prefetch_related(relations![Author])
         .all()
@@ -334,10 +324,9 @@ async fn test_prefetch_batch_loading_efficiency() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Load all books with authors in one go
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // Verify batch loading worked by checking all relations are populated
     let mut authors_loaded = 0;
@@ -358,9 +347,10 @@ async fn test_prefetch_batch_loading_efficiency() {
 #[tokio::test]
 async fn test_prefetch_with_zero_foreign_key() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
+    // Disable FK constraints for this edge case test
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
 
-    Book::objects(db)
+    Book::objects(&db)
         .create(Book {
             title: "No Author Book".to_string(),
             author_id: 0, // Zero FK
@@ -371,7 +361,7 @@ async fn test_prefetch_with_zero_foreign_key() {
         .await
         .unwrap();
 
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::AuthorId, 0))
         .prefetch_related(relations![Author])
         .all()
@@ -393,9 +383,8 @@ async fn test_cloned_model_preserves_relations() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     if let Some(book) = books.first() {
         let cloned = book.clone();

@@ -1,22 +1,71 @@
-//! Shared test helpers and utilities
-//!
-//! This module provides common functionality for all tests to avoid duplication.
+//! Common test utilities and helper functions
+//! 
+//! **SINGLE SOURCE OF TRUTH FOR ALL TEST SETUP**
+//! 
+//! All tests MUST use these helpers instead of creating their own.
 
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
-use sea_orm::{Database, DatabaseConnection, DbBackend};
 use seaorm_django::prelude::*;
 
-/// Create an in-memory SQLite database for testing
-pub async fn setup_test_db() -> DatabaseConnection {
-    Database::connect("sqlite::memory:")
+/// Create an in-memory SQLite database for testing.
+///
+/// This is the **SINGLE CENTRALIZED** test database setup function.
+/// All tests should use this instead of creating their own setup functions.
+///
+/// # Returns
+/// A `DatabaseRouter` configured with an in-memory SQLite database.
+///
+/// # Example
+/// ```ignore
+/// use crate::common::test_helpers::setup_test_db;
+/// 
+/// #[tokio::test]
+/// async fn my_test() {
+///     let db = setup_test_db().await;
+///     // Your test code here
+/// }
+/// ```
+pub async fn setup_test_db() -> DatabaseRouter {
+    let db = Database::connect("sqlite::memory:")
         .await
-        .expect("Failed to connect to test database")
+        .expect("Failed to create test database");
+    DatabaseRouter::new_single(db)
+}
+
+/// Create a test database with specific model tables already created.
+///
+/// This helper creates a database and immediately creates the specified model's table.
+/// Use this when your test needs a specific table structure.
+///
+/// # Example
+/// ```ignore
+/// use crate::common::test_helpers::setup_test_db_with_table;
+/// use crate::common::Author;
+/// 
+/// #[tokio::test]
+/// async fn my_test() {
+///     let db = setup_test_db_with_table::<Author>().await;
+///     // Author table is already created
+/// }
+/// ```
+pub async fn setup_test_db_with_table<M>() -> DatabaseRouter 
+where
+    M: HasTableCreation,
+{
+    let db = setup_test_db().await;
+    M::create_table(&db).await.expect("Failed to create table");
+    db
+}
+
+/// Marker trait for models that support table creation
+/// 
+/// This is automatically implemented by models with `#[django_model]`
+pub trait HasTableCreation {
+    async fn create_table(db: &DatabaseRouter) -> Result<(), sea_orm::DbErr>;
 }
 
 /// Execute raw SQL on the database (for table creation, etc.)
-pub async fn execute_sql(db: &DatabaseConnection, sql: &str) {
-    use sea_orm::ConnectionTrait;
-
+pub async fn execute_sql<C: sea_orm::ConnectionTrait>(db: &C, sql: &str) {
     db.execute_unprepared(sql).await.expect("Failed to execute SQL");
 }
 

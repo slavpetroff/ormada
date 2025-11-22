@@ -8,9 +8,8 @@ use seaorm_django::prelude::*;
 async fn test_values_iter_basic() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db).values_iter(vec![Author::Name], None).await.unwrap();
+    let mut stream = Author::objects(&db).values_iter(vec![Author::Name], None).await.unwrap();
 
     let mut count = 0;
     while let Some(value) = stream.next().await {
@@ -26,9 +25,8 @@ async fn test_values_iter_basic() {
 async fn test_values_iter_with_chunk_size() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db).values_iter(vec![Author::Name], Some(1)).await.unwrap();
+    let mut stream = Author::objects(&db).values_iter(vec![Author::Name], Some(1)).await.unwrap();
 
     let mut count = 0;
     while let Some(value) = stream.next().await {
@@ -42,9 +40,8 @@ async fn test_values_iter_with_chunk_size() {
 #[tokio::test]
 async fn test_values_iter_empty_columns() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db).values_iter(vec![], None).await.unwrap();
+    let mut stream = Author::objects(&db).values_iter(vec![], None).await.unwrap();
 
     assert!(stream.next().await.is_none());
 }
@@ -53,9 +50,8 @@ async fn test_values_iter_empty_columns() {
 async fn test_values_list_iter_basic() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db)
+    let mut stream = Author::objects(&db)
         .values_list_iter(vec![Author::Name, Author::Age], false, None)
         .await
         .unwrap();
@@ -74,9 +70,8 @@ async fn test_values_list_iter_basic() {
 async fn test_values_list_iter_flat() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db)
+    let mut stream = Author::objects(&db)
         .values_list_iter(vec![Author::Name], true, None)
         .await
         .unwrap();
@@ -95,9 +90,8 @@ async fn test_values_list_iter_flat() {
 async fn test_values_list_iter_with_chunk_size() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let mut stream = Author::objects(db)
+    let mut stream = Author::objects(&db)
         .values_list_iter(vec![Author::Name], false, Some(1))
         .await
         .unwrap();

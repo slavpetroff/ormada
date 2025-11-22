@@ -1,5 +1,4 @@
 use chrono::{DateTime, FixedOffset, Utc};
-use sea_orm::{Database, DatabaseConnection};
 use seaorm_django::prelude::*;
 
 // Test model WITH default ordering
@@ -32,26 +31,17 @@ pub mod comment {
 }
 pub use comment::Comment;
 
-async fn setup_test_db() -> DatabaseConnection {
+async fn setup_test_db() -> DatabaseRouter {
     let db = Database::connect("sqlite::memory:")
         .await
         .expect("Failed to connect to in-memory DB");
+    let router = DatabaseRouter::new_single(db);
 
-    // Create tables
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
+    // Create tables using our ORM interface
+    Post::create_table(&router).await.expect("Failed to create posts table");
+    Comment::create_table(&router).await.expect("Failed to create comments table");
 
-    let post_stmt = schema.create_table_from_entity(post::Entity);
-    let comment_stmt = schema.create_table_from_entity(comment::Entity);
-
-    use sea_orm::ConnectionTrait;
-    let sql = post_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.expect("Failed to create posts table");
-
-    let sql = comment_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.expect("Failed to create comments table");
-
-    db
+    router
 }
 
 #[tokio::test]
@@ -178,12 +168,8 @@ async fn test_ascending_default_ordering() {
     }
 
     let db = Database::connect("sqlite::memory:").await.unwrap();
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(article::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    let db = DatabaseRouter::new_single(db);
+    article::Article::create_table(&db).await.unwrap();
 
     // Create articles in random order
     for title in ["Zebra", "Apple", "Mango"] {

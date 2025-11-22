@@ -8,8 +8,8 @@ use seaorm_django::prelude::*;
 use crate::common::*;
 
 // Helper to create a test author
-async fn create_test_author(db: &sea_orm::DatabaseConnection) -> Author {
-    Author::objects(db)
+async fn create_test_author(db: &DatabaseRouter) -> Author {
+    Author::objects(&db)
         .create(Author {
             name: "Test Author".to_string(),
             email: "test@example.com".to_string(),
@@ -28,9 +28,8 @@ async fn create_test_author(db: &sea_orm::DatabaseConnection) -> Author {
 async fn test_aggregate_count_all() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Author::objects(db).aggregate_count().await.unwrap();
+    let count = Author::objects(&db).aggregate_count().await.unwrap();
 
     assert_eq!(count, 3);
 }
@@ -39,9 +38,8 @@ async fn test_aggregate_count_all() {
 async fn test_aggregate_count_with_filter() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Author::objects(db)
+    let count = Author::objects(&db)
         .filter(ColumnTrait::gt(&Author::Age, 30))
         .aggregate_count()
         .await
@@ -53,9 +51,8 @@ async fn test_aggregate_count_with_filter() {
 #[tokio::test]
 async fn test_aggregate_count_empty() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Author::objects(db).aggregate_count().await.unwrap();
+    let count = Author::objects(&db).aggregate_count().await.unwrap();
 
     assert_eq!(count, 0);
 }
@@ -67,14 +64,13 @@ async fn test_aggregate_count_empty() {
 #[tokio::test]
 async fn test_aggregate_sum_basic() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create author first
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     // Create books with known prices
     for (i, price) in [1000, 2000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -86,7 +82,7 @@ async fn test_aggregate_sum_basic() {
             .unwrap();
     }
 
-    let sum = Book::objects(db).aggregate_sum(Book::Price).await.unwrap();
+    let sum = Book::objects(&db).aggregate_sum(Book::Price).await.unwrap();
 
     assert_eq!(sum, Some(6000.0));
 }
@@ -94,12 +90,11 @@ async fn test_aggregate_sum_basic() {
 #[tokio::test]
 async fn test_aggregate_sum_with_filter() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 2000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -111,7 +106,7 @@ async fn test_aggregate_sum_with_filter() {
             .unwrap();
     }
 
-    let sum = Book::objects(db)
+    let sum = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::Published, true))
         .aggregate_sum(Book::Price)
         .await
@@ -123,9 +118,8 @@ async fn test_aggregate_sum_with_filter() {
 #[tokio::test]
 async fn test_aggregate_sum_empty() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let sum = Book::objects(db).aggregate_sum(Book::Price).await.unwrap();
+    let sum = Book::objects(&db).aggregate_sum(Book::Price).await.unwrap();
 
     assert_eq!(sum, None);
 }
@@ -137,12 +131,11 @@ async fn test_aggregate_sum_empty() {
 #[tokio::test]
 async fn test_aggregate_avg_basic() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 2000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -154,7 +147,7 @@ async fn test_aggregate_avg_basic() {
             .unwrap();
     }
 
-    let avg = Book::objects(db).aggregate_avg(Book::Price).await.unwrap();
+    let avg = Book::objects(&db).aggregate_avg(Book::Price).await.unwrap();
 
     assert_eq!(avg, Some(2000.0));
 }
@@ -162,12 +155,11 @@ async fn test_aggregate_avg_basic() {
 #[tokio::test]
 async fn test_aggregate_avg_with_filter() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 2000, 3000, 4000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -179,7 +171,7 @@ async fn test_aggregate_avg_with_filter() {
             .unwrap();
     }
 
-    let avg = Book::objects(db)
+    let avg = Book::objects(&db)
         .filter(ColumnTrait::gte(&Book::Price, 2000))
         .aggregate_avg(Book::Price)
         .await
@@ -191,9 +183,8 @@ async fn test_aggregate_avg_with_filter() {
 #[tokio::test]
 async fn test_aggregate_avg_empty() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let avg = Book::objects(db).aggregate_avg(Book::Price).await.unwrap();
+    let avg = Book::objects(&db).aggregate_avg(Book::Price).await.unwrap();
 
     assert_eq!(avg, None);
 }
@@ -205,12 +196,11 @@ async fn test_aggregate_avg_empty() {
 #[tokio::test]
 async fn test_aggregate_max_basic() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 5000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -222,7 +212,7 @@ async fn test_aggregate_max_basic() {
             .unwrap();
     }
 
-    let max = Book::objects(db).aggregate_max(Book::Price).await.unwrap();
+    let max = Book::objects(&db).aggregate_max(Book::Price).await.unwrap();
 
     assert_eq!(max, Some(5000.0));
 }
@@ -230,12 +220,11 @@ async fn test_aggregate_max_basic() {
 #[tokio::test]
 async fn test_aggregate_max_with_filter() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 5000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -247,7 +236,7 @@ async fn test_aggregate_max_with_filter() {
             .unwrap();
     }
 
-    let max = Book::objects(db)
+    let max = Book::objects(&db)
         .filter(ColumnTrait::lt(&Book::Price, 4000))
         .aggregate_max(Book::Price)
         .await
@@ -259,9 +248,8 @@ async fn test_aggregate_max_with_filter() {
 #[tokio::test]
 async fn test_aggregate_max_empty() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let max = Book::objects(db).aggregate_max(Book::Price).await.unwrap();
+    let max = Book::objects(&db).aggregate_max(Book::Price).await.unwrap();
 
     assert_eq!(max, None);
 }
@@ -273,12 +261,11 @@ async fn test_aggregate_max_empty() {
 #[tokio::test]
 async fn test_aggregate_min_basic() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 5000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -290,7 +277,7 @@ async fn test_aggregate_min_basic() {
             .unwrap();
     }
 
-    let min = Book::objects(db).aggregate_min(Book::Price).await.unwrap();
+    let min = Book::objects(&db).aggregate_min(Book::Price).await.unwrap();
 
     assert_eq!(min, Some(1000.0));
 }
@@ -298,12 +285,11 @@ async fn test_aggregate_min_basic() {
 #[tokio::test]
 async fn test_aggregate_min_with_filter() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 5000, 3000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -315,7 +301,7 @@ async fn test_aggregate_min_with_filter() {
             .unwrap();
     }
 
-    let min = Book::objects(db)
+    let min = Book::objects(&db)
         .filter(ColumnTrait::gt(&Book::Price, 2000))
         .aggregate_min(Book::Price)
         .await
@@ -327,9 +313,8 @@ async fn test_aggregate_min_with_filter() {
 #[tokio::test]
 async fn test_aggregate_min_empty() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let min = Book::objects(db).aggregate_min(Book::Price).await.unwrap();
+    let min = Book::objects(&db).aggregate_min(Book::Price).await.unwrap();
 
     assert_eq!(min, None);
 }
@@ -341,13 +326,12 @@ async fn test_aggregate_min_empty() {
 #[tokio::test]
 async fn test_aggregations_comprehensive() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
     let prices = vec![1000, 2000, 3000, 4000, 5000];
 
     for (i, price) in prices.iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -360,11 +344,11 @@ async fn test_aggregations_comprehensive() {
     }
 
     // Test all aggregations on the same data
-    let count = Book::objects(db).aggregate_count().await.unwrap();
-    let sum = Book::objects(db).aggregate_sum(Book::Price).await.unwrap();
-    let avg = Book::objects(db).aggregate_avg(Book::Price).await.unwrap();
-    let max = Book::objects(db).aggregate_max(Book::Price).await.unwrap();
-    let min = Book::objects(db).aggregate_min(Book::Price).await.unwrap();
+    let count = Book::objects(&db).aggregate_count().await.unwrap();
+    let sum = Book::objects(&db).aggregate_sum(Book::Price).await.unwrap();
+    let avg = Book::objects(&db).aggregate_avg(Book::Price).await.unwrap();
+    let max = Book::objects(&db).aggregate_max(Book::Price).await.unwrap();
+    let min = Book::objects(&db).aggregate_min(Book::Price).await.unwrap();
 
     assert_eq!(count, 5);
     assert_eq!(sum, Some(15000.0));
@@ -376,12 +360,11 @@ async fn test_aggregations_comprehensive() {
 #[tokio::test]
 async fn test_aggregate_chain_operations() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     for (i, price) in [1000, 2000, 3000, 4000, 5000].iter().enumerate() {
-        Book::objects(db)
+        Book::objects(&db)
             .create(Book {
                 title: format!("Book {}", i),
                 author_id: author.id,
@@ -394,7 +377,7 @@ async fn test_aggregate_chain_operations() {
     }
 
     // Chain filter -> aggregate
-    let avg_published = Book::objects(db)
+    let avg_published = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::Published, true))
         .aggregate_avg(Book::Price)
         .await

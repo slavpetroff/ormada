@@ -6,6 +6,15 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
+/// Test helper - creates just a DatabaseRouter wrapper (tables not needed for these unit tests)
+async fn setup_test_db() -> DatabaseRouter {
+    let db = Database::connect("sqlite::memory:").await.unwrap();
+    DatabaseRouter::new_single(db)
+}
+
+// NOTE: These tests use raw SeaORM entities for low-level hook testing
+// They don't need actual tables, just a connection for the hook signatures
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "async_hook_users")]
 pub struct Model {
@@ -60,7 +69,8 @@ async fn test_async_hooks_execute() {
     user.before_create().await.unwrap();
     assert_eq!(*HOOK_COUNTER.lock().await, 1);
 
-    user.after_create(&Database::connect("sqlite::memory:").await.unwrap()).await.unwrap();
+    let db = setup_test_db().await;
+    user.after_create(db.primary_connection()).await.unwrap();
     assert_eq!(*HOOK_COUNTER.lock().await, 2);
 }
 
@@ -77,8 +87,9 @@ async fn test_async_hooks_run_sequentially() {
     let start = std::time::Instant::now();
     
     // Both hooks have 10ms delays
+    let db = setup_test_db().await;
     user.before_create().await.unwrap();
-    user.after_create(&Database::connect("sqlite::memory:").await.unwrap()).await.unwrap();
+    user.after_create(db.primary_connection()).await.unwrap();
     
     let elapsed = start.elapsed();
     

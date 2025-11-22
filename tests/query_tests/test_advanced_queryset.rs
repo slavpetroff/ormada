@@ -15,9 +15,8 @@ use crate::common::*;
 async fn test_distinct_basic() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db).distinct().all().await.unwrap();
+    let authors = Author::objects(&db).distinct().all().await.unwrap();
 
     // Should return all unique authors
     assert_eq!(authors.len(), 3);
@@ -27,9 +26,8 @@ async fn test_distinct_basic() {
 async fn test_distinct_with_filter() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db)
+    let authors = Author::objects(&db)
         .filter(ColumnTrait::gt(&Author::Age, 25))
         .distinct()
         .all()
@@ -43,9 +41,8 @@ async fn test_distinct_with_filter() {
 async fn test_distinct_empty_result() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db)
+    let authors = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Id, 9999))
         .distinct()
         .all()
@@ -63,9 +60,8 @@ async fn test_distinct_empty_result() {
 async fn test_earliest_basic() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let earliest = Author::objects(db).earliest(Author::Id).await.unwrap();
+    let earliest = Author::objects(&db).earliest(Author::Id).await.unwrap();
 
     // Should return the first author (lowest ID)
     assert_eq!(earliest.id, authors[0].id);
@@ -75,9 +71,8 @@ async fn test_earliest_basic() {
 async fn test_earliest_by_age() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let youngest = Author::objects(db).earliest(Author::Age).await.unwrap();
+    let youngest = Author::objects(&db).earliest(Author::Age).await.unwrap();
 
     // Should return the youngest author
     assert!(youngest.age > 0);
@@ -87,9 +82,8 @@ async fn test_earliest_by_age() {
 async fn test_earliest_with_filter() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let earliest = Author::objects(db)
+    let earliest = Author::objects(&db)
         .filter(ColumnTrait::gt(&Author::Age, 30))
         .earliest(Author::Age)
         .await;
@@ -105,9 +99,8 @@ async fn test_earliest_with_filter() {
 #[tokio::test]
 async fn test_earliest_empty_result() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db).earliest(Author::Id).await;
+    let result = Author::objects(&db).earliest(Author::Id).await;
 
     assert!(result.is_err());
     match result {
@@ -124,9 +117,8 @@ async fn test_earliest_empty_result() {
 async fn test_latest_basic() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let latest = Author::objects(db).latest(Author::Id).await.unwrap();
+    let latest = Author::objects(&db).latest(Author::Id).await.unwrap();
 
     // Should return the last author (highest ID)
     assert_eq!(latest.id, authors[2].id);
@@ -136,9 +128,8 @@ async fn test_latest_basic() {
 async fn test_latest_by_age() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let oldest = Author::objects(db).latest(Author::Age).await.unwrap();
+    let oldest = Author::objects(&db).latest(Author::Age).await.unwrap();
 
     // Should return the oldest author
     assert!(oldest.age > 0);
@@ -148,9 +139,8 @@ async fn test_latest_by_age() {
 async fn test_latest_with_filter() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let latest = Author::objects(db)
+    let latest = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, authors[1].email.clone()))
         .latest(Author::Id)
         .await
@@ -162,9 +152,8 @@ async fn test_latest_with_filter() {
 #[tokio::test]
 async fn test_latest_empty_result() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db).latest(Author::Id).await;
+    let result = Author::objects(&db).latest(Author::Id).await;
 
     assert!(result.is_err());
     match result {
@@ -180,10 +169,9 @@ async fn test_latest_empty_result() {
 #[tokio::test]
 async fn test_get_or_create_creates_new() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "newauthor@example.com";
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, email))
         .get_or_create(|| Author {
             name: "New Author".to_string(),
@@ -203,10 +191,9 @@ async fn test_get_or_create_creates_new() {
 async fn test_get_or_create_gets_existing() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let existing_email = authors[0].email.clone();
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, existing_email.clone()))
         .get_or_create(|| Author {
             name: "Should Not Create".to_string(),
@@ -227,9 +214,8 @@ async fn test_get_or_create_gets_existing() {
 #[tokio::test]
 async fn test_get_or_create_multiple_filters() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, "unique@example.com"))
         .filter(ColumnTrait::gt(&Author::Age, 25))
         .get_or_create(|| Author {
@@ -252,10 +238,9 @@ async fn test_get_or_create_multiple_filters() {
 #[tokio::test]
 async fn test_update_or_create_creates_new() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "newemail@example.com";
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, email))
         .update_or_create(
             |author| {
@@ -280,11 +265,10 @@ async fn test_update_or_create_creates_new() {
 async fn test_update_or_create_updates_existing() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let existing_email = authors[0].email.clone();
 
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, existing_email.clone()))
         .update_or_create(
             |author| {
@@ -308,9 +292,8 @@ async fn test_update_or_create_updates_existing() {
 #[tokio::test]
 async fn test_update_or_create_with_filter() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, "filter@example.com"))
         .filter(ColumnTrait::gt(&Author::Age, 20))
         .update_or_create(
@@ -339,9 +322,8 @@ async fn test_update_or_create_with_filter() {
 async fn test_distinct_with_ordering() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let authors = Author::objects(db).distinct().order_by_asc(Author::Name).all().await.unwrap();
+    let authors = Author::objects(&db).distinct().order_by_asc(Author::Name).all().await.unwrap();
 
     assert!(authors.len() > 0);
 }
@@ -350,11 +332,10 @@ async fn test_distinct_with_ordering() {
 async fn test_earliest_latest_comparison() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let earliest = Author::objects(db).earliest(Author::Id).await.unwrap();
+    let earliest = Author::objects(&db).earliest(Author::Id).await.unwrap();
 
-    let latest = Author::objects(db).latest(Author::Id).await.unwrap();
+    let latest = Author::objects(&db).latest(Author::Id).await.unwrap();
 
     assert!(earliest.id <= latest.id);
 }
@@ -362,12 +343,11 @@ async fn test_earliest_latest_comparison() {
 #[tokio::test]
 async fn test_get_or_create_idempotent() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "idempotent@example.com";
 
     // First call - creates
-    let (author1, created1) = Author::objects(db)
+    let (author1, created1) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, email))
         .get_or_create(|| Author {
             name: "Idempotent Test".to_string(),
@@ -379,7 +359,7 @@ async fn test_get_or_create_idempotent() {
         .unwrap();
 
     // Second call - gets existing
-    let (author2, created2) = Author::objects(db)
+    let (author2, created2) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, email))
         .get_or_create(|| Author {
             name: "Idempotent Test".to_string(),

@@ -37,7 +37,14 @@
 //! let reloaded = Book::objects(&router).get(book.id).await?;  // Uses primary!
 //! ```
 
-use sea_orm::DatabaseConnection;
+use sea_orm::{
+    AccessMode, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, DbErr,
+    ExecResult, IsolationLevel, QueryResult, Statement, StatementBuilder,
+    TransactionError, TransactionTrait,
+};
+use async_trait::async_trait;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -100,6 +107,7 @@ impl Default for ConsistencyContext {
 /// - Transactions → always primary
 ///
 /// If no replicas are configured, all operations use the primary.
+#[derive(Debug, Clone)]
 pub struct DatabaseRouter {
     /// Primary database (handles all writes)
     primary: DatabaseConnection,
@@ -221,9 +229,162 @@ impl DatabaseRouter {
     }
 }
 
-// Note: We don't implement ConnectionTrait directly due to its complex signature.
-// Instead, DatabaseRouter provides connection() methods that return &DatabaseConnection,
-// and our ORM methods accept ConnectionTrait, so they work with router.primary_connection() etc.
+#[async_trait::async_trait]
+impl ConnectionTrait for DatabaseRouter {
+    fn get_database_backend(&self) -> DbBackend {
+        self.primary.get_database_backend()
+    }
+
+    async fn execute<S: StatementBuilder>(&self, stmt: &S) -> Result<ExecResult, DbErr> {
+        // Delegate to primary for writes
+        self.primary.execute(stmt).await
+    }
+
+    async fn execute_unprepared(&self, sql: &str) -> Result<ExecResult, DbErr> {
+        // Delegate to primary for writes
+        self.primary.execute_unprepared(sql).await
+    }
+
+    async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
+        // Delegate to primary for writes
+        self.primary.execute_raw(stmt).await
+    }
+
+    async fn query_one<S: StatementBuilder>(&self, stmt: &S) -> Result<Option<QueryResult>, DbErr> {
+        // Delegate to primary (routing happens at higher level via read_connection)
+        self.primary.query_one(stmt).await
+    }
+
+    async fn query_all<S: StatementBuilder>(&self, stmt: &S) -> Result<Vec<QueryResult>, DbErr> {
+        // Delegate to primary (routing happens at higher level via read_connection)
+        self.primary.query_all(stmt).await
+    }
+
+    async fn query_one_raw(&self, stmt: Statement) -> Result<Option<QueryResult>, DbErr> {
+        // Delegate to primary (routing happens at higher level via read_connection)
+        self.primary.query_one_raw(stmt).await
+    }
+
+    async fn query_all_raw(&self, stmt: Statement) -> Result<Vec<QueryResult>, DbErr> {
+        // Delegate to primary (routing happens at higher level via read_connection)
+        self.primary.query_all_raw(stmt).await
+    }
+}
+
+#[async_trait::async_trait]
+impl ConnectionTrait for &DatabaseRouter {
+    fn get_database_backend(&self) -> DbBackend {
+        self.primary.get_database_backend()
+    }
+
+    async fn execute<S: StatementBuilder>(&self, stmt: &S) -> Result<ExecResult, DbErr> {
+        self.primary.execute(stmt).await
+    }
+
+    async fn execute_unprepared(&self, sql: &str) -> Result<ExecResult, DbErr> {
+        self.primary.execute_unprepared(sql).await
+    }
+
+    async fn execute_raw(&self, stmt: Statement) -> Result<ExecResult, DbErr> {
+        self.primary.execute_raw(stmt).await
+    }
+
+    async fn query_one<S: StatementBuilder>(&self, stmt: &S) -> Result<Option<QueryResult>, DbErr> {
+        self.primary.query_one(stmt).await
+    }
+
+    async fn query_all<S: StatementBuilder>(&self, stmt: &S) -> Result<Vec<QueryResult>, DbErr> {
+        self.primary.query_all(stmt).await
+    }
+
+    async fn query_one_raw(&self, stmt: Statement) -> Result<Option<QueryResult>, DbErr> {
+        self.primary.query_one_raw(stmt).await
+    }
+
+    async fn query_all_raw(&self, stmt: Statement) -> Result<Vec<QueryResult>, DbErr> {
+        self.primary.query_all_raw(stmt).await
+    }
+}
+
+#[async_trait]
+impl TransactionTrait for DatabaseRouter {
+    type Transaction = DatabaseTransaction;
+
+    async fn begin(&self) -> Result<DatabaseTransaction, DbErr> {
+        self.primary.begin().await
+    }
+
+    async fn begin_with_config(
+        &self,
+        isolation_level: Option<IsolationLevel>,
+        access_mode: Option<AccessMode>,
+    ) -> Result<DatabaseTransaction, DbErr> {
+        self.primary.begin_with_config(isolation_level, access_mode).await
+    }
+
+    async fn transaction<F, T, E>(&self, callback: F) -> Result<T, TransactionError<E>>
+    where
+        F: for<'a> FnOnce(
+                &'a DatabaseTransaction,
+            ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'a>>
+            + Send,
+        T: Send,
+        E: Send + std::fmt::Debug + std::fmt::Display,
+    {
+        self.primary.transaction(callback).await
+    }
+
+    async fn transaction_with_config<F, T, E>(
+        &self,
+        callback: F,
+        isolation_level: Option<IsolationLevel>,
+        access_mode: Option<AccessMode>,
+    ) -> Result<T, TransactionError<E>>
+    where
+        F: for<'a> FnOnce(
+                &'a DatabaseTransaction,
+            ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'a>>
+            + Send,
+        T: Send,
+        E: Send + std::fmt::Debug + std::fmt::Display,
+    {
+        self.primary.transaction_with_config(callback, isolation_level, access_mode).await
+    }
+}
+
+impl crate::transaction::AtomicExt for DatabaseRouter {
+    async fn atomic<F, T>(&self, f: F) -> Result<T, crate::error::DjangoOrmError>
+    where
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, crate::error::DjangoOrmError>> + Send + 'a>,
+        >,
+        T: Send,
+    {
+        self.begin_transaction().await;
+        
+        // Use the primary connection for the actual transaction
+        let result = self.primary.atomic(f).await;
+        
+        self.end_transaction().await;
+        result
+    }
+
+    async fn savepoint<F, T>(&self, name: &str, f: F) -> Result<T, crate::error::DjangoOrmError>
+    where
+        F: for<'a> FnOnce(
+            &'a DatabaseTransaction,
+        ) -> std::pin::Pin<
+            Box<dyn Future<Output = Result<T, crate::error::DjangoOrmError>> + Send + 'a>,
+        >,
+        T: Send,
+    {
+        // Savepoints on the router just delegate to primary
+        // Note: The router itself doesn't track savepoint depth differently than transaction status
+        self.primary.savepoint(name, f).await
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,20 +1,14 @@
 //! Tests for savepoint functionality using our tx! macro
 
-use crate::common::{author, Author};
-use sea_orm::{ConnectionTrait, Database};
+use crate::common::Author;
 use seaorm_django::prelude::*;
 use seaorm_django::tx;
 
 #[tokio::test]
 async fn test_savepoint_with_tx_macro() {
     let db = Database::connect("sqlite::memory:").await.unwrap();
-
-    // Create tables
-    let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(author::Entity);
-    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
-        .await
-        .unwrap();
+    let db = DatabaseRouter::new_single(db);
+    Author::create_table(&db).await.unwrap();
 
     // Use our tx! macro for transactions!
     let result = tx!(&db, |txn| async move {
@@ -39,13 +33,8 @@ async fn test_savepoint_with_tx_macro() {
 #[tokio::test]
 async fn test_nested_transaction_with_tx_macro() {
     let db = Database::connect("sqlite::memory:").await.unwrap();
-
-    // Create tables
-    let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(author::Entity);
-    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
-        .await
-        .unwrap();
+    let db = DatabaseRouter::new_single(db);
+    Author::create_table(&db).await.unwrap();
 
     // Use our tx! macro for nested transactions!
     let result = tx!(&db, |txn| async move {
@@ -71,13 +60,8 @@ async fn test_nested_transaction_with_tx_macro() {
 #[tokio::test]
 async fn test_transaction_rollback_with_tx_macro() {
     let db = Database::connect("sqlite::memory:").await.unwrap();
-
-    // Create tables
-    let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(author::Entity);
-    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
-        .await
-        .unwrap();
+    let db = DatabaseRouter::new_single(db);
+    Author::create_table(&db).await.unwrap();
 
     // Use our tx! macro with intentional error to test rollback!
     let result = tx!(&db, |_txn| async move {

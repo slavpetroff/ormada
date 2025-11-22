@@ -14,9 +14,8 @@ use crate::common::*;
 #[tokio::test]
 async fn test_all_empty_table() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db).all().await.unwrap();
+    let results = Author::objects(&db).all().await.unwrap();
     assert_eq!(results.len(), 0);
 }
 
@@ -24,9 +23,8 @@ async fn test_all_empty_table() {
 async fn test_filter_no_results() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Id, 99999))
         .all()
         .await
@@ -39,9 +37,8 @@ async fn test_filter_no_results() {
 async fn test_limit_zero() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db).limit(0).all().await.unwrap();
+    let results = Author::objects(&db).limit(0).all().await.unwrap();
 
     assert_eq!(results.len(), 0);
 }
@@ -50,10 +47,9 @@ async fn test_limit_zero() {
 async fn test_offset_beyond_data() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // SQLite requires LIMIT with OFFSET
-    let results = Author::objects(db).limit(100).offset(1000).all().await.unwrap();
+    let results = Author::objects(&db).limit(100).offset(1000).all().await.unwrap();
 
     assert_eq!(results.len(), 0);
 }
@@ -65,18 +61,16 @@ async fn test_offset_beyond_data() {
 #[tokio::test]
 async fn test_first_empty_table_errors() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db).first().await;
+    let result = Author::objects(&db).first().await;
     assert!(result.is_err());
 }
 
 #[tokio::test]
 async fn test_last_empty_table_errors() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db).last().await;
+    let result = Author::objects(&db).last().await;
     assert!(result.is_err());
 }
 
@@ -88,9 +82,8 @@ async fn test_last_empty_table_errors() {
 async fn test_filter_and_exclude() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .filter(ColumnTrait::gt(&Author::Id, 0))
         .exclude(ColumnTrait::eq(&Author::Id, authors[0].id))
         .all()
@@ -105,9 +98,8 @@ async fn test_filter_and_exclude() {
 async fn test_order_limit_offset_combination() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let results = Author::objects(db)
+    let results = Author::objects(&db)
         .order_by_asc(Author::Id)
         .limit(2)
         .offset(1)
@@ -125,18 +117,16 @@ async fn test_order_limit_offset_combination() {
 #[tokio::test]
 async fn test_count_empty_table() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Author::objects(db).count().await.unwrap();
+    let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 0);
 }
 
 #[tokio::test]
 async fn test_exists_empty_table() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = Author::objects(db).exists().await.unwrap();
+    let exists = Author::objects(&db).exists().await.unwrap();
     assert!(!exists);
 }
 
@@ -144,9 +134,8 @@ async fn test_exists_empty_table() {
 async fn test_exists_with_data() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = Author::objects(db).exists().await.unwrap();
+    let exists = Author::objects(&db).exists().await.unwrap();
     assert!(exists);
 }
 
@@ -157,9 +146,8 @@ async fn test_exists_with_data() {
 #[tokio::test]
 async fn test_prefetch_empty_result() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 0);
 }
@@ -169,9 +157,8 @@ async fn test_prefetch_with_filter() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(ColumnTrait::eq(&Book::AuthorId, authors[0].id))
         .prefetch_related(relations![Author])
         .all()
@@ -190,16 +177,15 @@ async fn test_prefetch_with_ordering() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books_asc = Book::objects(db)
+    let books_asc = Book::objects(&db)
         .order_by_asc(Book::Id)
         .prefetch_related(relations![Author])
         .all()
         .await
         .unwrap();
 
-    let books_desc = Book::objects(db)
+    let books_desc = Book::objects(&db)
         .order_by_desc(Book::Id)
         .prefetch_related(relations![Author])
         .all()
@@ -217,15 +203,14 @@ async fn test_prefetch_with_ordering() {
 async fn test_delete_all_records() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count_before = Author::objects(db).count().await.unwrap();
+    let count_before = Author::objects(&db).count().await.unwrap();
     assert!(count_before > 0);
 
-    let deleted = Author::objects(db).delete().await.unwrap();
+    let deleted = Author::objects(&db).delete().await.unwrap();
     assert_eq!(deleted, count_before);
 
-    let count_after = Author::objects(db).count().await.unwrap();
+    let count_after = Author::objects(&db).count().await.unwrap();
     assert_eq!(count_after, 0);
 }
 
@@ -233,9 +218,8 @@ async fn test_delete_all_records() {
 async fn test_delete_filtered_subset() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let deleted = Author::objects(db)
+    let deleted = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Id, authors[0].id))
         .delete()
         .await
@@ -243,7 +227,7 @@ async fn test_delete_filtered_subset() {
 
     assert_eq!(deleted, 1);
 
-    let remaining = Author::objects(db).count().await.unwrap();
+    let remaining = Author::objects(&db).count().await.unwrap();
     assert_eq!(remaining, (authors.len() - 1) as u64);
 }
 
@@ -256,9 +240,8 @@ async fn test_model_with_relations_has_all_fields() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     for book in &books {
         // Test field access
@@ -278,9 +261,8 @@ async fn test_model_with_relations_clone() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     if let Some(book) = books.first() {
         let cloned = book.clone();
@@ -297,14 +279,13 @@ async fn test_model_with_relations_clone() {
 async fn test_save_updates_model() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let mut author = authors[0].clone();
     let author_id = author.id;
     author.name = "Updated Name".to_string();
-    author.save(db).await.unwrap();
+    author.save(&db).await.unwrap();
 
-    let reloaded = Author::objects(db)
+    let reloaded = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Id, author_id))
         .first()
         .await
@@ -317,17 +298,16 @@ async fn test_save_updates_model() {
 async fn test_save_multiple_times() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let author_id = authors[0].id;
 
     for i in 1..=3 {
         let mut author = authors[0].clone();
         author.name = format!("Update {}", i);
-        author.save(db).await.unwrap();
+        author.save(&db).await.unwrap();
     }
 
-    let reloaded = Author::objects(db)
+    let reloaded = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Id, author_id))
         .first()
         .await

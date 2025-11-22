@@ -14,10 +14,9 @@ async fn test_empty_tuple_relations() {
 
     let db = setup_test_db().await;
     let _authors_created = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Query without prefetch_related - uses () empty tuple
-    let authors = Author::objects(db).all().await.unwrap();
+    let authors = Author::objects(&db).all().await.unwrap();
 
     assert_eq!(authors.len(), 3);
 }

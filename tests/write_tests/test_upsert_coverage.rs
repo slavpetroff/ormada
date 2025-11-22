@@ -9,12 +9,11 @@ use crate::common::*;
 #[tokio::test]
 async fn test_update_or_create_insert_path_detailed() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "newuser@example.com";
 
     // This should trigger the insert path
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, email))
         .update_or_create(
             |_author| {
@@ -39,12 +38,11 @@ async fn test_update_or_create_insert_path_detailed() {
 #[tokio::test]
 async fn test_get_or_create_insert_path_detailed() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let email = "created@example.com";
 
     // This should trigger the insert path
-    let (author, created) = Author::objects(db)
+    let (author, created) = Author::objects(&db)
         .filter(ColumnTrait::eq(&Author::Email, email))
         .get_or_create(|| Author {
             name: "Created User".to_string(),

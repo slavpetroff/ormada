@@ -3,6 +3,14 @@
 use seaorm_django::prelude::*;
 use sea_orm::entity::prelude::*;
 
+/// Test helper - creates just a DatabaseRouter wrapper (tables not needed for these unit tests)
+async fn setup_test_db() -> DatabaseRouter {
+    let db = Database::connect("sqlite::memory:").await.unwrap();
+    DatabaseRouter::new_single(db)
+}
+
+// NOTE: These tests use raw SeaORM entities for low-level hook error testing
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "error_hook_users")]
 pub struct Model {
@@ -62,7 +70,7 @@ async fn test_before_create_error_propagates() {
 
 #[tokio::test]
 async fn test_after_create_error_propagates() {
-    let db = Database::connect("sqlite::memory:").await.unwrap();
+    let db = setup_test_db().await;
     
     let user = Model {
         id: 1,
@@ -70,7 +78,7 @@ async fn test_after_create_error_propagates() {
         should_fail: true,
     };
 
-    let result = user.after_create(&db).await;
+    let result = user.after_create(db.primary_connection()).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Failed to send notification"));
 }
@@ -100,8 +108,8 @@ async fn test_hook_success_when_should_fail_is_false() {
     assert!(user.before_create().await.is_ok());
     assert_eq!(user.name, "Processed: Test");
     
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    assert!(user.after_create(&db).await.is_ok());
+    let db = setup_test_db().await;
+    assert!(user.after_create(db.primary_connection()).await.is_ok());
     assert!(user.before_update().await.is_ok());
 }
 

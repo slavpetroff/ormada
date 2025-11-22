@@ -1,10 +1,10 @@
 //! Test ergonomic lifecycle hooks with #[django_hooks] macro
 
-use sea_orm::ConnectionTrait;
 use seaorm_django::prelude::*;
 use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::Mutex;
+use crate::common::test_helpers::setup_test_db;
 
 // Test model
 #[django_model(table = "ergonomic_users")]
@@ -73,14 +73,10 @@ async fn test_hooks_with_create_operation() {
     *HOOK_COUNTER.lock().await = 0;
 
     // Use OUR ORM API!
-    let db = Database::connect("sqlite::memory:").await.unwrap();
+    let db = setup_test_db().await;
 
-    // Create table using OUR schema builder
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
-        .await
-        .unwrap();
+    // Create table using OUR create_table method
+    User::create_table(&db).await.unwrap();
 
     // Use OUR ORM .objects().create() - hooks fire automatically!
     let user = User::objects(&db)
@@ -110,12 +106,8 @@ async fn test_hooks_with_save_operation() {
     let _guard = TEST_SERIALIZER.lock().await;
     *HOOK_COUNTER.lock().await = 0;
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
-        .await
-        .unwrap();
+    let db = setup_test_db().await;
+    User::create_table(&db).await.unwrap();
 
     // Create first
     let user = User::objects(&db)
@@ -165,12 +157,8 @@ async fn test_regular_methods_work() {
 async fn test_delete_with_hooks() {
     let _guard = TEST_SERIALIZER.lock().await;
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
-        .await
-        .unwrap();
+    let db = setup_test_db().await;
+    User::create_table(&db).await.unwrap();
 
     let user = User::objects(&db)
         .create(Model {

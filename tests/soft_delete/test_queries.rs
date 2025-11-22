@@ -55,37 +55,35 @@ async fn create_test_items(db: &DatabaseConnection) -> Vec<Model> {
 #[tokio::test]
 async fn test_with_deleted_includes_all() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let items = create_test_items(db).await;
+    let items = create_test_items(&db).await;
 
     // Delete half of them
-    items[0].clone().delete(db).await.unwrap();
-    items[2].clone().delete(db).await.unwrap();
-    items[4].clone().delete(db).await.unwrap();
+    items[0].clone().delete(&db).await.unwrap();
+    items[2].clone().delete(&db).await.unwrap();
+    items[4].clone().delete(&db).await.unwrap();
 
     // Normal query excludes deleted
-    let visible = Entity::objects(db).all().await.unwrap();
+    let visible = Entity::objects(&db).all().await.unwrap();
     assert_eq!(visible.len(), 3);
 
     // with_deleted includes all
-    let all = Entity::objects(db).with_deleted().all().await.unwrap();
+    let all = Entity::objects(&db).with_deleted().all().await.unwrap();
     assert_eq!(all.len(), 6);
 }
 
 #[tokio::test]
 async fn test_only_deleted_shows_deleted_only() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let items = create_test_items(db).await;
+    let items = create_test_items(&db).await;
 
     // Delete some items
-    items[1].clone().delete(db).await.unwrap();
-    items[3].clone().delete(db).await.unwrap();
+    items[1].clone().delete(&db).await.unwrap();
+    items[3].clone().delete(&db).await.unwrap();
 
     // only_deleted should show only the 2 deleted
-    let deleted = Entity::objects(db).only_deleted().all().await.unwrap();
+    let deleted = Entity::objects(&db).only_deleted().all().await.unwrap();
     assert_eq!(deleted.len(), 2);
 
     // Verify they are the right ones
@@ -97,21 +95,20 @@ async fn test_only_deleted_shows_deleted_only() {
 #[tokio::test]
 async fn test_filter_with_soft_delete() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let items = create_test_items(db).await;
+    let items = create_test_items(&db).await;
 
     // Delete some active items
-    items[1].clone().delete(db).await.unwrap(); // Active item
-    items[3].clone().delete(db).await.unwrap(); // Active item
+    items[1].clone().delete(&db).await.unwrap(); // Active item
+    items[3].clone().delete(&db).await.unwrap(); // Active item
 
     // Filter for active items (should exclude deleted)
-    let active = Entity::objects(db).filter(Column::Active.eq(true)).all().await.unwrap();
+    let active = Entity::objects(&db).filter(Column::Active.eq(true)).all().await.unwrap();
 
     assert_eq!(active.len(), 1); // Only item 6 is active and not deleted
 
     // with_deleted should show all active (including deleted)
-    let all_active = Entity::objects(db)
+    let all_active = Entity::objects(&db)
         .with_deleted()
         .filter(Column::Active.eq(true))
         .all()
@@ -124,18 +121,17 @@ async fn test_filter_with_soft_delete() {
 #[tokio::test]
 async fn test_only_deleted_with_filter() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let items = create_test_items(db).await;
+    let items = create_test_items(&db).await;
 
     // Delete various items
-    items[0].clone().delete(db).await.unwrap(); // Inactive
-    items[1].clone().delete(db).await.unwrap(); // Active
-    items[2].clone().delete(db).await.unwrap(); // Inactive
-    items[3].clone().delete(db).await.unwrap(); // Active
+    items[0].clone().delete(&db).await.unwrap(); // Inactive
+    items[1].clone().delete(&db).await.unwrap(); // Active
+    items[2].clone().delete(&db).await.unwrap(); // Inactive
+    items[3].clone().delete(&db).await.unwrap(); // Active
 
     // Get only deleted active items
-    let deleted_active = Entity::objects(db)
+    let deleted_active = Entity::objects(&db)
         .only_deleted()
         .filter(Column::Active.eq(true))
         .all()
@@ -148,52 +144,50 @@ async fn test_only_deleted_with_filter() {
 #[tokio::test]
 async fn test_count_respects_soft_delete() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let items = create_test_items(db).await;
+    let items = create_test_items(&db).await;
 
     // Initial count
-    let initial_count = Entity::objects(db).count().await.unwrap();
+    let initial_count = Entity::objects(&db).count().await.unwrap();
     assert_eq!(initial_count, 6);
 
     // Delete some
-    items[0].clone().delete(db).await.unwrap();
-    items[2].clone().delete(db).await.unwrap();
+    items[0].clone().delete(&db).await.unwrap();
+    items[2].clone().delete(&db).await.unwrap();
 
     // Count should exclude deleted
-    let count = Entity::objects(db).count().await.unwrap();
+    let count = Entity::objects(&db).count().await.unwrap();
     assert_eq!(count, 4);
 
     // with_deleted count should include all
-    let all_count = Entity::objects(db).with_deleted().count().await.unwrap();
+    let all_count = Entity::objects(&db).with_deleted().count().await.unwrap();
     assert_eq!(all_count, 6);
 
     // only_deleted count
-    let deleted_count = Entity::objects(db).only_deleted().count().await.unwrap();
+    let deleted_count = Entity::objects(&db).only_deleted().count().await.unwrap();
     assert_eq!(deleted_count, 2);
 }
 
 #[tokio::test]
 async fn test_exists_respects_soft_delete() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let items = create_test_items(db).await;
+    let items = create_test_items(&db).await;
     let item_id = items[0].id;
 
     // Should exist initially
-    let exists = Entity::objects(db).filter(Column::Id.eq(item_id)).exists().await.unwrap();
+    let exists = Entity::objects(&db).filter(Column::Id.eq(item_id)).exists().await.unwrap();
     assert!(exists);
 
     // Soft delete it
-    items[0].clone().delete(db).await.unwrap();
+    items[0].clone().delete(&db).await.unwrap();
 
     // Should not exist in normal query
-    let exists_after = Entity::objects(db).filter(Column::Id.eq(item_id)).exists().await.unwrap();
+    let exists_after = Entity::objects(&db).filter(Column::Id.eq(item_id)).exists().await.unwrap();
     assert!(!exists_after);
 
     // But should exist with_deleted
-    let exists_with_deleted = Entity::objects(db)
+    let exists_with_deleted = Entity::objects(&db)
         .with_deleted()
         .filter(Column::Id.eq(item_id))
         .exists()

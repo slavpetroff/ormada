@@ -30,7 +30,7 @@ mod cache_test_item {
 }
 
 // Helper to create table for this specific test
-async fn create_cache_test_table(db: &DatabaseConnection) {
+async fn create_cache_test_table(db: &DatabaseRouter) {
     super::common::test_helpers::execute_sql(
         db,
         "CREATE TABLE IF NOT EXISTS cache_test_items (

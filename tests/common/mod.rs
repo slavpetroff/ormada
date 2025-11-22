@@ -43,7 +43,6 @@ pub mod fixtures;
 pub mod test_helpers;
 
 // Test utilities using OUR django_model macro
-use sea_orm::{Database, DatabaseConnection, DbBackend, Schema};
 use seaorm_django::prelude::*;
 
 /// Test Author model - properly using django_model macro
@@ -97,32 +96,26 @@ pub use author::Author;
 pub use book::Book;
 
 /// Setup in-memory SQLite database for testing
-pub async fn setup_test_db() -> DatabaseConnection {
+pub async fn setup_test_db() -> DatabaseRouter {
     let db = Database::connect("sqlite::memory:")
         .await
         .expect("Failed to create in-memory database");
 
-    // Create schema
-    let schema = Schema::new(DbBackend::Sqlite);
+    let router = DatabaseRouter::new_single(db);
 
-    // Note: For schema creation we still need Entity (SeaORM requirement)
-    let author_stmt = schema.create_table_from_entity(author::Entity);
-    let book_stmt = schema.create_table_from_entity(book::Entity);
+    // Create schema using new create_table interface
+    Author::create_table(&router)
+        .await
+        .expect("Failed to create authors table");
+    Book::create_table(&router)
+        .await
+        .expect("Failed to create books table");
 
-    use sea_orm::ConnectionTrait;
-    use sea_orm::Statement;
-
-    let sql = author_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.expect("Failed to create authors table");
-
-    let sql = book_stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.expect("Failed to create books table");
-
-    db
+    router
 }
 
 /// Create sample authors for testing
-pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<Author> {
+pub async fn create_sample_authors(db: &DatabaseRouter) -> Vec<Author> {
     let mut authors = Vec::new();
 
     let author1 = Author::objects(db)
@@ -162,7 +155,7 @@ pub async fn create_sample_authors(db: &DatabaseConnection) -> Vec<Author> {
 }
 
 /// Create sample books for testing
-pub async fn create_sample_books(db: &DatabaseConnection) -> Vec<Book> {
+pub async fn create_sample_books(db: &DatabaseRouter) -> Vec<Book> {
     let mut books = Vec::new();
 
     let book1 = Book::objects(db)

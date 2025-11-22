@@ -9,15 +9,15 @@ use tokio::task::JoinSet;
 #[tokio::test]
 async fn test_get_or_create_concurrent_safe() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Launch multiple concurrent get_or_create operations for the same email
     let mut tasks = JoinSet::new();
 
     for i in 0..5 {
+        let db_clone = db.clone();
         tasks.spawn(async move {
             let email = "concurrent@example.com";
-            Author::objects(db)
+            Author::objects(&db_clone)
                 .filter(Author::Email.eq(email))
                 .get_or_create(|| Author {
                     id: 0,
@@ -51,7 +51,7 @@ async fn test_get_or_create_concurrent_safe() {
     }
 
     // Verify only one record exists in DB
-    let count = Author::objects(db)
+    let count = Author::objects(&db)
         .filter(Author::Email.eq("concurrent@example.com"))
         .count()
         .await
@@ -62,15 +62,15 @@ async fn test_get_or_create_concurrent_safe() {
 #[tokio::test]
 async fn test_update_or_create_concurrent_safe() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Launch multiple concurrent update_or_create operations
     let mut tasks = JoinSet::new();
 
     for i in 0..5 {
+        let db_clone = db.clone();
         tasks.spawn(async move {
             let email = "update_concurrent@example.com";
-            Author::objects(db)
+            Author::objects(&db_clone)
                 .filter(Author::Email.eq(email))
                 .update_or_create(
                     |model| {
@@ -99,7 +99,7 @@ async fn test_update_or_create_concurrent_safe() {
     assert_eq!(results.len(), 5);
 
     // Verify only one record exists
-    let count = Author::objects(db)
+    let count = Author::objects(&db)
         .filter(Author::Email.eq("update_concurrent@example.com"))
         .count()
         .await

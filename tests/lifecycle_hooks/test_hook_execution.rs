@@ -5,6 +5,22 @@ use sea_orm::entity::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Test helper for creating test database with tables
+async fn setup_test_db() -> DatabaseConnection {
+    let db = Database::connect("sqlite::memory:").await.unwrap();
+    
+    // Create table
+    let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
+    let stmt = schema.create_table_from_entity(Entity);
+    db.execute(db.get_database_backend().build(&stmt)).await.unwrap();
+    
+    db
+}
+
+// NOTE: This test file uses raw SeaORM entities (DeriveEntityModel)
+// instead of our #[django_model] macro, so it can't use Model::create_table()
+// This is intentional for testing the low-level lifecycle hooks infrastructure
+
 // Test model with lifecycle hooks
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "hook_test_users")]
@@ -91,12 +107,7 @@ impl LifecycleHooks for Model {
 #[tokio::test]
 async fn test_create_hooks_execute_in_order() {
     // Setup in-memory database
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    
-    // Create table
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute(db.get_database_backend().build(&stmt)).await.unwrap();
+    let db = setup_test_db().await;
 
     // Create model - hooks should fire
     let user = Model {
@@ -119,11 +130,7 @@ async fn test_create_hooks_execute_in_order() {
 
 #[tokio::test]
 async fn test_update_hooks_execute_in_order() {
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute(db.get_database_backend().build(&stmt)).await.unwrap();
+    let db = setup_test_db().await;
 
     // Insert a record first
     let user = ActiveModel {
@@ -145,11 +152,7 @@ async fn test_update_hooks_execute_in_order() {
 
 #[tokio::test]
 async fn test_delete_hook_executes() {
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute(db.get_database_backend().build(&stmt)).await.unwrap();
+    let db = setup_test_db().await;
 
     // Insert a record
     let user = ActiveModel {

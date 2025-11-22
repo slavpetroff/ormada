@@ -5,6 +5,18 @@ use sea_orm::entity::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Test helper for creating test database with tables
+async fn setup_test_db() -> DatabaseConnection {
+    let db = Database::connect("sqlite::memory:").await.unwrap();
+    
+    // Create table
+    let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
+    let stmt = schema.create_table_from_entity(Entity);
+    db.execute(db.get_database_backend().build(&stmt)).await.unwrap();
+    
+    db
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "txn_hook_users")]
 pub struct Model {
@@ -44,11 +56,7 @@ impl LifecycleHooks for Model {
 async fn test_hooks_execute_within_transaction() {
     *TXN_HOOK_COUNTER.lock().await = 0;
     
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    
-    let schema = sea_orm::Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
-    db.execute(db.get_database_backend().build(&stmt)).await.unwrap();
+    let db = setup_test_db().await;
 
     // Hooks should execute even within transaction context
     let mut user = Model {

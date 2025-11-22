@@ -5,7 +5,7 @@ use seaorm_django::prelude::*;
 use crate::common::*;
 
 // Helper to create a test author
-async fn create_test_author(db: &sea_orm::DatabaseConnection) -> Author {
+async fn create_test_author(db: &DatabaseRouter) -> Author {
     Author::objects(db)
         .create(Author {
             name: "Test Author".to_string(),
@@ -24,7 +24,6 @@ async fn create_test_author(db: &sea_orm::DatabaseConnection) -> Author {
 #[tokio::test]
 async fn test_bulk_create_basic() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let models: Vec<Author> = (0..10)
         .map(|i| Author {
@@ -35,21 +34,20 @@ async fn test_bulk_create_basic() {
         })
         .collect();
 
-    let count = Author::objects(db).bulk_create(models).await.unwrap();
+    let count = Author::objects(&db).bulk_create(models).await.unwrap();
     assert_eq!(count, 10);
 
     // Verify count
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, 10);
 }
 
 #[tokio::test]
 async fn test_bulk_create_empty() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let models: Vec<Author> = vec![];
-    let count = Author::objects(db).bulk_create(models).await.unwrap();
+    let count = Author::objects(&db).bulk_create(models).await.unwrap();
 
     assert_eq!(count, 0);
 }
@@ -57,7 +55,6 @@ async fn test_bulk_create_empty() {
 #[tokio::test]
 async fn test_bulk_create_large_batch() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let models: Vec<Author> = (0..100)
         .map(|i| Author {
@@ -68,21 +65,20 @@ async fn test_bulk_create_large_batch() {
         })
         .collect();
 
-    let count = Author::objects(db).bulk_create(models).await.unwrap();
+    let count = Author::objects(&db).bulk_create(models).await.unwrap();
     assert_eq!(count, 100);
 
     // Verify all inserted
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, 100);
 }
 
 #[tokio::test]
 async fn test_bulk_create_with_relationships() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create author first
-    let author = create_test_author(db).await;
+    let author = create_test_author(&db).await;
 
     // Bulk create books
     let books: Vec<Book> = (0..20)
@@ -95,18 +91,17 @@ async fn test_bulk_create_with_relationships() {
         })
         .collect();
 
-    let count = Book::objects(db).bulk_create(books).await.unwrap();
+    let count = Book::objects(&db).bulk_create(books).await.unwrap();
     assert_eq!(count, 20);
 
     // Verify count
-    let total = Book::objects(db).count().await.unwrap();
+    let total = Book::objects(&db).count().await.unwrap();
     assert_eq!(total, 20);
 }
 
 #[tokio::test]
 async fn test_bulk_create_single_record() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let models = vec![Author {
         name: "Single".to_string(),
@@ -115,17 +110,16 @@ async fn test_bulk_create_single_record() {
         ..Default::default()
     }];
 
-    let count = Author::objects(db).bulk_create(models).await.unwrap();
+    let count = Author::objects(&db).bulk_create(models).await.unwrap();
     assert_eq!(count, 1);
 
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, 1);
 }
 
 #[tokio::test]
 async fn test_bulk_operations_in_transaction() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Bulk create within transaction
     let count = tx!(db, |txn| async move {
@@ -148,14 +142,13 @@ async fn test_bulk_operations_in_transaction() {
     assert_eq!(count, 10);
 
     // Verify committed
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, 10);
 }
 
 #[tokio::test]
 async fn test_bulk_create_rollback_on_error() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     let result: Result<(), DjangoOrmError> = tx!(db, |txn| async move {
         let models: Vec<Author> = (0..5)
@@ -178,14 +171,13 @@ async fn test_bulk_create_rollback_on_error() {
     assert!(result.is_err());
 
     // Verify nothing was committed
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, 0);
 }
 
 #[tokio::test]
 async fn test_bulk_create_performance_comparison() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
     let count = 50;
 
     // Bulk insert
@@ -199,11 +191,11 @@ async fn test_bulk_create_performance_comparison() {
         })
         .collect();
 
-    Author::objects(db).bulk_create(models).await.unwrap();
+    Author::objects(&db).bulk_create(models).await.unwrap();
     let bulk_duration = start.elapsed();
 
     // Verify
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, count as u64);
 
     println!("Bulk insert of {} records: {:?}", count, bulk_duration);
@@ -212,7 +204,6 @@ async fn test_bulk_create_performance_comparison() {
 #[tokio::test]
 async fn test_bulk_create_duplicate_handling() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // First batch
     let models1: Vec<Author> = (0..5)
@@ -224,7 +215,7 @@ async fn test_bulk_create_duplicate_handling() {
         })
         .collect();
 
-    let count1 = Author::objects(db).bulk_create(models1).await.unwrap();
+    let count1 = Author::objects(&db).bulk_create(models1).await.unwrap();
     assert_eq!(count1, 5);
 
     // Second batch with different data
@@ -237,10 +228,10 @@ async fn test_bulk_create_duplicate_handling() {
         })
         .collect();
 
-    let count2 = Author::objects(db).bulk_create(models2).await.unwrap();
+    let count2 = Author::objects(&db).bulk_create(models2).await.unwrap();
     assert_eq!(count2, 5);
 
     // Verify total
-    let total = Author::objects(db).count().await.unwrap();
+    let total = Author::objects(&db).count().await.unwrap();
     assert_eq!(total, 10);
 }

@@ -1,5 +1,7 @@
 use seaorm_django::prelude::*;
-use sea_orm::{Database, ConnectionTrait};
+
+mod common;
+use common::test_helpers::setup_test_db;
 
 mod test_create_table_mod {
     use super::*;
@@ -15,7 +17,7 @@ mod test_create_table_mod {
 
 #[tokio::test]
 async fn test_create_table_works() {
-    let db = Database::connect("sqlite::memory:").await.unwrap();
+    let db = setup_test_db().await;
 
     // Create table using the new method
     test_create_table_mod::CreatedTable::create_table(&db).await.unwrap();

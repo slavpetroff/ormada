@@ -10,9 +10,8 @@ use crate::common::*;
 async fn test_get_by_id_found() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let author = Author::objects(db).get(authors[0].id).await.unwrap();
+    let author = Author::objects(&db).get(authors[0].id).await.unwrap();
 
     assert_eq!(author.id, authors[0].id);
     assert_eq!(author.name, authors[0].name);
@@ -22,9 +21,8 @@ async fn test_get_by_id_found() {
 async fn test_get_by_id_not_found() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let result = Author::objects(db).get(99999).await;
+    let result = Author::objects(&db).get(99999).await;
 
     assert!(result.is_err());
 }
@@ -33,10 +31,9 @@ async fn test_get_by_id_not_found() {
 async fn test_get_with_filter_ignored() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // get() ignores filters and just uses the ID
-    let author = Author::objects(db)
+    let author = Author::objects(&db)
         .filter(sea_orm::ColumnTrait::eq(&Author::Age, 999))
         .get(authors[0].id)
         .await

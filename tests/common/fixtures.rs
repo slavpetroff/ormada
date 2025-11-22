@@ -2,7 +2,6 @@
 //!
 //! This module contains commonly used test models that can be shared across tests.
 
-use sea_orm::DatabaseConnection;
 use seaorm_django::prelude::*;
 
 /// Simple test item model - used for basic CRUD tests
@@ -17,17 +16,8 @@ pub mod simple_item {
     }
     impl AsyncLifecycleHooks for Model {}
 
-    pub async fn create_table(db: &DatabaseConnection) {
-        use crate::common::test_helpers::execute_sql;
-
-        execute_sql(
-            db,
-            "CREATE TABLE IF NOT EXISTS simple_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                value INTEGER NOT NULL
-            )",
-        )
-        .await;
+    pub async fn create_table(db: &DatabaseRouter) {
+        Model::create_table(db).await.unwrap();
     }
 
     pub fn sample_items(count: usize) -> Vec<Model> {
@@ -50,19 +40,8 @@ pub mod rich_item {
     }
     impl AsyncLifecycleHooks for Model {}
 
-    pub async fn create_table(db: &DatabaseConnection) {
-        use crate::common::test_helpers::execute_sql;
-
-        execute_sql(
-            db,
-            "CREATE TABLE IF NOT EXISTS rich_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                value INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )",
-        )
-        .await;
+    pub async fn create_table(db: &DatabaseRouter) {
+        Model::create_table(db).await.unwrap();
     }
 
     pub fn sample_items(count: usize, base_name: &str) -> Vec<Model> {
@@ -94,19 +73,8 @@ pub mod agg_item {
     }
     impl AsyncLifecycleHooks for Model {}
 
-    pub async fn create_table(db: &DatabaseConnection) {
-        use crate::common::test_helpers::execute_sql;
-
-        execute_sql(
-            db,
-            "CREATE TABLE IF NOT EXISTS agg_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                int_value INTEGER,
-                dec_value INTEGER,
-                category INTEGER NOT NULL
-            )",
-        )
-        .await;
+    pub async fn create_table(db: &DatabaseRouter) {
+        Model::create_table(db).await.unwrap();
     }
 
     pub fn sample_items_with_nulls(count: usize, category: i32) -> Vec<Model> {

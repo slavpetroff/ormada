@@ -14,10 +14,9 @@ async fn test_prefetch_related_loads_relations() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Load books with authors prefetched
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 3);
 
@@ -33,9 +32,8 @@ async fn test_prefetch_related_direct_field_access() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // Direct field access to book fields
     assert_eq!(book.title, "Rust Programming");
@@ -53,12 +51,11 @@ async fn test_prefetch_related_with_filter() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     use crate::common::book::Column;
 
     // Load only published books with authors
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(Column::Published.eq(true))
         .prefetch_related(relations![Author])
         .all()
@@ -78,11 +75,10 @@ async fn test_prefetch_related_with_ordering() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     use crate::common::book::Column;
 
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .order_by_desc(Column::Price)
         .prefetch_related(relations![Author])
         .all()
@@ -105,9 +101,8 @@ async fn test_prefetch_related_first() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     assert!(book.author.is_some());
     assert_eq!(book.author.as_ref().unwrap().name, "Alice Johnson");
@@ -118,9 +113,8 @@ async fn test_prefetch_related_last() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).last().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).last().await.unwrap();
 
     assert!(book.author.is_some());
 }
@@ -130,9 +124,8 @@ async fn test_prefetch_related_count() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let count = Book::objects(db).prefetch_related(relations![Author]).count().await.unwrap();
+    let count = Book::objects(&db).prefetch_related(relations![Author]).count().await.unwrap();
 
     assert_eq!(count, 3);
 }
@@ -142,9 +135,8 @@ async fn test_prefetch_related_exists() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let exists = Book::objects(db).prefetch_related(relations![Author]).exists().await.unwrap();
+    let exists = Book::objects(&db).prefetch_related(relations![Author]).exists().await.unwrap();
 
     assert!(exists);
 }
@@ -158,9 +150,8 @@ async fn test_related_author_fields_accessible() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // Book 1 - Alice Johnson
     let book1 = &books[0];
@@ -187,12 +178,11 @@ async fn test_multiple_books_same_author() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     use crate::common::book::Column;
 
     // Get books by Alice (author_id = 1)
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(Column::AuthorId.eq(1))
         .prefetch_related(relations![Author])
         .all()
@@ -214,13 +204,12 @@ async fn test_relation_none_when_not_prefetched() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Query WITHOUT prefetch_related
     // Note: This will return WithRelations but won't have the relation loaded
     // Actually, without prefetch_related we get regular Model, not ModelWithRelations
     // So we need to test the regular query path
-    let books = Book::objects(db).all().await.unwrap();
+    let books = Book::objects(&db).all().await.unwrap();
 
     assert_eq!(books.len(), 3);
     // Regular models don't have the author field - this is expected
@@ -233,12 +222,11 @@ async fn test_relation_none_when_not_prefetched() {
 #[tokio::test]
 async fn test_prefetch_related_empty_result() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     use crate::common::book::Column;
 
     // Query that returns no results
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .filter(Column::Price.gt(999999))
         .prefetch_related(relations![Author])
         .all()
@@ -251,11 +239,10 @@ async fn test_prefetch_related_empty_result() {
 #[tokio::test]
 async fn test_prefetch_related_first_empty_errors() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     use crate::common::book::Column;
 
-    let result = Book::objects(db)
+    let result = Book::objects(&db)
         .filter(Column::Price.gt(999999))
         .prefetch_related(relations![Author])
         .first()
@@ -285,11 +272,10 @@ async fn test_book_with_invalid_author_id() {
 
     let created = Book::objects(&db).create(orphan_book).await.unwrap();
 
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Fetch with prefetch_related
     use crate::common::book::Column;
-    let book = Book::objects(db)
+    let book = Book::objects(&db)
         .filter(Column::Id.eq(created.id))
         .prefetch_related(relations![Author])
         .first()
@@ -309,13 +295,12 @@ async fn test_prefetch_batches_correctly() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Load all books with authors
     // This should execute 2 queries total:
     // 1. SELECT * FROM books
     // 2. SELECT * FROM authors WHERE id IN (1, 2) -- batch query
-    let books = Book::objects(db).prefetch_related(relations![Author]).all().await.unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 3);
 
@@ -329,10 +314,9 @@ async fn test_prefetch_with_limit_still_batches() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Even with LIMIT, prefetch should batch load all related authors
-    let books = Book::objects(db)
+    let books = Book::objects(&db)
         .limit(2)
         .prefetch_related(relations![Author])
         .all()
@@ -355,9 +339,8 @@ async fn test_model_with_relations_has_all_fields() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // All original book fields accessible
     assert_eq!(book.id, 1);
@@ -378,9 +361,8 @@ async fn test_model_with_relations_clone() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
     let _books = create_sample_books(&db).await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let book = Book::objects(db).prefetch_related(relations![Author]).first().await.unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // ModelWithRelations implements Clone
     let book_clone = book.clone();

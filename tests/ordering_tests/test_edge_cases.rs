@@ -1,4 +1,3 @@
-use sea_orm::Database;
 use seaorm_django::prelude::*;
 
 /// Test that specifying a non-existent column in ordering causes a compile-time error
@@ -18,15 +17,9 @@ async fn test_ordering_with_valid_column() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-
-    // Create table
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(valid_post::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
+    valid_post::ValidPost::create_table(&db).await.unwrap();
 
     // This should compile and work fine
     let posts = valid_post::ValidPost::default_ordering(&db).all().await.unwrap();
@@ -46,13 +39,9 @@ async fn test_ordering_ascending() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(asc_post::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
+    asc_post::AscPost::create_table(&db).await.unwrap();
 
     // Create posts in reverse alphabetical order
     for title in ["Zebra", "Mango", "Apple"] {
@@ -88,13 +77,9 @@ async fn test_ordering_descending() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(desc_post::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
+    desc_post::DescPost::create_table(&db).await.unwrap();
 
     // Create posts with different view counts
     for (title, views) in [("Low", 10), ("High", 100), ("Medium", 50)] {
@@ -130,15 +115,11 @@ async fn test_no_ordering_specified() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
+    no_order_post::NoOrderPost::create_table(&db).await.unwrap();
 
-    // Create table
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(no_order_post::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    // Test empty result
 
     // Models without ordering don't have default_ordering method
     // This is a compile-time check - if we tried to call default_ordering() here,
@@ -165,13 +146,9 @@ async fn test_ordering_with_filter() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(filterable_post::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
+    filterable_post::FilterablePost::create_table(&db).await.unwrap();
 
     // Create posts
     for i in 1..=3 {
@@ -215,13 +192,9 @@ async fn test_ordering_override() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
-    use sea_orm::Schema;
-    let schema = Schema::new(sea_orm::DatabaseBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(override_post::Entity);
-    use sea_orm::ConnectionTrait;
-    let sql = stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder);
-    db.execute_unprepared(&sql).await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
+    override_post::OverridePost::create_table(&db).await.unwrap();
 
     // Create posts
     for (title, priority) in [("Low", 1), ("High", 3), ("Medium", 2)] {
@@ -268,7 +241,8 @@ async fn test_invalid_column_name() {
         impl AsyncLifecycleHooks for Model {}
     }
 
-    let db = Database::connect("sqlite::memory:").await.unwrap();
+    let temp = Database::connect("sqlite::memory:").await.unwrap();
+    let db = DatabaseRouter::new_single(temp);
     // ERROR: no associated item named `Nonexistent` found for struct `Model`
     let posts = invalid_post::InvalidPost::default_ordering(&db).all().await.unwrap();
 }

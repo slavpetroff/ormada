@@ -36,10 +36,9 @@ async fn setup_test_db() -> DatabaseConnection {
 #[tokio::test]
 async fn test_restore_basic() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create and soft delete a document
-    let doc = Entity::objects(db)
+    let doc = Entity::objects(&db)
         .create(Model {
             id: 0,
             title: "Test Doc".to_string(),
@@ -50,22 +49,22 @@ async fn test_restore_basic() {
         .unwrap();
 
     let doc_id = doc.id;
-    let deleted = doc.delete(db).await.unwrap();
+    let deleted = doc.delete(&db).await.unwrap();
 
     // Verify it's deleted
     assert!(deleted.deleted_at.is_some());
-    let visible = Entity::objects(db).all().await.unwrap();
+    let visible = Entity::objects(&db).all().await.unwrap();
     assert_eq!(visible.len(), 0);
 
     // Restore it
-    let restored = deleted.restore(db).await.unwrap();
+    let restored = deleted.restore(&db).await.unwrap();
 
     // Verify it's restored
     assert!(restored.deleted_at.is_none());
     assert_eq!(restored.title, "Test Doc");
 
     // Should be visible again
-    let visible_after = Entity::objects(db).all().await.unwrap();
+    let visible_after = Entity::objects(&db).all().await.unwrap();
     assert_eq!(visible_after.len(), 1);
     assert_eq!(visible_after[0].id, doc_id);
 }
@@ -73,9 +72,8 @@ async fn test_restore_basic() {
 #[tokio::test]
 async fn test_restore_preserves_data() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let original = Entity::objects(db)
+    let original = Entity::objects(&db)
         .create(Model {
             id: 0,
             title: "Important Doc".to_string(),
@@ -86,8 +84,8 @@ async fn test_restore_preserves_data() {
         .unwrap();
 
     // Delete and restore
-    let deleted = original.delete(db).await.unwrap();
-    let restored = deleted.restore(db).await.unwrap();
+    let deleted = original.delete(&db).await.unwrap();
+    let restored = deleted.restore(&db).await.unwrap();
 
     // All data should be preserved
     assert_eq!(restored.title, "Important Doc");
@@ -98,9 +96,8 @@ async fn test_restore_preserves_data() {
 #[tokio::test]
 async fn test_multiple_delete_restore_cycles() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let doc = Entity::objects(db)
+    let doc = Entity::objects(&db)
         .create(Model {
             id: 0,
             title: "Cycle Test".to_string(),
@@ -115,17 +112,17 @@ async fn test_multiple_delete_restore_cycles() {
 
     for _ in 0..3 {
         // Delete
-        current = current.delete(db).await.unwrap();
+        current = current.delete(&db).await.unwrap();
         assert!(current.deleted_at.is_some());
 
-        let count_deleted = Entity::objects(db).count().await.unwrap();
+        let count_deleted = Entity::objects(&db).count().await.unwrap();
         assert_eq!(count_deleted, 0);
 
         // Restore
-        current = current.restore(db).await.unwrap();
+        current = current.restore(&db).await.unwrap();
         assert!(current.deleted_at.is_none());
 
-        let count_restored = Entity::objects(db).count().await.unwrap();
+        let count_restored = Entity::objects(&db).count().await.unwrap();
         assert_eq!(count_restored, 1);
     }
 }
@@ -133,11 +130,10 @@ async fn test_multiple_delete_restore_cycles() {
 #[tokio::test]
 async fn test_restore_from_only_deleted_query() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
     // Create and delete multiple documents
     for i in 1..=3 {
-        let doc = Entity::objects(db)
+        let doc = Entity::objects(&db)
             .create(Model {
                 id: 0,
                 title: format!("Doc {}", i),
@@ -147,31 +143,30 @@ async fn test_restore_from_only_deleted_query() {
             .await
             .unwrap();
 
-        doc.delete(db).await.unwrap();
+        doc.delete(&db).await.unwrap();
     }
 
     // Get all deleted
-    let deleted_docs = Entity::objects(db).only_deleted().all().await.unwrap();
+    let deleted_docs = Entity::objects(&db).only_deleted().all().await.unwrap();
     assert_eq!(deleted_docs.len(), 3);
 
     // Restore one
     let to_restore = deleted_docs[1].clone();
-    to_restore.restore(db).await.unwrap();
+    to_restore.restore(&db).await.unwrap();
 
     // Now there should be 1 visible and 2 deleted
-    let visible = Entity::objects(db).all().await.unwrap();
+    let visible = Entity::objects(&db).all().await.unwrap();
     assert_eq!(visible.len(), 1);
 
-    let still_deleted = Entity::objects(db).only_deleted().all().await.unwrap();
+    let still_deleted = Entity::objects(&db).only_deleted().all().await.unwrap();
     assert_eq!(still_deleted.len(), 2);
 }
 
 #[tokio::test]
 async fn test_cannot_restore_force_deleted() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let doc = Entity::objects(db)
+    let doc = Entity::objects(&db)
         .create(Model {
             id: 0,
             title: "To be removed".to_string(),
@@ -184,10 +179,10 @@ async fn test_cannot_restore_force_deleted() {
     let doc_id = doc.id;
 
     // Force delete (permanent)
-    doc.force_delete(db).await.unwrap();
+    doc.force_delete(&db).await.unwrap();
 
     // Try to find it even with with_deleted
-    let result = Entity::objects(db)
+    let result = Entity::objects(&db)
         .with_deleted()
         .filter(Column::Id.eq(doc_id))
         .all()
@@ -200,9 +195,8 @@ async fn test_cannot_restore_force_deleted() {
 #[tokio::test]
 async fn test_restore_makes_record_queryable() {
     let db = setup_test_db().await;
-    let db: &'static _ = Box::leak(Box::new(db));
 
-    let doc = Entity::objects(db)
+    let doc = Entity::objects(&db)
         .create(Model {
             id: 0,
             title: "Queryable Test".to_string(),
@@ -215,10 +209,10 @@ async fn test_restore_makes_record_queryable() {
     let doc_id = doc.id;
 
     // Delete it
-    let deleted = doc.delete(db).await.unwrap();
+    let deleted = doc.delete(&db).await.unwrap();
 
     // Can't query with normal filter
-    let result = Entity::objects(db)
+    let result = Entity::objects(&db)
         .filter(Column::Title.eq("Queryable Test"))
         .all()
         .await
@@ -226,10 +220,10 @@ async fn test_restore_makes_record_queryable() {
     assert_eq!(result.len(), 0);
 
     // Restore
-    deleted.restore(db).await.unwrap();
+    deleted.restore(&db).await.unwrap();
 
     // Now it should be queryable
-    let after_restore = Entity::objects(db)
+    let after_restore = Entity::objects(&db)
         .filter(Column::Title.eq("Queryable Test"))
         .all()
         .await
