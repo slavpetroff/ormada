@@ -570,6 +570,12 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     if config.is_primary_key {
         new_attrs.push(syn::parse_quote! { #[sea_orm(primary_key)] });
     }
+    if config.index.is_some() {
+        new_attrs.push(syn::parse_quote! { #[sea_orm(indexed)] });
+    }
+    if config.unique.is_some() {
+        new_attrs.push(syn::parse_quote! { #[sea_orm(unique)] });
+    }
 
     // TODO: Add serde attributes back when we properly handle serde dependency
     // if config.skip_deserializing {
@@ -1234,6 +1240,54 @@ fn generate_model_convenience_methods(
             }
 
             #default_ordering_method
+
+            /// Create the table for this model
+            pub async fn create_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError>
+            where
+                C: ::sea_orm::ConnectionTrait,
+            {
+                use ::sea_orm::{Schema, ConnectionTrait, DbBackend};
+                use ::sea_orm::sea_query::{MysqlQueryBuilder, PostgresQueryBuilder, SqliteQueryBuilder};
+
+                let backend = db.get_database_backend();
+                let schema = Schema::new(backend);
+                let stmt = schema.create_table_from_entity(_Entity);
+
+                let sql = match backend {
+                    DbBackend::MySql => stmt.to_string(MysqlQueryBuilder),
+                    DbBackend::Postgres => stmt.to_string(PostgresQueryBuilder),
+                    DbBackend::Sqlite => stmt.to_string(SqliteQueryBuilder),
+                    _ => unreachable!("Unsupported database backend"),
+                };
+
+                db.execute_unprepared(&sql).await?;
+
+                Ok(())
+            }
+
+            /// Drop the table for this model
+            pub async fn drop_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError>
+            where
+                C: ::sea_orm::ConnectionTrait,
+            {
+                use ::sea_orm::{Schema, ConnectionTrait, DbBackend};
+                use ::sea_orm::sea_query::{MysqlQueryBuilder, PostgresQueryBuilder, SqliteQueryBuilder};
+
+                let backend = db.get_database_backend();
+                let schema = Schema::new(backend);
+                let stmt = sea_orm::sea_query::Table::drop().table(_Entity).to_owned();
+
+                let sql = match backend {
+                    DbBackend::MySql => stmt.to_string(MysqlQueryBuilder),
+                    DbBackend::Postgres => stmt.to_string(PostgresQueryBuilder),
+                    DbBackend::Sqlite => stmt.to_string(SqliteQueryBuilder),
+                    _ => unreachable!("Unsupported database backend"),
+                };
+
+                db.execute_unprepared(&sql).await?;
+
+                Ok(())
+            }
         }
     })
 }
