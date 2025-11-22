@@ -283,14 +283,14 @@ async fn test_book_with_invalid_author_id() {
         ..Default::default()
     };
 
-    Book::objects(&db).create(orphan_book).await.unwrap();
+    let created = Book::objects(&db).create(orphan_book).await.unwrap();
 
     let db: &'static _ = Box::leak(Box::new(db));
 
     // Fetch with prefetch_related
     use crate::common::book::Column;
     let book = Book::objects(db)
-        .filter(Column::Id.eq(99))
+        .filter(Column::Id.eq(created.id))
         .prefetch_related(relations![Author])
         .first()
         .await

@@ -261,24 +261,20 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
             let path = meta.path.clone();
 
             // Convert Model type to Entity path
-            // If user provides "Author", we convert to "super::author::Entity"
-            // If user provides path like "super::author::Author", extract the module name
+            // From _internal module context, we need super::super to reach sibling modules
+            // Author -> super::super::author::_internal::Entity
             let entity_path = if path.segments.len() == 1 {
-                // Simple case: Author -> super::author::Entity
+                // Simple case: Author -> super::super::author::_internal::Entity
                 let model_name = &path.segments[0].ident;
                 let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
-                syn::parse_quote! { super::#module_name::Entity }
+                syn::parse_quote! { super::super::#module_name::_internal::Entity }
             } else {
-                // Path case: super::author::Author -> super::author::Entity
-                // Replace last segment with Entity
-                let mut segments = path.segments.clone();
-                if let Some(last) = segments.last_mut() {
-                    last.ident = format_ident!("Entity");
-                }
-                syn::Path {
-                    leading_colon: path.leading_colon,
-                    segments,
-                }
+                // Path case: needs more complex handling
+                // For now, assume simple case is most common
+                let model_name =
+                    &path.segments.last().map(|seg| &seg.ident).expect("Path must have segments");
+                let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
+                syn::parse_quote! { super::super::#module_name::_internal::Entity }
             };
 
             model_type = Some(entity_path);
@@ -362,11 +358,7 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         }
 
         // Store config before stripping attributes
-        field_configs.push((
-            field_ident,
-            field_type,
-            config.clone(),
-        ));
+        field_configs.push((field_ident, field_type, config.clone()));
 
         // Strip our custom attributes, keep only SeaORM/serde ones
         strip_django_attributes(field, &config);
@@ -417,6 +409,33 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     input.ident = format_ident!("Model");
     input.vis = syn::Visibility::Public(syn::token::Pub::default());
 
+    // Inject relation fields
+    if let syn::Data::Struct(ref mut data) = input.data {
+        if let syn::Fields::Named(ref mut fields) = data.fields {
+            for (field_ident, fk) in &foreign_keys {
+                let field_name_str = field_ident.to_string();
+                let relation_name_str = if field_name_str.ends_with("_id") {
+                    &field_name_str[..field_name_str.len() - 3]
+                } else {
+                    &field_name_str
+                };
+                let relation_name = format_ident!("{}", relation_name_str);
+                let relation_type = &fk.entity; // This is a Path to Entity
+
+                // Add field: pub relation_name: Option<Model>
+                // We use the Entity::Model type
+                fields.named.push(syn::Field {
+                    attrs: vec![syn::parse_quote! { #[sea_orm(ignore)] }],
+                    vis: syn::Visibility::Public(syn::token::Pub::default()),
+                    mutability: syn::FieldMutability::None,
+                    ident: Some(relation_name),
+                    colon_token: Some(syn::token::Colon::default()),
+                    ty: syn::parse_quote! { ::core::option::Option<<#relation_type as ::sea_orm::EntityTrait>::Model> },
+                });
+            }
+        }
+    }
+
     // Generate additional components
     let relation_enum = generate_relation_enum(&foreign_keys);
     let entity_impl = generate_entity_impl();
@@ -432,7 +451,8 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     // This creates the internal SeaORM types and exposes Model as the main interface
     let expanded = quote! {
         // Internal module for SeaORM compatibility - users don't touch this
-        mod _internal {
+        // pub(crate) allows other models to reference Entity for relations
+        pub(crate) mod _internal {
             use ::serde::{Serialize, Deserialize};
             use ::sea_orm::entity::prelude::{
                 DeriveEntityModel, EnumIter, Related, RelationDef, RelationTrait,
@@ -796,7 +816,7 @@ fn generate_django_entity_impl(
         }
 
         // Generate field assignment
-        if config.auto_now_add {
+        if config.auto_now_add || config.auto_now {
             create_assignments.push(quote! {
                 #field_name: ::sea_orm::Set(now)
             });
@@ -804,7 +824,12 @@ fn generate_django_entity_impl(
             create_assignments.push(quote! {
                 #field_name: ::sea_orm::NotSet
             });
+        } else if let Some(ref fk) = config.foreign_key {
+            create_assignments.push(quote! {
+                #field_name: ::sea_orm::Set(model.#field_name)
+            });
         } else {
+            // Regular field
             create_assignments.push(quote! {
                 #field_name: ::sea_orm::Set(model.#field_name)
             });
@@ -858,11 +883,10 @@ fn generate_with_relations_trait(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> 
         impl ::seaorm_django::traits::WithRelationsTrait for Entity {
             type Model = Model;
             type ModelWithRelations = Model; // For now, same as Model
-            type Relations = (); // Empty relations tuple
 
-            fn from_model_and_relations(
+            fn from_model_and_relations<R>(
                 model: Self::Model,
-                _relations: &Self::Relations,
+                _relations: &R,
             ) -> Self::ModelWithRelations {
                 model // Just return the model as-is
             }
@@ -875,12 +899,23 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
         .iter()
         .map(|(field_name, fk)| {
             let entity = &fk.entity;
+            let relation_name_str = if field_name.to_string().ends_with("_id") {
+                &field_name.to_string()[..field_name.to_string().len() - 3]
+            } else {
+                &field_name.to_string()
+            };
+            let relation_name = format_ident!("{}", relation_name_str);
+
             quote! {
                 impl ::seaorm_django::relations::HasRelation<#entity> for Entity {
                     type RelatedPK = i32; // TODO: Detect actual type
 
                     fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
                         model.#field_name
+                    }
+
+                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::sea_orm::EntityTrait>::Model>) {
+                        model.#relation_name = related;
                     }
 
                     async fn load_related<C: ::sea_orm::ConnectionTrait>(
@@ -911,67 +946,86 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
                             .all(db)
                             .await?;
 
-                        ::core::result::Result::Ok(
-                            ::seaorm_django::prelude::FxHashMap::from_iter(
-                                related_models
-                                    .into_iter()
-                                    .map(|m| (m.id, m))
-                            )
-                        )
+                        let mut map = ::seaorm_django::prelude::FxHashMap::default();
+                        for model in related_models {
+                            let key = model.id;
+                            map.insert(key, model);
+                        }
+
+                        ::core::result::Result::Ok(map)
                     }
                 }
             }
         })
         .collect();
 
-    quote! {
-        #(#impls)*
-    }
+    quote! { #(#impls)* }
 }
 
+/// Generate the save method for the model
 fn generate_model_save_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
 ) -> syn::Result<TokenStream> {
-    let mut save_assignments = Vec::new();
-    let mut auto_now_updates = Vec::new();
-
-    for (field_name, _field_type, config) in field_configs {
+    let auto_now_updates = field_configs.iter().filter_map(|(ident, _, config)| {
         if config.auto_now {
-            save_assignments.push(quote! {
-                #field_name: ::sea_orm::Set(model.#field_name)
-            });
-            auto_now_updates.push(quote! {
-                active_model.#field_name = ::sea_orm::Set(now);
-            });
+            Some(quote! {
+                active_model.#ident = ::sea_orm::Set(::chrono::Utc::now().fixed_offset());
+            })
         } else {
-            save_assignments.push(quote! {
-                #field_name: ::sea_orm::Set(model.#field_name)
-            });
+            None
         }
-    }
+    });
+
+    // Force all fields to Set to ensure they are updated
+    // ActiveModel::from() sets them to Unchanged, which causes save() to skip updating them
+    let force_set_updates = field_configs.iter().filter_map(|(ident, _, config)| {
+        if !config.is_primary_key && !config.auto_now {
+            Some(quote! {
+                active_model.#ident = ::sea_orm::Set(active_model.#ident.unwrap());
+            })
+        } else {
+            None
+        }
+    });
 
     Ok(quote! {
         impl Model {
-            /// Save (update) this model instance to the database.
+            /// Save the model to the database.
             ///
-            /// This updates ALL fields, following Django's behavior.
-            /// Fields marked with #[auto_now] are automatically updated to the current timestamp.
+            /// If the model has a primary key set and exists, it updates.
+            /// Otherwise, it inserts.
+            /// Handles `auto_now` fields automatically.
+            /// Triggers `before_save` and `after_save` hooks.
             pub async fn save<'a, C: ::sea_orm::ConnectionTrait>(
-                self,
+                mut self,
                 db: &'a C,
             ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
-                let now = ::chrono::Utc::now().fixed_offset();
-                let model = self;
+                use ::seaorm_django::hooks::LifecycleHooks;
+                use ::sea_orm::ActiveModelTrait;
+                use ::sea_orm::TryIntoModel;
 
-                let mut active_model = ActiveModel {
-                    #(#save_assignments,)*
-                };
+                // Pre-save hooks
+                <Self as LifecycleHooks>::before_save(&mut self).await?;
+
+                // Convert to ActiveModel
+                let mut active_model = ActiveModel::from(self);
+
+                // Ensure all fields are marked as Set so they get updated
+                #(#force_set_updates)*
 
                 // Update auto_now fields
                 #(#auto_now_updates)*
 
-                use ::sea_orm::ActiveModelTrait;
-                ::core::result::Result::Ok(active_model.update(db).await?)
+                // Save (Insert or Update)
+                let result = active_model.save(db).await?;
+
+                // Convert back to Model
+                let model = result.try_into_model()?;
+
+                // Post-save hooks
+                <Self as LifecycleHooks>::after_save(&model, db).await?;
+
+                ::core::result::Result::Ok(model)
             }
         }
     })
@@ -989,10 +1043,13 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 /// Use `.with_deleted()` to include soft-deleted records in queries.
                 /// Use `.restore()` to un-delete a soft-deleted record.
                 pub async fn delete<C: ::sea_orm::ConnectionTrait>(
-                    self,
+                    mut self,
                     db: &C,
                 ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
+                    use ::seaorm_django::hooks::LifecycleHooks;
+
+                    <Self as LifecycleHooks>::before_delete(&self, db).await?;
 
                     // Convert to ActiveModel and set deleted_at
                     let mut active = ActiveModel::from(self);
@@ -1001,6 +1058,8 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     // Update in database
                     let updated = active.update(db).await?;
 
+                    <Self as LifecycleHooks>::after_delete(&updated, db).await?;
+
                     ::core::result::Result::Ok(updated)
                 }
 
@@ -1008,13 +1067,18 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 ///
                 /// This cannot be undone. Use `.delete()` for soft delete instead.
                 pub async fn force_delete<C: ::sea_orm::ConnectionTrait>(
-                    self,
+                    mut self,
                     db: &C,
                 ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::ActiveModelTrait;
+                    use ::seaorm_django::hooks::LifecycleHooks;
 
-                    let active = ActiveModel::from(self);
+                    <Self as LifecycleHooks>::before_delete(&self, db).await?;
+
+                    let active = ActiveModel::from(self.clone());
                     active.delete(db).await?;
+
+                    <Self as LifecycleHooks>::after_delete(&self, db).await?;
 
                     ::core::result::Result::Ok(())
                 }
@@ -1023,10 +1087,16 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 ///
                 /// Makes the record visible in queries again.
                 pub async fn restore<C: ::sea_orm::ConnectionTrait>(
-                    self,
+                    mut self,
                     db: &C,
                 ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
+                    use ::seaorm_django::hooks::LifecycleHooks;
+
+                    // TODO: Should we have before_restore hooks?
+                    // For now, treat it as an update
+                    <Self as LifecycleHooks>::before_save(&mut self).await?;
+                    <Self as LifecycleHooks>::before_update(&mut self).await?;
 
                     // Convert to ActiveModel and set deleted_at to NULL
                     let mut active = ActiveModel::from(self);
@@ -1034,6 +1104,9 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
 
                     // Update in database
                     let updated = active.update(db).await?;
+
+                    <Self as LifecycleHooks>::after_update(&updated, db).await?;
+                    <Self as LifecycleHooks>::after_save(&updated, db).await?;
 
                     ::core::result::Result::Ok(updated)
                 }
@@ -1045,13 +1118,18 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
             impl Model {
                 /// Delete this record from the database.
                 pub async fn delete<C: ::sea_orm::ConnectionTrait>(
-                    self,
+                    mut self,
                     db: &C,
                 ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
                     use ::sea_orm::ActiveModelTrait;
+                    use ::seaorm_django::hooks::LifecycleHooks;
 
-                    let active = ActiveModel::from(self);
+                    <Self as LifecycleHooks>::before_delete(&self, db).await?;
+
+                    let active = ActiveModel::from(self.clone());
                     active.delete(db).await?;
+
+                    <Self as LifecycleHooks>::after_delete(&self, db).await?;
 
                     ::core::result::Result::Ok(())
                 }
@@ -1082,6 +1160,17 @@ fn generate_model_convenience_methods(
     // Generate column constants: Book::Title = Column::Title
     let column_constants: Vec<_> = fields
         .iter()
+        .filter(|field| {
+            // Filter out fields with #[sea_orm(ignore)]
+            !field.attrs.iter().any(|attr| {
+                if attr.path().is_ident("sea_orm") {
+                    let attr_str = quote!(#attr).to_string();
+                    attr_str.contains("ignore")
+                } else {
+                    false
+                }
+            })
+        })
         .map(|field| {
             let field_name = field.ident.as_ref().unwrap();
             let constant_name = format_ident!("{}", to_pascal_case(&field_name.to_string()));

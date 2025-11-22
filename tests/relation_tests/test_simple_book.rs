@@ -1,21 +1,15 @@
 //! Test book without relations first
+use seaorm_django::prelude::*;
 
-use sea_orm::entity::prelude::*;
-use seaorm_django_derive::DjangoModel;
-
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
-#[sea_orm(table_name = "books")]
-pub struct Model {
-    #[sea_orm(primary_key)]
+#[django_model(table = "books")]
+pub struct Book {
+    #[primary_key]
     pub id: i32,
     pub title: String,
     pub author_id: i32,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
+impl AsyncLifecycleHooks for Model {}
 
 #[test]
 fn test_compiles() {

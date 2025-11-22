@@ -15,6 +15,7 @@ mod user_model {
         pub age: i32,
         pub bio: Option<String>,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 // Projection with subset of fields

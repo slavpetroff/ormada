@@ -3,7 +3,7 @@
 use crate::common::{author, Author};
 use sea_orm::{ConnectionTrait, Database};
 use seaorm_django::prelude::*;
-use seaorm_django::{query::QueryExt, traits::DjangoEntity, tx};
+use seaorm_django::tx;
 
 #[tokio::test]
 async fn test_savepoint_with_tx_macro() {
@@ -11,8 +11,10 @@ async fn test_savepoint_with_tx_macro() {
 
     // Create tables
     let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Author);
-    db.execute(&stmt).await.unwrap();
+    let stmt = schema.create_table_from_entity(author::Entity);
+    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
+        .await
+        .unwrap();
 
     // Use our tx! macro for transactions!
     let result = tx!(&db, |txn| async move {
@@ -22,8 +24,7 @@ async fn test_savepoint_with_tx_macro() {
                 name: "Test Author".to_string(),
                 email: "test@test.com".to_string(),
                 age: 30,
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await?;
 
@@ -41,8 +42,10 @@ async fn test_nested_transaction_with_tx_macro() {
 
     // Create tables
     let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Author);
-    db.execute(&stmt).await.unwrap();
+    let stmt = schema.create_table_from_entity(author::Entity);
+    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
+        .await
+        .unwrap();
 
     // Use our tx! macro for nested transactions!
     let result = tx!(&db, |txn| async move {
@@ -53,8 +56,7 @@ async fn test_nested_transaction_with_tx_macro() {
                 name: "Nested Author".to_string(),
                 email: "nested@test.com".to_string(),
                 age: 25,
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await?;
 
@@ -72,8 +74,10 @@ async fn test_transaction_rollback_with_tx_macro() {
 
     // Create tables
     let schema = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Author);
-    db.execute(&stmt).await.unwrap();
+    let stmt = schema.create_table_from_entity(author::Entity);
+    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::SqliteQueryBuilder))
+        .await
+        .unwrap();
 
     // Use our tx! macro with intentional error to test rollback!
     let result = tx!(&db, |_txn| async move {

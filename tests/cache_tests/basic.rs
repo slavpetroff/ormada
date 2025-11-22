@@ -25,6 +25,8 @@ mod cache_test_item {
 
         pub data: String,
     }
+
+    impl AsyncLifecycleHooks for CacheTestItem {}
 }
 
 // Helper to create table for this specific test

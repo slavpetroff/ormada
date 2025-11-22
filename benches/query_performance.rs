@@ -19,6 +19,8 @@ pub struct BenchmarkItem {
     pub category: String,
 }
 
+impl AsyncLifecycleHooks for BenchmarkItem {}
+
 // Use the generated module directly
 
 async fn setup_db() -> DatabaseConnection {

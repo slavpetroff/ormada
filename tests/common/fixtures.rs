@@ -15,6 +15,7 @@ pub mod simple_item {
         pub id: i32,
         pub value: i32,
     }
+    impl AsyncLifecycleHooks for Model {}
 
     pub async fn create_table(db: &DatabaseConnection) {
         use crate::common::test_helpers::execute_sql;
@@ -47,6 +48,7 @@ pub mod rich_item {
         pub name: String,
         pub created_at: DateTimeWithTimeZone,
     }
+    impl AsyncLifecycleHooks for Model {}
 
     pub async fn create_table(db: &DatabaseConnection) {
         use crate::common::test_helpers::execute_sql;
@@ -90,6 +92,7 @@ pub mod agg_item {
         pub dec_value: Option<i64>,
         pub category: i32,
     }
+    impl AsyncLifecycleHooks for Model {}
 
     pub async fn create_table(db: &DatabaseConnection) {
         use crate::common::test_helpers::execute_sql;

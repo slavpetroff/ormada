@@ -98,6 +98,9 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait {
         models: &[Self::Model],
         db: &C,
     ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, DjangoOrmError>;
+
+    /// Set the related model on the parent model
+    fn set_related(model: &mut Self::Model, related: Option<Related::Model>);
 }
 
 /// Trait for loading relations at compile time
@@ -110,6 +113,9 @@ pub trait LoadRelations<Parent: EntityTrait> {
         models: &[Parent::Model],
         db: &C,
     ) -> Result<Self::Output, DjangoOrmError>;
+
+    /// Populate relations on models
+    fn populate(models: &mut [Parent::Model], data: &Self::Output);
 }
 
 // Base case: no relations to load
@@ -122,6 +128,8 @@ impl<E: EntityTrait> LoadRelations<E> for () {
     ) -> Result<(), DjangoOrmError> {
         Ok(())
     }
+
+    fn populate(_models: &mut [E::Model], _data: &()) {}
 }
 
 // Single relation
@@ -137,6 +145,14 @@ where
         db: &C,
     ) -> Result<Self::Output, DjangoOrmError> {
         <Parent as HasRelation<R1>>::load_related(models, db).await
+    }
+
+    fn populate(models: &mut [Parent::Model], data: &Self::Output) {
+        for model in models {
+            let pk = <Parent as HasRelation<R1>>::get_foreign_key(model);
+            let related = data.get(&pk).cloned();
+            <Parent as HasRelation<R1>>::set_related(model, related);
+        }
     }
 }
 
@@ -159,6 +175,11 @@ where
         let r1 = <Parent as HasRelation<R1>>::load_related(models, db).await?;
         let r2 = <Parent as HasRelation<R2>>::load_related(models, db).await?;
         Ok((r1, r2))
+    }
+
+    fn populate(models: &mut [Parent::Model], data: &Self::Output) {
+        <RelationSpec<R1> as LoadRelations<Parent>>::populate(models, &data.0);
+        <RelationSpec<R2> as LoadRelations<Parent>>::populate(models, &data.1);
     }
 }
 
@@ -235,7 +256,7 @@ where
     E: EntityTrait + crate::traits::WithRelationsTrait<Model = <E as EntityTrait>::Model>,
     <E as EntityTrait>::Model: Sync + Clone,
     C: ConnectionTrait,
-    Relations: LoadRelations<E, Output = E::Relations>,
+    Relations: LoadRelations<E>,
 {
     /// Get all records with prefetched relations (typed version)
     ///
@@ -259,7 +280,7 @@ where
     pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, DjangoOrmError> {
         // Execute main query
         let db = self.db;
-        let models = self.select.all(db).await?;
+        let mut models = self.select.all(db).await?;
 
         if models.is_empty() {
             return Ok(Vec::new());
@@ -268,10 +289,13 @@ where
         // Load all relations using compile-time typed system
         let relation_data = Relations::load_all(&models, db).await?;
 
-        // Build results using typed relation data
+        // Populate relations on models
+        Relations::populate(&mut models, &relation_data);
+
+        // Build results (identity transform now)
         let results = models
             .into_iter()
-            .map(|model| E::from_model_and_relations(model, &relation_data))
+            .map(|model| E::from_model_and_relations(model, &()))
             .collect();
 
         Ok(results)

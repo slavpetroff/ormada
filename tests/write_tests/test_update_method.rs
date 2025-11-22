@@ -29,7 +29,7 @@ async fn test_update_method_executes() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_single_record() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
@@ -55,7 +55,7 @@ async fn test_update_single_record() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_multiple_records() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
@@ -78,7 +78,7 @@ async fn test_update_multiple_records() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_with_filter() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
@@ -104,7 +104,7 @@ async fn test_update_with_filter() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_no_matches() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;
@@ -122,7 +122,7 @@ async fn test_update_no_matches() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_with_exclude() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
@@ -148,7 +148,7 @@ async fn test_update_with_exclude() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_multiple_fields() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
@@ -178,7 +178,7 @@ async fn test_update_multiple_fields() {
 }
 
 #[tokio::test]
-#[ignore = "update() method needs to be fixed to mark fields as Set"]
+
 async fn test_update_with_ordering() {
     let db = setup_test_db().await;
     let _authors = create_sample_authors(&db).await;

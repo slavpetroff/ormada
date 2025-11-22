@@ -16,6 +16,7 @@ mod order_model {
         pub price: i32,
         pub status: String,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 // Projection with computed aggregation fields

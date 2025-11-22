@@ -52,16 +52,10 @@ pub trait WithRelationsTrait {
     /// The extended model type with relation accessor methods  
     type ModelWithRelations: Clone;
 
-    /// The type of relation data loaded
-    type Relations;
-
     /// Convert a base model and typed relation data into the extended model
     ///
     /// This uses compile-time typed relations for zero-cost abstraction.
-    fn from_model_and_relations(
-        model: Self::Model,
-        relations: &Self::Relations,
-    ) -> Self::ModelWithRelations
+    fn from_model_and_relations<R>(model: Self::Model, relations: &R) -> Self::ModelWithRelations
     where
         Self: Sized;
 }

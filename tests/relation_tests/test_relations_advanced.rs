@@ -48,7 +48,7 @@ async fn test_get_without_relations_none() {
 
     // With our simplified implementation, Model is the same as ModelWithRelations
     // Relations are loaded via prefetch_related, not stored on the model
-    assert_eq!(book.id, book_with_author.id);
+    assert_eq!(book.id, books[0].id);
 }
 
 // ============================================================================
@@ -58,7 +58,6 @@ async fn test_get_without_relations_none() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "Requires FK constraint violations"]
 async fn test_prefetch_with_all_invalid_fks() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));
@@ -89,7 +88,6 @@ async fn test_prefetch_with_all_invalid_fks() {
 }
 
 #[tokio::test]
-#[ignore = "Requires FK constraint violations"]
 async fn test_prefetch_partial_invalid_fks() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
@@ -358,7 +356,6 @@ async fn test_prefetch_batch_loading_efficiency() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "Requires FK constraint violations"]
 async fn test_prefetch_with_zero_foreign_key() {
     let db = setup_test_db().await;
     let db: &'static _ = Box::leak(Box::new(db));

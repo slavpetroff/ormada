@@ -21,6 +21,7 @@ mod user_model {
         pub age: i32,
         pub bio: Option<String>,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 // THESE WILL FAIL TO COMPILE UNTIL BUG IS FIXED:

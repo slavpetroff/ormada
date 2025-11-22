@@ -1,45 +1,36 @@
-//! Test DjangoModel derive with relations
-
-use sea_orm::entity::prelude::*;
-use seaorm_django_derive::DjangoModel;
+//! Test DjangoModel derive with relations using the new macro
+use seaorm_django::prelude::*;
 
 pub mod author {
     use super::*;
 
-    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "authors")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    #[django_model(table = "authors")]
+    pub struct Author {
+        #[primary_key]
         pub id: i32,
         pub name: String,
     }
 
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
+    impl AsyncLifecycleHooks for Model {}
 }
 
 pub mod book {
     use super::*;
 
-    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "books")]
-    #[django(relations(author = "super::Author"))]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    #[django_model(table = "books")]
+    pub struct Book {
+        #[primary_key]
         pub id: i32,
         pub title: String,
+        #[foreign_key(super::author::Author)]
         pub author_id: i32,
     }
 
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
+    impl AsyncLifecycleHooks for Model {}
 }
 
 #[test]
 fn test_compiles() {
     // Just ensure the derive macro works with relations
+    // The macro expansion check happens at compile time
 }

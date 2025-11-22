@@ -71,8 +71,7 @@ async fn test_sum_on_float_column() {
             author_id: author.id,
             price: 1999, // $19.99
             published: true,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -84,8 +83,7 @@ async fn test_sum_on_float_column() {
             author_id: author.id,
             price: 2999, // $29.99
             published: true,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();

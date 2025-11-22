@@ -16,6 +16,7 @@ mod simple_author_mod {
         pub name: String,
         pub email: String,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 mod simple_book_mod {
@@ -28,6 +29,7 @@ mod simple_book_mod {
         pub title: String,
         pub author_id: i32,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 #[test]

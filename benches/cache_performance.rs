@@ -50,6 +50,8 @@ mod benchmark_item {
         #[max_length(100)]
         pub data: String,
     }
+
+    impl AsyncLifecycleHooks for Model {}
 }
 
 async fn setup_db() -> DatabaseConnection {

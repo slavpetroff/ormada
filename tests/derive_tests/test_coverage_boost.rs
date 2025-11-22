@@ -5,16 +5,7 @@
 use sea_orm::Related;
 use seaorm_django::prelude::*;
 
-use crate::common::{author, book};
-
-// Test the Related trait implementation (common/mod.rs lines 68-69)
-#[tokio::test]
-async fn test_related_trait() {
-    // This exercises the Related trait implementation in common/mod.rs
-    let _rel_def = <Book as Related<Author>>::to();
-
-    // The fact that this compiles and runs means the trait impl is working
-}
+use crate::common::{Author, Book};
 
 // Test empty tuple LoadRelations (relations.rs lines 130, 134)
 #[tokio::test]

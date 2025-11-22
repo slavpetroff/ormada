@@ -1,65 +1,48 @@
 //! Minimal test to isolate the E0223 error
-
-use sea_orm::entity::prelude::*;
-use seaorm_django_derive::DjangoModel;
+use seaorm_django::prelude::*;
 
 // First: Test entity without relations (should work)
 pub mod simple {
     use super::*;
 
-    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "simple")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    #[django_model(table = "simple")]
+    pub struct Simple {
+        #[primary_key]
         pub id: i32,
         pub name: String,
     }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
+    impl AsyncLifecycleHooks for Model {}
 }
 
 // Second: Add a related entity (should also work since it has no relations)
 pub mod parent {
     use super::*;
 
-    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "parent")]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    #[django_model(table = "parent")]
+    pub struct Parent {
+        #[primary_key]
         pub id: i32,
         pub name: String,
     }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
+    impl AsyncLifecycleHooks for Model {}
 }
 
 // Third: Add entity WITH relation to parent
 pub mod child {
     use super::*;
 
-    #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, DjangoModel)]
-    #[sea_orm(table_name = "child")]
-    #[django(relations(parent = "super::parent::Entity"))]
-    pub struct Model {
-        #[sea_orm(primary_key)]
+    #[django_model(table = "child")]
+    pub struct Child {
+        #[primary_key]
         pub id: i32,
         pub name: String,
+        #[foreign_key(super::parent::Parent)]
         pub parent_id: i32,
     }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
+    impl AsyncLifecycleHooks for Model {}
 }
 
 #[test]
 fn test_simple_compiles() {
-    // Just ensure entities compile (child commented out temporarily)
+    // Just ensure entities compile
 }

@@ -22,6 +22,7 @@ mod validation_user_mod {
         #[range(min = 18, max = 120)]
         pub age: i32,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 mod validation_product_mod {
@@ -40,6 +41,7 @@ mod validation_product_mod {
         #[range(min = 0)]
         pub stock: i32,
     }
+    impl AsyncLifecycleHooks for Model {}
 }
 
 #[test]
