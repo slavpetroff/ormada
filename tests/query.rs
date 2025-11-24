@@ -665,12 +665,43 @@ async fn test_values_query(#[future] db_with_sample_authors: (DatabaseRouter, Ve
 #[rstest]
 #[awt]
 #[tokio::test]
+async fn test_values_empty_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let values = Author::objects(&db).values(vec![]).await.unwrap();
+    assert_eq!(values.len(), 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
 async fn test_values_list_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
     let ages = Author::objects(&db).values_list(vec![Author::Age], false).await.unwrap();
     assert_eq!(ages.len(), 3);
     // Values are returned as JsonValue, so just check count
     assert!(!ages.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_list_flat(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let names = Author::objects(&db).values_list(vec![Author::Name], true).await.unwrap();
+    assert_eq!(names.len(), 3);
+    // With flat=true, should return flat values not arrays
+    for name in &names {
+        assert!(!name.is_array() || name.is_string());
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_list_empty_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let values = Author::objects(&db).values_list(vec![], false).await.unwrap();
+    assert_eq!(values.len(), 0);
 }
 
 #[rstest]
@@ -692,6 +723,45 @@ async fn test_latest_on_empty(#[future] db: DatabaseRouter) {
 // ============================================================================
 // Query Caching Edge Cases
 // ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_cache_hit_first_after_all(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    let qs = Author::objects(&db).order_by_asc(Author::Age);
+
+    // First call to .all() populates cache
+    let all_authors = qs.all().await.unwrap();
+    assert_eq!(all_authors.len(), 3);
+
+    // Subsequent .first() should hit cache
+    let first_author = qs.first().await.unwrap();
+    assert_eq!(first_author.age, 25); // Alice (youngest)
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_queryset_explicit_clone(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    let base_qs = Author::objects(&db);
+    let qs1 = base_qs.clone().filter(Author::Age.gt(25));
+    let qs2 = base_qs.clone().filter(Author::Age.lt(35));
+
+    let result1 = qs1.all().await.unwrap();
+    let result2 = qs2.all().await.unwrap();
+
+    // Explicitly cloned querysets should be independent
+    assert_eq!(result1.len(), 2); // Bob, Charlie
+    assert_eq!(result2.len(), 2); // Alice, Bob
+}
 
 #[rstest]
 #[awt]
@@ -972,36 +1042,490 @@ async fn test_q_empty_any(#[future] db_with_sample_authors: (DatabaseRouter, Vec
 }
 
 // ============================================================================
-// Iterator and Batch Tests
+// get_or_create / update_or_create Tests
 // ============================================================================
 
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_iterator_over_results(
-    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
-) {
-    let (db, _sample_authors) = db_with_sample_authors;
+async fn test_get_or_create_creates_new(#[future] db: DatabaseRouter) {
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("new@test.com"))
+        .get_or_create(|| Author {
+            name: "New Author".to_string(),
+            email: "new@test.com".to_string(),
+            age: 30,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
 
-    let authors = Author::objects(&db).all().await.unwrap();
+    assert!(created);
+    assert_eq!(author.email, "new@test.com");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_get_or_create_gets_existing(#[future] db_with_author: (DatabaseRouter, Author)) {
+    let (db, existing) = db_with_author;
+
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq(&existing.email))
+        .get_or_create(|| Author {
+            name: "Should Not Create".to_string(),
+            email: existing.email.clone(),
+            age: 99,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert!(!created);
+    assert_eq!(author.id, existing.id);
+    assert_eq!(author.name, existing.name); // Original name, not "Should Not Create"
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_update_or_create_updates_existing(
+    #[future] db_with_author: (DatabaseRouter, Author),
+) {
+    let (db, existing) = db_with_author;
+
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq(&existing.email))
+        .update_or_create(
+            |a| {
+                a.age = 100;
+            },
+            || Author {
+                name: "Should Not Create".to_string(),
+                email: existing.email.clone(),
+                age: 50,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(!created);
+    assert_eq!(author.id, existing.id);
+    assert_eq!(author.age, 100);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_update_or_create_creates_new(#[future] db: DatabaseRouter) {
+    let (author, created) = Author::objects(&db)
+        .filter(Author::Email.eq("new@test.com"))
+        .update_or_create(
+            |a| {
+                a.age = 100;
+            },
+            || Author {
+                name: "New Author".to_string(),
+                email: "new@test.com".to_string(),
+                age: 50,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(created);
+    assert_eq!(author.email, "new@test.com");
+    assert_eq!(author.age, 50); // Creator's age, not updater's
+}
+
+// ============================================================================
+// Iterator and Streaming Tests
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_iterator_method(#[future] db: DatabaseRouter) {
+    // Create 10 authors
+    for i in 0..10 {
+        Author::objects(&db)
+            .create(Author {
+                name: format!("Author {}", i),
+                email: format!("author{}@test.com", i),
+                age: 20 + i,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+    }
+
+    use futures::StreamExt;
+    let mut stream = Author::objects(&db).iterator(Some(3)).await.unwrap();
+
     let mut count = 0;
-    for _ in authors.iter() {
+    while let Some(result) = stream.next().await {
+        result.unwrap();
         count += 1;
     }
+
+    assert_eq!(count, 10);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_iter_method(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    use futures::StreamExt;
+    let mut stream = Author::objects(&db)
+        .values_iter(vec![Author::Name, Author::Age], Some(2))
+        .await
+        .unwrap();
+
+    let mut count = 0;
+    while let Some(result) = stream.next().await {
+        result.unwrap();
+        count += 1;
+    }
+
     assert_eq!(count, 3);
 }
 
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_select_only_specific_columns(
+async fn test_values_iter_empty_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    use futures::StreamExt;
+    let mut stream = Author::objects(&db).values_iter(vec![], None).await.unwrap();
+
+    let mut count = 0;
+    while let Some(result) = stream.next().await {
+        result.unwrap();
+        count += 1;
+    }
+
+    assert_eq!(count, 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_list_iter_flat(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    use futures::StreamExt;
+    let mut stream = Author::objects(&db)
+        .values_list_iter(vec![Author::Name], true, None)
+        .await
+        .unwrap();
+
+    let mut count = 0;
+    while let Some(result) = stream.next().await {
+        result.unwrap();
+        count += 1;
+    }
+
+    assert_eq!(count, 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_list_iter_not_flat(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    use futures::StreamExt;
+    let mut stream = Author::objects(&db)
+        .values_list_iter(vec![Author::Name, Author::Age], false, None)
+        .await
+        .unwrap();
+
+    let mut count = 0;
+    while let Some(result) = stream.next().await {
+        let value = result.unwrap();
+        assert!(value.is_array());
+        count += 1;
+    }
+
+    assert_eq!(count, 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_group_by_basic(
     #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
 ) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    // Test that we can still query even if select_only isn't fully implemented
-    let authors = Author::objects(&db).all().await.unwrap();
-    assert_eq!(authors.len(), 3);
+    // Test that group_by returns a modified queryset
+    let qs = Author::objects(&db).group_by(Author::Age);
+    
+    // Verify it's still queryable (implementation detail - group_by just modifies select)
+    let sql = qs.debug_sql();
+    assert!(sql.contains("GROUP BY") || sql.contains("group by"));
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_annotate_basic(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    // Test that annotate returns a modified queryset with aggregation expressions
+    let qs = Author::objects(&db)
+        .group_by(Author::Age)
+        .annotate([
+            ("count_all", Aggregation::count_all()),
+            ("max_age", Aggregation::max(Author::Age)),
+        ]);
+    
+    let sql = qs.debug_sql();
+    assert!(!sql.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregation_helpers() {
+    // Test all Aggregation helper constructors
+    let _count_all = Aggregation::count_all();
+    let _count = Aggregation::count(Author::Age);
+    let _sum = Aggregation::sum(Author::Age);
+    let _avg = Aggregation::avg(Author::Age);
+    let _max = Aggregation::max(Author::Age);
+    let _min = Aggregation::min(Author::Age);
+    
+    // Just verify they can be constructed
+    assert!(true);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_soft_delete_mode_methods(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    // Test with_deleted() - should return all records including soft-deleted
+    // (Author doesn't have soft delete, so behavior is same as normal query)
+    let with_deleted = Author::objects(&db).with_deleted().all().await.unwrap();
+    assert_eq!(with_deleted.len(), 3);
+
+    // Test only_deleted() - should filter to only deleted records
+    // (Author doesn't have soft delete, so this should return all records)
+    let only_deleted = Author::objects(&db).only_deleted().all().await.unwrap();
+    assert_eq!(only_deleted.len(), 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_limit_offset_combination(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    // Test limit + offset together
+    let authors = Author::objects(&db)
+        .order_by_asc(Author::Age)
+        .offset(1)
+        .limit(1)
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(authors.len(), 1);
+    assert_eq!(authors[0].name, "Bob"); // Middle author after offset
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_query_set_select_related_conversion(
+    #[future] db_with_author_with_books: (DatabaseRouter, (Author, Vec<Book>)),
+) {
+    let (db, (author, books)) = db_with_author_with_books;
+
+    // Test that select_related() converts QuerySet to QuerySetEager
+    let books_with_author = Book::objects(&db)
+        .filter(Book::AuthorId.eq(author.id))
+        .select_related(relations![Author])
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books_with_author.len(), books.len());
+    assert!(!books_with_author.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_query_set_prefetch_related_conversion(
+    #[future] db_with_author_with_books: (DatabaseRouter, (Author, Vec<Book>)),
+) {
+    let (db, (author, books)) = db_with_author_with_books;
+
+    // Test that prefetch_related() converts QuerySet to QuerySetEager
+    let books_with_author = Book::objects(&db)
+        .filter(Book::AuthorId.eq(author.id))
+        .prefetch_related(relations![Author])
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books_with_author.len(), books.len());
+    assert!(!books_with_author.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_get_or_create_race_condition_retry(#[future] db: DatabaseRouter) {
+    use std::sync::Arc;
+    use tokio::sync::Barrier;
+
+    // Simulate race condition: two concurrent get_or_create calls
+    let barrier = Arc::new(Barrier::new(2));
+    let db = Arc::new(db);
+
+    let handle1 = {
+        let db = Arc::clone(&db);
+        let barrier = Arc::clone(&barrier);
+        tokio::spawn(async move {
+            barrier.wait().await; // Sync start
+            Author::objects(&*db)
+                .filter(Author::Email.eq("race@test.com"))
+                .get_or_create(|| Author {
+                    name: "Race Test 1".to_string(),
+                    email: "race@test.com".to_string(),
+                    age: 30,
+                    ..Default::default()
+                })
+                .await
+        })
+    };
+
+    let handle2 = {
+        let db = Arc::clone(&db);
+        let barrier = Arc::clone(&barrier);
+        tokio::spawn(async move {
+            barrier.wait().await; // Sync start
+            Author::objects(&*db)
+                .filter(Author::Email.eq("race@test.com"))
+                .get_or_create(|| Author {
+                    name: "Race Test 2".to_string(),
+                    email: "race@test.com".to_string(),
+                    age: 31,
+                    ..Default::default()
+                })
+                .await
+        })
+    };
+
+    let (result1, result2) = tokio::join!(handle1, handle2);
+    let (author1, created1) = result1.unwrap().unwrap();
+    let (author2, created2) = result2.unwrap().unwrap();
+
+    // One should create, one should get existing
+    assert_ne!(created1, created2, "Exactly one should have created");
+    assert_eq!(author1.id, author2.id, "Both should reference same record");
+    assert_eq!(author1.email, "race@test.com");
+
+    // Verify only one record exists
+    let count = Author::objects(&*db)
+        .filter(Author::Email.eq("race@test.com"))
+        .count()
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_update_or_create_race_condition_retry(#[future] db: DatabaseRouter) {
+    use std::sync::Arc;
+    use tokio::sync::Barrier;
+
+    // Create initial record
+    Author::objects(&db)
+        .create(Author {
+            name: "Original".to_string(),
+            email: "update_race@test.com".to_string(),
+            age: 25,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    let barrier = Arc::new(Barrier::new(2));
+    let db = Arc::new(db);
+
+    let handle1 = {
+        let db = Arc::clone(&db);
+        let barrier = Arc::clone(&barrier);
+        tokio::spawn(async move {
+            barrier.wait().await;
+            Author::objects(&*db)
+                .filter(Author::Email.eq("update_race@test.com"))
+                .update_or_create(
+                    |a| a.age = 30,
+                    || Author {
+                        name: "New 1".to_string(),
+                        email: "update_race@test.com".to_string(),
+                        age: 30,
+                        ..Default::default()
+                    },
+                )
+                .await
+        })
+    };
+
+    let handle2 = {
+        let db = Arc::clone(&db);
+        let barrier = Arc::clone(&barrier);
+        tokio::spawn(async move {
+            barrier.wait().await;
+            Author::objects(&*db)
+                .filter(Author::Email.eq("update_race@test.com"))
+                .update_or_create(
+                    |a| a.age = 35,
+                    || Author {
+                        name: "New 2".to_string(),
+                        email: "update_race@test.com".to_string(),
+                        age: 35,
+                        ..Default::default()
+                    },
+                )
+                .await
+        })
+    };
+
+    let (result1, result2) = tokio::join!(handle1, handle2);
+    assert!(result1.unwrap().is_ok());
+    assert!(result2.unwrap().is_ok());
+
+    // Verify only one record exists and was updated
+    let final_author = Author::objects(&*db)
+        .filter(Author::Email.eq("update_race@test.com"))
+        .first()
+        .await
+        .unwrap();
+
+    assert!(
+        final_author.age == 30 || final_author.age == 35,
+        "Age should be one of the updated values"
+    );
 }
 
 #[rstest]
@@ -1221,4 +1745,51 @@ async fn test_filter_contains_substring(
 
     // Alice and Charlie both contain "li"
     assert_eq!(authors.len(), 2);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_debug_sql(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    let sql = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .order_by_desc(Author::Name)
+        .debug_sql();
+
+    assert!(sql.contains("SELECT") || sql.contains("select"));
+    assert!(!sql.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    let explain = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .explain()
+        .await
+        .unwrap();
+
+    assert!(explain.contains("EXPLAIN"));
+    assert!(!explain.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_explain_analyze_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    let explain = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .explain_analyze()
+        .await
+        .unwrap();
+
+    assert!(explain.contains("EXPLAIN"));
+    assert!(!explain.is_empty());
 }

@@ -59,7 +59,7 @@ async fn test_tx_macro_commit(#[future] db: DatabaseRouter) {
 async fn test_tx_macro_rollback_on_error(#[future] db: DatabaseRouter) {
     let result: Result<(), DjangoOrmError> = tx!(db, |txn| async move {
         // Create author
-        let author = Author::objects(txn)
+        let _author = Author::objects(txn)
             .create(Author {
                 name: "Will Rollback".to_string(),
                 email: "rollback@example.com".to_string(),
@@ -84,7 +84,7 @@ async fn test_tx_macro_rollback_on_error(#[future] db: DatabaseRouter) {
 #[awt]
 #[tokio::test]
 async fn test_atomic_ext_commit(#[future] db: DatabaseRouter) {
-    let result = db
+    let _result = db
         .atomic(|txn| {
             Box::pin(async move {
                 Author::objects(txn)
@@ -213,7 +213,7 @@ async fn test_transaction_rollback_on_constraint_violation(
 #[awt]
 #[tokio::test]
 async fn test_nested_transaction_both_commit(#[future] db: DatabaseRouter) {
-    let (outer, inner) = tx!(db, |txn| async move {
+    let (_outer, _inner) = tx!(db, |txn| async move {
         let outer = Author::objects(txn)
             .create(Author {
                 name: "Outer".to_string(),

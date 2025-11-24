@@ -429,6 +429,39 @@ async fn test_bulk_create_empty_vec(#[future] db: DatabaseRouter) {
 #[rstest]
 #[awt]
 #[tokio::test]
+async fn test_delete_single_record(#[future] db_with_author: (DatabaseRouter, Author)) {
+    let (db, author) = db_with_author;
+    let id = author.id;
+
+    // Delete the record using DeleteExt trait
+    author.delete(&db).await.unwrap();
+
+    // Verify it's gone
+    let result = Author::objects(&db).get(id).await;
+    assert!(result.is_err());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_delete_with_verification(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, sample_authors) = db_with_sample_authors;
+    
+    let count_before = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count_before, 3);
+
+    // Delete one author
+    sample_authors[0].clone().delete(&db).await.unwrap();
+
+    let count_after = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count_after, 2);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
 async fn test_save_preserves_created_at(#[future] db_with_author: (DatabaseRouter, Author)) {
     let (db, author) = db_with_author;
     let original_created_at = author.created_at;

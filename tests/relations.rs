@@ -22,7 +22,7 @@ use seaorm_django::prelude::*;
 async fn test_prefetch_related_single_relation(
     #[future] db_with_author_with_books: (DatabaseRouter, (Author, Vec<Book>)),
 ) {
-    let (db, (author, books)) = db_with_author_with_books;
+    let (db, (author, _books)) = db_with_author_with_books;
 
     let loaded_books = Book::objects(&db)
         .filter(Book::AuthorId.eq(author.id))
@@ -219,7 +219,7 @@ async fn test_prefetch_related_exists(
 #[tokio::test]
 async fn test_prefetch_with_complex_filter_chain(
     #[future] db: DatabaseRouter,
-    #[future] authors_with_books: Vec<(Author, Vec<Book>)>,
+    #[future] _authors_with_books: Vec<(Author, Vec<Book>)>,
 ) {
     let books = Book::objects(&db)
         .filter(Book::Price.gte(1000))
@@ -572,4 +572,60 @@ async fn test_prefetch_distinct(
         .unwrap();
 
     assert_eq!(books.len(), 6);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_queryset_eager_order_by_asc(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _setup) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .select_related(relations![Author])
+        .order_by_asc(Book::Title)
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 6);
+    
+    // Verify actual ascending order by title
+    for i in 0..books.len() - 1 {
+        assert!(
+            books[i].title <= books[i + 1].title,
+            "Books not in ascending order by title: '{}' should be <= '{}'",
+            books[i].title,
+            books[i + 1].title
+        );
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_queryset_eager_order_by_desc(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _setup) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .prefetch_related(relations![Author])
+        .order_by_desc(Book::Price)
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 6);
+    
+    // Verify actual descending order by price
+    for i in 0..books.len() - 1 {
+        assert!(
+            books[i].price >= books[i + 1].price,
+            "Books not in descending order by price: {} should be >= {}",
+            books[i].price,
+            books[i + 1].price
+        );
+    }
 }

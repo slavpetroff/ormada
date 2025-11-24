@@ -612,3 +612,77 @@ async fn test_upsert_mixed_new_and_existing(#[future] db_with_author: (DatabaseR
     let new = Author::objects(&db).get(888).await.unwrap();
     assert_eq!(new.name, "New Author");
 }
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_on_conflict_columns_api(#[future] db: DatabaseRouter) {
+    // Test on_conflict_columns API (builder pattern)
+    // Note: Actual execution would require a composite unique constraint in schema
+    let author = Author {
+        id: 500,
+        name: "Test Author".to_string(),
+        email: "api_test@test.com".to_string(),
+        age: 35,
+        created_at: chrono::Utc::now().fixed_offset(),
+        updated_at: chrono::Utc::now().fixed_offset(),
+    };
+
+    // Test that on_conflict_columns returns a valid builder
+    // Use single column (Id) which is the primary key
+    let count = Author::objects(&db)
+        .upsert_many(vec![author.clone()])
+        .on_conflict_columns(vec![Author::Id])
+        .update_fields(&[Author::Name])
+        .execute()
+        .await
+        .unwrap();
+
+    assert_eq!(count, 1);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_missing_on_conflict_error(#[future] db: DatabaseRouter) {
+    let author = Author {
+        id: 600,
+        name: "Test".to_string(),
+        email: "test@test.com".to_string(),
+        age: 30,
+        created_at: chrono::Utc::now().fixed_offset(),
+        updated_at: chrono::Utc::now().fixed_offset(),
+    };
+
+    // Should error if on_conflict not called
+    let result = Author::objects(&db)
+        .upsert_many(vec![author])
+        .update_fields(&[Author::Name])
+        .execute()
+        .await;
+
+    assert!(result.is_err());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_missing_update_fields_error(#[future] db: DatabaseRouter) {
+    let author = Author {
+        id: 700,
+        name: "Test".to_string(),
+        email: "test@test.com".to_string(),
+        age: 30,
+        created_at: chrono::Utc::now().fixed_offset(),
+        updated_at: chrono::Utc::now().fixed_offset(),
+    };
+
+    // Should error if update_fields not called
+    let result = Author::objects(&db)
+        .upsert_many(vec![author])
+        .on_conflict(Author::Id)
+        .execute()
+        .await;
+
+    assert!(result.is_err());
+}
