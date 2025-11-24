@@ -474,10 +474,10 @@ async fn test_upsert_single_then_update(#[future] db: DatabaseRouter) {
         .execute()
         .await
         .unwrap();
-    
+
     let author = Author::objects(&db).get(999).await.unwrap();
     assert_eq!(author.name, "Single");
-    
+
     // Update existing
     Author::objects(&db)
         .upsert_many(vec![Author {
@@ -493,7 +493,7 @@ async fn test_upsert_single_then_update(#[future] db: DatabaseRouter) {
         .execute()
         .await
         .unwrap();
-    
+
     let author = Author::objects(&db).get(999).await.unwrap();
     assert_eq!(author.name, "Updated Single");
 }
@@ -509,7 +509,7 @@ async fn test_upsert_with_empty_vec(#[future] db: DatabaseRouter) {
         .execute()
         .await
         .unwrap();
-    
+
     assert_eq!(result, 0);
 }
 
@@ -527,7 +527,7 @@ async fn test_upsert_all_new_records(#[future] db: DatabaseRouter) {
             updated_at: chrono::Utc::now().fixed_offset(),
         })
         .collect();
-    
+
     Author::objects(&db)
         .upsert_many(authors)
         .on_conflict(Author::Id)
@@ -535,7 +535,7 @@ async fn test_upsert_all_new_records(#[future] db: DatabaseRouter) {
         .execute()
         .await
         .unwrap();
-    
+
     let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 5);
 }
@@ -543,9 +543,11 @@ async fn test_upsert_all_new_records(#[future] db: DatabaseRouter) {
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_upsert_all_existing_records(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_upsert_all_existing_records(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, sample_authors) = db_with_sample_authors;
-    
+
     let mut updated_authors: Vec<Author> = sample_authors
         .into_iter()
         .map(|mut a| {
@@ -553,7 +555,7 @@ async fn test_upsert_all_existing_records(#[future] db_with_sample_authors: (Dat
             a
         })
         .collect();
-    
+
     Author::objects(&db)
         .upsert_many(updated_authors)
         .on_conflict(Author::Id)
@@ -561,7 +563,7 @@ async fn test_upsert_all_existing_records(#[future] db_with_sample_authors: (Dat
         .execute()
         .await
         .unwrap();
-    
+
     let all_authors = Author::objects(&db).all().await.unwrap();
     assert_eq!(all_authors.len(), 3);
     assert!(all_authors.iter().all(|a| a.name.contains("Updated")));
@@ -572,7 +574,7 @@ async fn test_upsert_all_existing_records(#[future] db_with_sample_authors: (Dat
 #[tokio::test]
 async fn test_upsert_mixed_new_and_existing(#[future] db_with_author: (DatabaseRouter, Author)) {
     let (db, existing_author) = db_with_author;
-    
+
     let authors = vec![
         Author {
             id: existing_author.id,
@@ -591,7 +593,7 @@ async fn test_upsert_mixed_new_and_existing(#[future] db_with_author: (DatabaseR
             updated_at: chrono::Utc::now().fixed_offset(),
         },
     ];
-    
+
     Author::objects(&db)
         .upsert_many(authors)
         .on_conflict(Author::Id)
@@ -599,14 +601,14 @@ async fn test_upsert_mixed_new_and_existing(#[future] db_with_author: (DatabaseR
         .execute()
         .await
         .unwrap();
-    
+
     let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 2);
-    
+
     let updated = Author::objects(&db).get(existing_author.id).await.unwrap();
     assert_eq!(updated.name, "Updated Existing");
     assert_eq!(updated.age, existing_author.age + 10);
-    
+
     let new = Author::objects(&db).get(888).await.unwrap();
     assert_eq!(new.name, "New Author");
 }

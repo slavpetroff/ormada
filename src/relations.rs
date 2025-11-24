@@ -407,6 +407,62 @@ where
         Ok(result.is_some())
     }
 
+    /// Apply limit to the queryset before loading relations
+    pub fn limit(mut self, limit: u64) -> Self {
+        use sea_orm::QuerySelect;
+        self.select = self.select.limit(limit);
+        self
+    }
+
+    /// Apply offset to the queryset before loading relations
+    pub fn offset(mut self, offset: u64) -> Self {
+        use sea_orm::QuerySelect;
+        self.select = self.select.offset(offset);
+        self
+    }
+
+    /// Apply filter to the queryset before loading relations
+    pub fn filter(mut self, condition: impl Into<sea_orm::sea_query::SimpleExpr>) -> Self {
+        use sea_orm::QueryFilter;
+        self.select = self.select.filter(condition.into());
+        self
+    }
+
+    /// Exclude records matching the condition
+    pub fn exclude(mut self, condition: impl Into<sea_orm::Condition>) -> Self {
+        use sea_orm::QueryFilter;
+        let cond: sea_orm::Condition = condition.into();
+        self.select = self.select.filter(cond.not());
+        self
+    }
+
+    /// Order by ascending before loading relations
+    pub fn order_by_asc<Col>(mut self, column: Col) -> Self
+    where
+        Col: sea_orm::ColumnTrait,
+    {
+        use sea_orm::QueryOrder;
+        self.select = self.select.order_by_asc(column);
+        self
+    }
+
+    /// Order by descending before loading relations
+    pub fn order_by_desc<Col>(mut self, column: Col) -> Self
+    where
+        Col: sea_orm::ColumnTrait,
+    {
+        use sea_orm::QueryOrder;
+        self.select = self.select.order_by_desc(column);
+        self
+    }
+
+    /// Apply distinct to the queryset
+    pub fn distinct(mut self) -> Self {
+        use sea_orm::QuerySelect;
+        self.select = self.select.distinct();
+        self
+    }
+
     // Note: build_relation_graph removed - replaced by compile-time LoadRelations trait
 }
 

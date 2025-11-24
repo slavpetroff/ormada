@@ -396,7 +396,7 @@ async fn test_transaction_with_bulk_delete(
 #[tokio::test]
 async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
     let initial_count = Author::objects(&db).count().await.unwrap();
-    
+
     let result = tx!(db, |txn| async move {
         Author::objects(txn)
             .create(Author {
@@ -406,14 +406,14 @@ async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
                 ..Default::default()
             })
             .await?;
-        
+
         // Force error
         Err::<(), DjangoOrmError>(DjangoOrmError::Custom("Intentional error".to_string()))
     })
     .await;
-    
+
     assert!(result.is_err());
-    
+
     let final_count = Author::objects(&db).count().await.unwrap();
     assert_eq!(initial_count, final_count);
 }
@@ -435,7 +435,7 @@ async fn test_transaction_commit_only_on_success(#[future] db: DatabaseRouter) {
     })
     .await
     .unwrap();
-    
+
     // Verify committed
     let fetched = Author::objects(&db).get(author.id).await.unwrap();
     assert_eq!(fetched.name, "Success");
@@ -454,7 +454,7 @@ async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
                 ..Default::default()
             })
             .await?;
-        
+
         // Inner transaction that fails
         let inner_result = tx!(outer_txn, |inner_txn| async move {
             Author::objects(inner_txn)
@@ -465,19 +465,19 @@ async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
                     ..Default::default()
                 })
                 .await?;
-            
+
             Err::<(), DjangoOrmError>(DjangoOrmError::Custom("Inner fail".to_string()))
         })
         .await;
-        
+
         // Inner failed but outer continues
         assert!(inner_result.is_err());
-        
+
         Ok(outer_author)
     })
     .await
     .unwrap();
-    
+
     // Outer should be committed
     let count = Author::objects(&db).count().await.unwrap();
     assert_eq!(count, 1);
@@ -487,9 +487,11 @@ async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_transaction_with_aggregation(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_transaction_with_aggregation(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
-    
+
     let (count, max_age) = tx!(db, |txn| async move {
         let count = Author::objects(txn).count().await?;
         let max = Author::objects(txn).aggregate_max(Author::Age).await?;
@@ -497,7 +499,7 @@ async fn test_transaction_with_aggregation(#[future] db_with_sample_authors: (Da
     })
     .await
     .unwrap();
-    
+
     assert_eq!(count, 3);
     assert_eq!(max_age, Some(35.0));
 }
@@ -505,9 +507,11 @@ async fn test_transaction_with_aggregation(#[future] db_with_sample_authors: (Da
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_transaction_with_filter_and_update(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_transaction_with_filter_and_update(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
-    
+
     let updated = tx!(db, |txn| async move {
         Author::objects(txn)
             .filter(Author::Name.eq("Alice"))
@@ -518,13 +522,9 @@ async fn test_transaction_with_filter_and_update(#[future] db_with_sample_author
     })
     .await
     .unwrap();
-    
+
     assert_eq!(updated, 1);
-    
-    let alice = Author::objects(&db)
-        .filter(Author::Name.eq("Alice"))
-        .first()
-        .await
-        .unwrap();
+
+    let alice = Author::objects(&db).filter(Author::Name.eq("Alice")).first().await.unwrap();
     assert_eq!(alice.age, 100);
 }

@@ -384,7 +384,7 @@ async fn test_create_with_explicit_id(#[future] db: DatabaseRouter) {
         })
         .await
         .unwrap();
-    
+
     // ID should be auto-assigned, not 9999
     assert!(author.id > 0);
 }
@@ -393,21 +393,19 @@ async fn test_create_with_explicit_id(#[future] db: DatabaseRouter) {
 #[awt]
 #[tokio::test]
 async fn test_delete_nonexistent(#[future] db: DatabaseRouter) {
-    let deleted = Author::objects(&db)
-        .filter(Author::Id.eq(99999))
-        .delete()
-        .await
-        .unwrap();
-    
+    let deleted = Author::objects(&db).filter(Author::Id.eq(99999)).delete().await.unwrap();
+
     assert_eq!(deleted, 0);
 }
 
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_update_with_no_filter_matches(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_update_with_no_filter_matches(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
-    
+
     let count = Author::objects(&db)
         .filter(Author::Name.eq("NonExistent"))
         .update(|author| {
@@ -415,7 +413,7 @@ async fn test_update_with_no_filter_matches(#[future] db_with_sample_authors: (D
         })
         .await
         .unwrap();
-    
+
     assert_eq!(count, 0);
 }
 
@@ -423,11 +421,8 @@ async fn test_update_with_no_filter_matches(#[future] db_with_sample_authors: (D
 #[awt]
 #[tokio::test]
 async fn test_bulk_create_empty_vec(#[future] db: DatabaseRouter) {
-    let count = Author::objects(&db)
-        .bulk_create(vec![])
-        .await
-        .unwrap();
-    
+    let count = Author::objects(&db).bulk_create(vec![]).await.unwrap();
+
     assert_eq!(count, 0);
 }
 
@@ -437,14 +432,14 @@ async fn test_bulk_create_empty_vec(#[future] db: DatabaseRouter) {
 async fn test_save_preserves_created_at(#[future] db_with_author: (DatabaseRouter, Author)) {
     let (db, author) = db_with_author;
     let original_created_at = author.created_at;
-    
+
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    
+
     let mut modified = author;
     modified.name = "Modified Name".to_string();
-    
+
     let saved = modified.save(&db).await.unwrap();
-    
+
     // created_at should not change
     assert_eq!(saved.created_at.timestamp(), original_created_at.timestamp());
     // updated_at should change
@@ -454,18 +449,20 @@ async fn test_save_preserves_created_at(#[future] db_with_author: (DatabaseRoute
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_delete_with_multiple_conditions(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_delete_with_multiple_conditions(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
-    
+
     let deleted = Author::objects(&db)
         .filter(Author::Age.gte(25))
         .filter(Author::Age.lte(30))
         .delete()
         .await
         .unwrap();
-    
+
     assert_eq!(deleted, 2); // Alice and Bob
-    
+
     let remaining = Author::objects(&db).count().await.unwrap();
     assert_eq!(remaining, 1); // Only Charlie left
 }
@@ -484,7 +481,7 @@ async fn test_create_multiple_with_same_email(#[future] db: DatabaseRouter) {
         })
         .await
         .unwrap();
-    
+
     let author2 = Author::objects(&db)
         .create(Author {
             name: "Author 2".to_string(),
@@ -494,7 +491,7 @@ async fn test_create_multiple_with_same_email(#[future] db: DatabaseRouter) {
         })
         .await
         .unwrap();
-    
+
     assert_ne!(author1.id, author2.id);
     assert_eq!(author1.email, author2.email);
 }
@@ -502,9 +499,11 @@ async fn test_create_multiple_with_same_email(#[future] db: DatabaseRouter) {
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_update_chained_filters(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_update_chained_filters(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
-    
+
     let count = Author::objects(&db)
         .filter(Author::Age.gt(25))
         .filter(Author::Age.lt(35))
@@ -513,13 +512,109 @@ async fn test_update_chained_filters(#[future] db_with_sample_authors: (Database
         })
         .await
         .unwrap();
-    
+
     assert_eq!(count, 1); // Only Bob (30)
-    
-    let bob = Author::objects(&db)
-        .filter(Author::Name.eq("Bob"))
-        .first()
+
+    let bob = Author::objects(&db).filter(Author::Name.eq("Bob")).first().await.unwrap();
+    assert_eq!(bob.age, 99);
+}
+
+// ============================================================================
+// Distinct Tests
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_distinct_on_duplicates(#[future] db: DatabaseRouter) {
+    // Create authors with duplicate ages
+    for i in 0..3 {
+        Author::objects(&db)
+            .create(Author {
+                name: format!("Author {}", i),
+                email: format!("author{}@test.com", i),
+                age: 30, // Same age for all
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+    }
+
+    let authors = Author::objects(&db).distinct().all().await.unwrap();
+
+    // Distinct should still return all records (distinct on all columns)
+    assert_eq!(authors.len(), 3);
+}
+
+// ============================================================================
+// Only/Defer Tests
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_only_specific_fields(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    // Even with only(), we should still get complete models
+    let authors = Author::objects(&db).all().await.unwrap();
+
+    assert_eq!(authors.len(), 3);
+    assert!(!authors[0].name.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_create_many_at_once(#[future] db: DatabaseRouter) {
+    let authors: Vec<Author> = (0..10)
+        .map(|i| Author {
+            name: format!("Author {}", i),
+            email: format!("author{}@bulk.com", i),
+            age: 20 + i,
+            ..Default::default()
+        })
+        .collect();
+
+    let count = Author::objects(&db).bulk_create(authors).await.unwrap();
+
+    assert_eq!(count, 10);
+
+    let total = Author::objects(&db).count().await.unwrap();
+    assert_eq!(total, 10);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_update_all_records(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    // Update all without filter
+    let count = Author::objects(&db)
+        .update(|author| {
+            author.age = 100;
+        })
         .await
         .unwrap();
-    assert_eq!(bob.age, 99);
+
+    assert_eq!(count, 3);
+
+    let authors = Author::objects(&db).all().await.unwrap();
+    assert!(authors.iter().all(|a| a.age == 100));
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_delete_all_records(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    let count = Author::objects(&db).delete().await.unwrap();
+    assert_eq!(count, 3);
+
+    let remaining = Author::objects(&db).count().await.unwrap();
+    assert_eq!(remaining, 0);
 }

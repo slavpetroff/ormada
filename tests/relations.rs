@@ -332,3 +332,244 @@ async fn test_multiple_books_same_author(
         assert_eq!(book_author.id, author.id);
     }
 }
+
+// ============================================================================
+// Select Related Tests
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_single(
+    #[future] db_with_author_with_books: (DatabaseRouter, (Author, Vec<Book>)),
+) {
+    let (db, (author, _books)) = db_with_author_with_books;
+
+    let books = Book::objects(&db)
+        .filter(Book::AuthorId.eq(author.id))
+        .select_related(relations![Author])
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 3);
+    for book in &books {
+        assert!(book.author.is_some());
+        assert_eq!(book.author.as_ref().unwrap().id, author.id);
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_with_filter(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .filter(Book::Published.eq(true))
+        .select_related(relations![Author])
+        .all()
+        .await
+        .unwrap();
+
+    assert!(books.len() > 0);
+    for book in &books {
+        assert!(book.published);
+        assert!(book.author.is_some());
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_count(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let count = Book::objects(&db).select_related(relations![Author]).count().await.unwrap();
+
+    assert_eq!(count, 6); // 3 authors * 2 books each
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_first(
+    #[future] db_with_author_with_books: (DatabaseRouter, (Author, Vec<Book>)),
+) {
+    let (db, _author_with_books) = db_with_author_with_books;
+
+    let book = Book::objects(&db).select_related(relations![Author]).first().await.unwrap();
+
+    assert!(book.author.is_some());
+}
+
+// ============================================================================
+// Relations Edge Cases
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_prefetch_on_empty_queryset(#[future] db: DatabaseRouter) {
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
+
+    assert_eq!(books.len(), 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_on_empty_queryset(#[future] db: DatabaseRouter) {
+    let books = Book::objects(&db).select_related(relations![Author]).all().await.unwrap();
+
+    assert_eq!(books.len(), 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_prefetch_with_limit(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .prefetch_related(relations![Author])
+        .limit(3)
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 3);
+    for book in &books {
+        assert!(book.author.is_some());
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_prefetch_with_limit_offset(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .prefetch_related(relations![Author])
+        .limit(10)
+        .offset(2)
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 4); // 6 total - 2 offset
+    for book in &books {
+        assert!(book.author.is_some());
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_prefetch_with_filter_after(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .prefetch_related(relations![Author])
+        .filter(Book::Published.eq(true))
+        .all()
+        .await
+        .unwrap();
+
+    assert!(books.len() > 0);
+    for book in &books {
+        assert!(book.published);
+        assert!(book.author.is_some());
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_ordering(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .select_related(relations![Author])
+        .order_by_desc(Book::Price)
+        .limit(3)
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 3);
+    for i in 0..books.len() - 1 {
+        assert!(books[i].price >= books[i + 1].price);
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_prefetch_exclude(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .prefetch_related(relations![Author])
+        .exclude(Book::Published.eq(false))
+        .all()
+        .await
+        .unwrap();
+
+    assert!(books.len() > 0);
+    for book in &books {
+        assert!(book.published);
+        assert!(book.author.is_some());
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_related_exists(
+    #[future] db_with_author_with_books: (DatabaseRouter, (Author, Vec<Book>)),
+) {
+    let (db, (author, _books)) = db_with_author_with_books;
+
+    let exists = Book::objects(&db)
+        .select_related(relations![Author])
+        .filter(Book::AuthorId.eq(author.id))
+        .exists()
+        .await
+        .unwrap();
+
+    assert!(exists);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_prefetch_distinct(
+    #[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>),
+) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+
+    let books = Book::objects(&db)
+        .prefetch_related(relations![Author])
+        .distinct()
+        .all()
+        .await
+        .unwrap();
+
+    assert_eq!(books.len(), 6);
+}
