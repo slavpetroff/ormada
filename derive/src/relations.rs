@@ -14,7 +14,7 @@ pub struct RelationInfo {
 
 /// Parse relation information from django attributes
 ///
-/// Looks for #[django(relations(field = "path::to::Entity", ...))]
+/// Looks for `#[django(relations(field = "path::to::Entity", ...))]`
 pub fn parse_relations(input: &DeriveInput) -> Vec<RelationInfo> {
     let mut relations = Vec::new();
 
@@ -64,7 +64,7 @@ pub fn parse_relations(input: &DeriveInput) -> Vec<RelationInfo> {
     relations
 }
 
-/// Generate ModelWithRelations struct
+/// Generate `ModelWithRelations` struct
 pub fn generate_model_with_relations(
     fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
     relations: &[RelationInfo],
@@ -159,7 +159,7 @@ pub fn generate_model_with_relations(
     }
 }
 
-/// Generate From<Model> for ModelWithRelations
+/// Generate `From<Model>` for `ModelWithRelations`
 ///
 /// This generates a simple From impl that creates an empty graph
 /// Primarily used for testing and simple cases
@@ -196,7 +196,7 @@ pub fn generate_from_impl(
     }
 }
 
-/// Generate WithRelationsTrait implementation
+/// Generate `WithRelationsTrait` implementation
 ///
 /// ALWAYS generates the trait impl, even for entities without relations
 /// This is needed so accessor methods can call the trait method on related entities
@@ -274,7 +274,7 @@ pub fn generate_trait_impl(relations: &[RelationInfo], fields: &[&syn::Field]) -
     }
 }
 
-/// Generate HasRelation trait implementations
+/// Generate `HasRelation` trait implementations
 pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
     if relations.is_empty() {
         return quote! {};

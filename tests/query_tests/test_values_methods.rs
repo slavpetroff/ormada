@@ -281,6 +281,6 @@ async fn test_values_list_single_vs_multiple() {
     assert_eq!(single.len(), single_array.len());
 
     // Flat should be strings, non-flat should be arrays
-    assert!(single[0].is_string());
-    assert!(single_array[0].is_array());
+    assert!(single.get(0).unwrap().is_string());
+    assert!(single_array.get(0).unwrap().is_array());
 }

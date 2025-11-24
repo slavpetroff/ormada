@@ -25,6 +25,22 @@ rustc-hash = "2.1.1"
 default = ["derive"]
 derive = ["seaorm-django-derive"]
 
+[lints.clippy]
+# Forbid panic-inducing methods in production code
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+# Also forbid other risky patterns
+indexing_slicing = "warn"
+# Encourage better error handling
+unwrap_in_result = "warn"
+# Require handling Results (especially for writes)
+unused_must_use = "warn"
+
+[lints.rust]
+# Forbid unused results at the Rust level
+unused_must_use = "deny"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 sea-orm = { workspace = true, features = ["sqlx-sqlite", "runtime-tokio-native-tls"] }

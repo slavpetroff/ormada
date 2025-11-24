@@ -30,12 +30,14 @@ pub use book::Book;
 /// Create a test database connection (not wrapped in router)
 async fn setup_test_connection() -> DatabaseConnection {
     let db = Database::connect("sqlite::memory:").await.expect("Failed to connect");
-    
+
     // Create tables using a temporary router
     let temp_router = DatabaseRouter::new_single(db.clone());
-    Author::create_table(&temp_router).await.expect("Failed to create authors table");
+    Author::create_table(&temp_router)
+        .await
+        .expect("Failed to create authors table");
     Book::create_table(&temp_router).await.expect("Failed to create books table");
-    
+
     db
 }
 

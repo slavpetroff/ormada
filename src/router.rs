@@ -37,12 +37,12 @@
 //! let reloaded = Book::objects(&router).get(book.id).await?;  // Uses primary!
 //! ```
 
+use async_trait::async_trait;
 use sea_orm::{
     AccessMode, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, DbErr,
-    ExecResult, IsolationLevel, QueryResult, Statement, StatementBuilder,
-    TransactionError, TransactionTrait,
+    ExecResult, IsolationLevel, QueryResult, Statement, StatementBuilder, TransactionError,
+    TransactionTrait,
 };
-use async_trait::async_trait;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -348,7 +348,9 @@ impl TransactionTrait for DatabaseRouter {
         T: Send,
         E: Send + std::fmt::Debug + std::fmt::Display,
     {
-        self.primary.transaction_with_config(callback, isolation_level, access_mode).await
+        self.primary
+            .transaction_with_config(callback, isolation_level, access_mode)
+            .await
     }
 }
 
@@ -363,10 +365,10 @@ impl crate::transaction::AtomicExt for DatabaseRouter {
         T: Send,
     {
         self.begin_transaction().await;
-        
+
         // Use the primary connection for the actual transaction
         let result = self.primary.atomic(f).await;
-        
+
         self.end_transaction().await;
         result
     }

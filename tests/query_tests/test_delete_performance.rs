@@ -49,7 +49,7 @@ async fn test_delete_single_record() {
 async fn test_update_with_select_for_update() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
-    let initial_age = authors[0].age;
+    let _initial_age = authors[0].age;
 
     // Update should use SELECT FOR UPDATE
     let count = Author::objects(&db)

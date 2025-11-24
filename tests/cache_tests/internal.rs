@@ -3,18 +3,19 @@
 //! Tests for the cache module's internal functions
 
 use super::common::fixtures::simple_item;
+use super::common::fixtures::simple_item::SimpleItem;
 use super::common::test_helpers::*;
 use seaorm_django::prelude::*;
 
 #[tokio::test]
 async fn test_cache_populated_on_first_all() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    let db = setup_test_db().await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let queryset = simple_item::Entity::objects(&db);
+    let queryset = SimpleItem::objects(&db);
 
     // First call populates cache
     let results = queryset.all().await.unwrap();
@@ -28,14 +29,14 @@ async fn test_cache_populated_on_first_all() {
 #[tokio::test]
 async fn test_cache_not_shared_between_different_queries() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let query1 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.lt(25));
+    let query1 = SimpleItem::objects(&db).filter(SimpleItem::Value.lt(25));
 
-    let query2 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.gte(25));
+    let query2 = SimpleItem::objects(&db).filter(SimpleItem::Value.gte(25));
 
     // Populate both caches
     let results1 = query1.all().await.unwrap();
@@ -55,17 +56,17 @@ async fn test_cache_not_shared_between_different_queries() {
 #[tokio::test]
 async fn test_builder_methods_create_new_queryset() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let base = simple_item::Entity::objects(&db);
+    let base = SimpleItem::objects(&db);
 
     // Each builder method should create a new QuerySet with new cache
-    let filtered = base.filter(simple_item::Column::Value.lt(50));
+    let filtered = base.filter(SimpleItem::Value.lt(50));
     let limited = filtered.limit(10);
-    let ordered = limited.order_by_asc(simple_item::Column::Value);
+    let ordered = limited.order_by_asc(SimpleItem::Value);
 
     // All should execute independently
     let base_results = base.all().await.unwrap();
@@ -82,12 +83,12 @@ async fn test_builder_methods_create_new_queryset() {
 #[tokio::test]
 async fn test_first_without_prior_cache() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let queryset = simple_item::Entity::objects(&db).order_by_asc(simple_item::Column::Value);
+    let queryset = SimpleItem::objects(&db).order_by_asc(SimpleItem::Value);
 
     // Call first() without calling all() first
     let first = queryset.first().await.unwrap();
@@ -97,15 +98,12 @@ async fn test_first_without_prior_cache() {
 #[tokio::test]
 async fn test_get_without_cache() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
-    let item = simple_item::Entity::objects(&db)
-        .create(simple_item::Model { id: 0, value: 42 })
-        .await
-        .unwrap();
+    let item = SimpleItem::objects(&db).create(SimpleItem { id: 0, value: 42 }).await.unwrap();
 
     // Get by ID (doesn't use cache)
-    let retrieved = simple_item::Entity::objects(&db).get(item.id).await.unwrap();
+    let retrieved = SimpleItem::objects(&db).get(item.id).await.unwrap();
 
     assert_eq!(retrieved.value, 42);
 }
@@ -113,12 +111,12 @@ async fn test_get_without_cache() {
 #[tokio::test]
 async fn test_count_independent_of_cache() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(50);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let queryset = simple_item::Entity::objects(&db);
+    let queryset = SimpleItem::objects(&db);
 
     // Count doesn't populate cache
     let count = queryset.count().await.unwrap();
@@ -132,12 +130,12 @@ async fn test_count_independent_of_cache() {
 #[tokio::test]
 async fn test_exists_independent_of_cache() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(10);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let queryset = simple_item::Entity::objects(&db);
+    let queryset = SimpleItem::objects(&db);
 
     // Exists doesn't populate cache
     let exists = queryset.exists().await.unwrap();
@@ -151,16 +149,16 @@ async fn test_exists_independent_of_cache() {
 #[tokio::test]
 async fn test_cache_with_complex_query_chain() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(200);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
     // Complex chain
-    let queryset = simple_item::Entity::objects(&db)
-        .filter(simple_item::Column::Value.gte(50))
-        .filter(simple_item::Column::Value.lt(150))
-        .order_by_desc(simple_item::Column::Value)
+    let queryset = SimpleItem::objects(&db)
+        .filter(SimpleItem::Value.gte(50))
+        .filter(SimpleItem::Value.lt(150))
+        .order_by_desc(SimpleItem::Value)
         .limit(20)
         .offset(10);
 
@@ -182,19 +180,19 @@ async fn test_cache_with_complex_query_chain() {
 #[tokio::test]
 async fn test_cache_cleared_on_query_modification() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let base = simple_item::Entity::objects(&db);
+    let base = SimpleItem::objects(&db);
 
     // Populate base cache
     let base_results = base.all().await.unwrap();
     assert_eq!(base_results.len(), 100);
 
     // Modify query - creates new QuerySet with new cache
-    let modified = base.filter(simple_item::Column::Value.lt(50));
+    let modified = base.filter(SimpleItem::Value.lt(50));
     let modified_results = modified.all().await.unwrap();
     assert_eq!(modified_results.len(), 50);
 
@@ -206,16 +204,16 @@ async fn test_cache_cleared_on_query_modification() {
 #[tokio::test]
 async fn test_multiple_concurrent_querysets() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
     // Create multiple querysets
-    let qs1 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.lt(25));
-    let qs2 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.between(25, 50));
-    let qs3 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.between(51, 75));
-    let qs4 = simple_item::Entity::objects(&db).filter(simple_item::Column::Value.gt(75));
+    let qs1 = SimpleItem::objects(&db).filter(SimpleItem::Value.lt(25));
+    let qs2 = SimpleItem::objects(&db).filter(SimpleItem::Value.between(25, 50));
+    let qs3 = SimpleItem::objects(&db).filter(SimpleItem::Value.between(51, 75));
+    let qs4 = SimpleItem::objects(&db).filter(SimpleItem::Value.gt(75));
 
     // Execute all
     let r1 = qs1.all().await.unwrap();
@@ -243,12 +241,12 @@ async fn test_multiple_concurrent_querysets() {
 #[tokio::test]
 async fn test_offset_creates_new_cache() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     let items = simple_item::sample_items(100);
-    simple_item::Entity::objects(&db).bulk_create(items).await.unwrap();
+    SimpleItem::objects(&db).bulk_create(items).await.unwrap();
 
-    let base = simple_item::Entity::objects(&db).order_by_asc(simple_item::Column::Value);
+    let base = SimpleItem::objects(&db).order_by_asc(SimpleItem::Value);
 
     let page1 = base.limit(10);
     let page2 = base.limit(10).offset(10);
@@ -266,19 +264,16 @@ async fn test_offset_creates_new_cache() {
 #[tokio::test]
 async fn test_distinct_creates_new_cache() {
     let db = super::common::test_helpers::setup_test_db().await;
-    simple_item::create_table(&db).await;
+    SimpleItem::create_table(&db).await;
 
     // Insert with duplicates
     for i in 0..5 {
         for _ in 0..2 {
-            simple_item::Entity::objects(&db)
-                .create(simple_item::Model { id: 0, value: i })
-                .await
-                .unwrap();
+            SimpleItem::objects(&db).create(SimpleItem { id: 0, value: i }).await.unwrap();
         }
     }
 
-    let all_qs = simple_item::Entity::objects(&db);
+    let all_qs = SimpleItem::objects(&db);
     let distinct_qs = all_qs.distinct();
 
     let all_results = all_qs.all().await.unwrap();

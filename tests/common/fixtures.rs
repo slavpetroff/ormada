@@ -16,11 +16,7 @@ pub mod simple_item {
     }
     impl AsyncLifecycleHooks for Model {}
 
-    pub async fn create_table(db: &DatabaseRouter) {
-        Model::create_table(db).await.unwrap();
-    }
-
-    pub fn sample_items(count: usize) -> Vec<Model> {
+    pub fn sample_items(count: usize) -> Vec<SimpleItem> {
         (0..count).map(|i| Model { id: 0, value: i as i32 }).collect()
     }
 }

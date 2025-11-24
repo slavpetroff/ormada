@@ -1,10 +1,10 @@
 //! Test ergonomic lifecycle hooks with #[django_hooks] macro
 
+use crate::common::test_helpers::setup_test_db;
 use seaorm_django::prelude::*;
 use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::Mutex;
-use crate::common::test_helpers::setup_test_db;
 
 // Test model
 #[django_model(table = "ergonomic_users")]

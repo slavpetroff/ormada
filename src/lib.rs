@@ -1,6 +1,13 @@
 //! # seaorm-django
 //!
 //! **Django-inspired ergonomic ORM for SeaORM with zero-cost abstractions**
+
+// Allow test code to use unwrap/expect for clarity
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used))]
+#![cfg_attr(test, allow(clippy::panic))]
+#![cfg_attr(test, allow(unused_must_use))]
+#![cfg_attr(test, allow(non_snake_case))]
 //!
 //! This library brings Django's elegant ORM API to Rust, providing:
 //! - **🚀 Zero-cost abstractions**: Compile-time typed relations, no runtime overhead

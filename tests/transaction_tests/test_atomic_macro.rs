@@ -6,10 +6,7 @@ use crate::common::*;
 
 // Test macro with explicit concrete type (Clean UX for end users)
 #[atomic(db)]
-async fn create_author_atomic(
-    db: &DatabaseRouter,
-    name: String,
-) -> Result<Author, DjangoOrmError> {
+async fn create_author_atomic(db: &DatabaseRouter, name: String) -> Result<Author, DjangoOrmError> {
     // This uses Entity::objects(db).create which handles auto fields
     let author = Author::objects(db)
         .create(Author {

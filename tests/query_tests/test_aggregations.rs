@@ -328,7 +328,7 @@ async fn test_aggregations_comprehensive() {
     let db = setup_test_db().await;
 
     let author = create_test_author(&db).await;
-    let prices = vec![1000, 2000, 3000, 4000, 5000];
+    let prices = [1000, 2000, 3000, 4000, 5000];
 
     for (i, price) in prices.iter().enumerate() {
         Book::objects(&db)

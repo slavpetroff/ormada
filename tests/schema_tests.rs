@@ -1,3 +1,9 @@
+// Integration tests are allowed to use unwrap/expect for clarity
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+#![allow(unused_must_use)]
+
 use seaorm_django::prelude::*;
 
 mod common;
@@ -24,10 +30,7 @@ async fn test_create_table_works() {
 
     // Verify it works by inserting data
     test_create_table_mod::CreatedTable::objects(&db)
-        .create(test_create_table_mod::Model {
-            id: 0,
-            name: "Test".to_string(),
-        })
+        .create(test_create_table_mod::Model { id: 0, name: "Test".to_string() })
         .await
         .unwrap();
 
@@ -37,7 +40,7 @@ async fn test_create_table_works() {
 
     // Test drop
     test_create_table_mod::CreatedTable::drop_table(&db).await.unwrap();
-    
+
     // Verify drop
     let result = test_create_table_mod::CreatedTable::objects(&db).count().await;
     assert!(result.is_err());

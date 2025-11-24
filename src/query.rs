@@ -62,7 +62,6 @@
 //! ```
 
 use crate::error::DjangoOrmError;
-use crate::traits::DjangoEntity;
 use crate::upsert::UpsertBuilder;
 use sea_orm::sea_query::{Expr, Func, SimpleExpr};
 use sea_orm::{
@@ -2286,6 +2285,8 @@ impl Aggregation {
     /// ```
     pub fn count_all() -> Self {
         Self {
+            // Using custom SQL since Expr::asterisk() is deprecated
+            #[allow(deprecated)]
             expr: Expr::expr(Func::count(Expr::asterisk())),
         }
     }

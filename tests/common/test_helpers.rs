@@ -1,7 +1,7 @@
 //! Common test utilities and helper functions
-//! 
+//!
 //! **SINGLE SOURCE OF TRUTH FOR ALL TEST SETUP**
-//! 
+//!
 //! All tests MUST use these helpers instead of creating their own.
 
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
@@ -18,7 +18,7 @@ use seaorm_django::prelude::*;
 /// # Example
 /// ```ignore
 /// use crate::common::test_helpers::setup_test_db;
-/// 
+///
 /// #[tokio::test]
 /// async fn my_test() {
 ///     let db = setup_test_db().await;
@@ -41,14 +41,14 @@ pub async fn setup_test_db() -> DatabaseRouter {
 /// ```ignore
 /// use crate::common::test_helpers::setup_test_db_with_table;
 /// use crate::common::Author;
-/// 
+///
 /// #[tokio::test]
 /// async fn my_test() {
 ///     let db = setup_test_db_with_table::<Author>().await;
 ///     // Author table is already created
 /// }
 /// ```
-pub async fn setup_test_db_with_table<M>() -> DatabaseRouter 
+pub async fn setup_test_db_with_table<M>() -> DatabaseRouter
 where
     M: HasTableCreation,
 {
@@ -58,7 +58,7 @@ where
 }
 
 /// Marker trait for models that support table creation
-/// 
+///
 /// This is automatically implemented by models with `#[django_model]`
 pub trait HasTableCreation {
     async fn create_table(db: &DatabaseRouter) -> Result<(), sea_orm::DbErr>;

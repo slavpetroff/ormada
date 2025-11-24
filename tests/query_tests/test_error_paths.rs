@@ -65,7 +65,12 @@ async fn test_offset_all() {
     let db = setup_test_db().await;
     let authors = create_sample_authors(&db).await;
 
-    let results = Author::objects(&db).limit(100).offset(authors.len() as u64).all().await.unwrap();
+    let results = Author::objects(&db)
+        .limit(100)
+        .offset(authors.len() as u64)
+        .all()
+        .await
+        .unwrap();
 
     assert_eq!(results.len(), 0);
 }
@@ -81,8 +86,8 @@ async fn test_count_with_limit_and_offset() {
 
     let count_limited = Author::objects(&db).limit(1).offset(1).count().await.unwrap();
 
-    // Verify count was calculated
-    assert!(count_limited >= 0);
+    // Count is always >= 0 (u64), just verify it doesn't panic
+    assert!(count_limited <= 3);
 }
 
 // ============================================================================
@@ -225,7 +230,7 @@ async fn test_count_after_complex_chain() {
         .unwrap();
 
     // The count should match the total since all authors have ID > 0
-    assert!(count >= 0);
+    assert!(count <= 10); // Just verify it's reasonable
 }
 
 // ============================================================================

@@ -9,6 +9,17 @@ license = "MIT OR Apache-2.0"
 [lib]
 proc-macro = true
 
+# Proc macros are allowed to panic on invalid input - this is standard practice
+[lints.clippy]
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+too_many_lines = "allow"
+collection_is_never_read = "allow"
+
+[lints.rust]
+unused_must_use = "allow"
+
 [dependencies]
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"

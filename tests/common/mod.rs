@@ -8,6 +8,12 @@
 //! - Test data factories
 //!
 //! # Usage
+
+// Integration tests are allowed to use unwrap/expect for clarity
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+#![allow(unused_must_use)]
 //!
 //! ## Using New Test Infrastructure
 //!
@@ -104,12 +110,8 @@ pub async fn setup_test_db() -> DatabaseRouter {
     let router = DatabaseRouter::new_single(db);
 
     // Create schema using new create_table interface
-    Author::create_table(&router)
-        .await
-        .expect("Failed to create authors table");
-    Book::create_table(&router)
-        .await
-        .expect("Failed to create books table");
+    Author::create_table(&router).await.expect("Failed to create authors table");
+    Book::create_table(&router).await.expect("Failed to create books table");
 
     router
 }

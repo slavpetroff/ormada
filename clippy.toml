@@ -4,14 +4,8 @@
 # Cognitive complexity threshold
 cognitive-complexity-threshold = 30
 
-# Disallowed methods - forbid dangerous operations
-disallowed-methods = [
-    { path = "std::option::Option::unwrap", reason = "Use `?` operator or proper error handling instead" },
-    { path = "std::result::Result::unwrap", reason = "Use `?` operator or proper error handling instead" },
-    { path = "std::option::Option::expect", reason = "Use `?` operator or proper error handling with context" },
-    { path = "std::result::Result::expect", reason = "Use `?` operator or proper error handling with context" },
-    { path = "std::panic::panic", reason = "Return errors instead of panicking" },
-]
+# Note: We use Cargo.toml [lints] instead of disallowed-methods here
+# This allows tests to use unwrap/expect while keeping production code strict
 
 # Type complexity threshold
 type-complexity-threshold = 250

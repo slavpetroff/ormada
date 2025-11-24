@@ -272,7 +272,6 @@ async fn test_book_with_invalid_author_id() {
 
     let created = Book::objects(&db).create(orphan_book).await.unwrap();
 
-
     // Fetch with prefetch_related
     use crate::common::book::Column;
     let book = Book::objects(&db)

@@ -3,13 +3,9 @@
 //! Verifies Django-like automatic caching with concurrency safety
 
 use super::common::test_helpers::*;
-use sea_orm::DatabaseConnection;
 use seaorm_django::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Barrier;
-
-// Re-export for convenience
-use cache_test_item::{Column, Entity, Model};
 
 // Define model in the test module
 mod cache_test_item {
@@ -29,37 +25,26 @@ mod cache_test_item {
     impl AsyncLifecycleHooks for CacheTestItem {}
 }
 
-// Helper to create table for this specific test
-async fn create_cache_test_table(db: &DatabaseRouter) {
-    super::common::test_helpers::execute_sql(
-        db,
-        "CREATE TABLE IF NOT EXISTS cache_test_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            value INTEGER NOT NULL,
-            data TEXT NOT NULL
-        )",
-    )
-    .await;
-}
-
 #[tokio::test]
 async fn test_query_caching_basic() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..100)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
     // Create QuerySet
-    let queryset = Entity::objects(&db).filter(Column::Value.lt(10));
+    let queryset = CacheTestItem::objects(&db).filter(CacheTestItem::Value.lt(10));
 
     // First call - should hit DB
     let results1 = queryset.all().await.expect("First query failed");
@@ -76,26 +61,27 @@ async fn test_query_caching_basic() {
 
 #[tokio::test]
 async fn test_separate_caches_for_different_queries() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    use cache_test_item::CacheTestItem;
+    let db = setup_test_db().await;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..100)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
     // Create base QuerySet
-    let base = Entity::objects(&db);
+    let base = CacheTestItem::objects(&db);
 
     // Different queries should have separate caches
-    let query1 = base.filter(Column::Value.lt(10));
-    let query2 = base.filter(Column::Value.gte(10));
+    let query1 = base.filter(CacheTestItem::Value.lt(10));
+    let query2 = base.filter(CacheTestItem::Value.gte(10));
 
     let results1 = query1.all().await.expect("Query 1 failed");
     let results2 = query2.all().await.expect("Query 2 failed");
@@ -113,21 +99,22 @@ async fn test_separate_caches_for_different_queries() {
 
 #[tokio::test]
 async fn test_cache_with_first_method() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..10)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset = Entity::objects(&db).order_by_asc(Column::Value);
+    let queryset = CacheTestItem::objects(&db).order_by_asc(CacheTestItem::Value);
 
     // First call should populate cache
     let _all = queryset.all().await.expect("all() failed");
@@ -139,21 +126,22 @@ async fn test_cache_with_first_method() {
 
 #[tokio::test]
 async fn test_concurrent_cache_access() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..100)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset = Entity::objects(&db).filter(Column::Value.lt(50));
+    let queryset = CacheTestItem::objects(&db).filter(CacheTestItem::Value.lt(50));
 
     // Populate cache
     let _ = queryset.all().await.expect("Initial query failed");
@@ -189,21 +177,22 @@ async fn test_concurrent_cache_access() {
 
 #[tokio::test]
 async fn test_modified_query_creates_new_cache() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..100)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let base = Entity::objects(&db).filter(Column::Value.lt(50));
+    let base = CacheTestItem::objects(&db).filter(CacheTestItem::Value.lt(50));
 
     // Populate base cache
     let base_results = base.all().await.expect("Base query failed");
@@ -225,21 +214,22 @@ async fn test_modified_query_creates_new_cache() {
 
 #[tokio::test]
 async fn test_cache_with_count() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..100)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset = Entity::objects(&db).filter(Column::Value.lt(25));
+    let queryset = CacheTestItem::objects(&db).filter(CacheTestItem::Value.lt(25));
 
     // count() doesn't populate the all() cache
     let count = queryset.count().await.expect("count() failed");
@@ -252,12 +242,13 @@ async fn test_cache_with_count() {
 
 #[tokio::test]
 async fn test_cache_with_exists() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed one item
-    Entity::objects(&db)
-        .create(Model {
+    CacheTestItem::objects(&db)
+        .create(CacheTestItem {
             id: 0,
             value: 42,
             data: "Test".to_string(),
@@ -265,7 +256,7 @@ async fn test_cache_with_exists() {
         .await
         .expect("Failed to create");
 
-    let queryset = Entity::objects(&db).filter(Column::Value.eq(42));
+    let queryset = CacheTestItem::objects(&db).filter(CacheTestItem::Value.eq(42));
 
     // exists() should work
     let exists = queryset.exists().await.expect("exists() failed");
@@ -278,21 +269,22 @@ async fn test_cache_with_exists() {
 
 #[tokio::test]
 async fn test_queryset_clone_shares_cache() {
-    let db = super::common::test_helpers::setup_test_db().await;
-    create_cache_test_table(&db).await;
+    let db = setup_test_db().await;
+    use cache_test_item::CacheTestItem;
+    CacheTestItem::create_table(&db).await.unwrap();
 
     // Seed data
     let items: Vec<_> = (0..10)
-        .map(|i| Model {
+        .map(|i| CacheTestItem {
             id: 0,
             value: i,
             data: format!("Item {}", i),
         })
         .collect();
 
-    Entity::objects(&db).bulk_create(items).await.expect("Failed to seed");
+    CacheTestItem::objects(&db).bulk_create(items).await.expect("Failed to seed");
 
-    let queryset1 = Entity::objects(&db).filter(Column::Value.lt(5));
+    let queryset1 = CacheTestItem::objects(&db).filter(CacheTestItem::Value.lt(5));
 
     // Clone the QuerySet
     let queryset2 = queryset1.clone();

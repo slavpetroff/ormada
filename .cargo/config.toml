@@ -2,14 +2,19 @@
 # Build configuration
 
 [target.'cfg(all())']
-# Clippy lints configuration
+# Clippy lints configuration for production code
+# Integration tests use #![allow(...)] in tests/common/mod.rs
+# Proc macros use #![allow(...)] in derive/src/lib.rs
 rustflags = [
-    # Deny common mistakes
+    # Deny common mistakes in production code
     "-Dclippy::unwrap_used",
     "-Dclippy::expect_used",
     "-Dclippy::panic",
     "-Dclippy::todo",
     "-Dclippy::unimplemented",
+    
+    # Deny unused results (especially for writes/IO)
+    "-Dunused_must_use",
     
     # Deny unsafe code (except in explicitly marked modules)
     "-Funsafe_code",
