@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, RwLock};
 
-/// Wrapper around DatabaseConnection that provides query result caching.
+/// Wrapper around `DatabaseConnection` that provides query result caching.
 ///
 /// All queries executed through this connection are cached in memory.
 /// Subsequent identical queries return cached results without hitting the database.
@@ -41,7 +41,7 @@ use std::sync::{Arc, RwLock};
 ///
 /// # Safety
 ///
-/// - **Thread-safe:** Uses RwLock for concurrent access
+/// - **Thread-safe:** Uses `RwLock` for concurrent access
 /// - **No stale data:** Cache cleared on drop
 /// - **No race conditions:** Scoped to single connection wrapper
 pub struct CachedConnection {
@@ -72,7 +72,7 @@ impl CachedConnection {
             let cache_read = self
                 .cache
                 .read()
-                .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {}", e)))?;
+                .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {e}")))?;
             if let Some(cached) = cache_read.get(&hash) {
                 return Ok(Arc::clone(cached));
             }
@@ -87,7 +87,7 @@ impl CachedConnection {
             let mut cache_write = self
                 .cache
                 .write()
-                .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {}", e)))?;
+                .map_err(|e| DbErr::Custom(format!("Cache lock poisoned: {e}")))?;
             cache_write.insert(hash, Arc::clone(&result_arc));
         }
 
@@ -95,7 +95,7 @@ impl CachedConnection {
     }
 
     /// Get the inner database connection.
-    pub fn inner(&self) -> &DatabaseConnection {
+    pub const fn inner(&self) -> &DatabaseConnection {
         &self.inner
     }
 
@@ -147,7 +147,7 @@ impl std::ops::Deref for CachedConnection {
     }
 }
 
-/// Extension trait to enable query caching on any ConnectionTrait.
+/// Extension trait to enable query caching on any `ConnectionTrait`.
 pub trait ConnectionCacheExt {
     /// Wrap this connection with query result caching.
     ///

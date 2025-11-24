@@ -58,9 +58,9 @@ use crate::query::QuerySet;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QuerySelect};
 use std::collections::HashMap;
 
-/// Extension trait for aggregation operations on QuerySet
+/// Extension trait for aggregation operations on `QuerySet`
 pub trait AggregateExt<E: EntityTrait> {
-    /// Count records (Django's .count())
+    /// Count records (Django's .`count()`)
     ///
     /// Returns the number of records matching the query.
     ///
@@ -156,8 +156,8 @@ struct AggregateValueFloat {
     value: Option<f64>,
 }
 
-impl<'a, E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> AggregateExt<E>
-    for QuerySet<'a, E, C>
+impl<E: EntityTrait + crate::traits::DjangoEntity, C: ConnectionTrait> AggregateExt<E>
+    for QuerySet<'_, E, C>
 {
     async fn aggregate_count(self) -> Result<u64, DjangoOrmError> {
         // Use the existing count() method

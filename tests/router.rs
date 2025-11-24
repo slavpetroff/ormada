@@ -10,9 +10,9 @@ mod fixtures;
 
 use fixtures::*;
 use rstest::*;
+use sea_orm::{ConnectionTrait, Database};
 use seaorm_django::prelude::*;
-use seaorm_django::router::{DatabaseRouter, ConsistencyContext};
-use sea_orm::{Database, ConnectionTrait};
+use seaorm_django::router::{ConsistencyContext, DatabaseRouter};
 
 #[tokio::test]
 async fn test_router_with_replicas() {

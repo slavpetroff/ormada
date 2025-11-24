@@ -218,8 +218,8 @@ pub trait LifecycleHooks: Sized {
     }
 }
 
-/// Blanket implementation: AsyncLifecycleHooks IS LifecycleHooks
-/// This forwards all the AsyncLifecycleHooks methods to LifecycleHooks
+/// Blanket implementation: `AsyncLifecycleHooks` IS `LifecycleHooks`
+/// This forwards all the `AsyncLifecycleHooks` methods to `LifecycleHooks`
 impl<T> LifecycleHooks for T
 where
     T: AsyncLifecycleHooks,

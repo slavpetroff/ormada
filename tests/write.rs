@@ -297,8 +297,8 @@ async fn test_bulk_create(#[future] db: DatabaseRouter) {
 async fn test_bulk_create_performance(#[future] db: DatabaseRouter, #[case] count: usize) {
     let authors: Vec<Author> = (0..count)
         .map(|i| Author {
-            name: format!("Author {}", i),
-            email: format!("author{}@example.com", i),
+            name: format!("Author {i}"),
+            email: format!("author{i}@example.com"),
             age: 25 + (i as i32 % 50),
             ..Default::default()
         })
@@ -448,7 +448,7 @@ async fn test_delete_with_verification(
     #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
 ) {
     let (db, sample_authors) = db_with_sample_authors;
-    
+
     let count_before = Author::objects(&db).count().await.unwrap();
     assert_eq!(count_before, 3);
 
@@ -564,8 +564,8 @@ async fn test_distinct_on_duplicates(#[future] db: DatabaseRouter) {
     for i in 0..3 {
         Author::objects(&db)
             .create(Author {
-                name: format!("Author {}", i),
-                email: format!("author{}@test.com", i),
+                name: format!("Author {i}"),
+                email: format!("author{i}@test.com"),
                 age: 30, // Same age for all
                 ..Default::default()
             })
@@ -604,8 +604,8 @@ async fn test_only_specific_fields(
 async fn test_create_many_at_once(#[future] db: DatabaseRouter) {
     let authors: Vec<Author> = (0..10)
         .map(|i| Author {
-            name: format!("Author {}", i),
-            email: format!("author{}@bulk.com", i),
+            name: format!("Author {i}"),
+            email: format!("author{i}@bulk.com"),
             age: 20 + i,
             ..Default::default()
         })

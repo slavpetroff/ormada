@@ -8,10 +8,9 @@
 
 mod fixtures;
 
-use fixtures::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 use sea_orm::ConnectionTrait;
+use seaorm_django::prelude::*;
 use std::sync::Mutex;
 
 // Model with tracking hooks to verify they're called
@@ -34,7 +33,12 @@ pub mod tracked_author {
     pub static DELETE_HOOK_CALLED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
     impl AsyncLifecycleHooks for Model {
-        fn before_delete<C: sea_orm::ConnectionTrait>(&self, _db: &C) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), DjangoOrmError>> + Send + '_>> {
+        fn before_delete<C: sea_orm::ConnectionTrait>(
+            &self,
+            _db: &C,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), DjangoOrmError>> + Send + '_>,
+        > {
             Box::pin(async move {
                 DELETE_HOOK_CALLED.lock().unwrap().push(format!("before_delete:{}", self.name));
                 Ok(())
@@ -85,7 +89,7 @@ async fn test_delete_calls_before_delete_hook(#[future] db: DatabaseRouter) {
     // Verify before_delete hook was called
     let calls = tracked_author::DELETE_HOOK_CALLED.lock().unwrap();
     assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0], format!("before_delete:{}", author_name));
+    assert_eq!(calls[0], format!("before_delete:{author_name}"));
 }
 
 #[rstest]
@@ -106,10 +110,13 @@ async fn test_delete_hook_prevents_deletion_on_error(#[future] db: DatabaseRoute
         }
 
         impl AsyncLifecycleHooks for Model {
-            fn before_delete<C: sea_orm::ConnectionTrait>(&self, _db: &C) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), DjangoOrmError>> + Send + '_>> {
-                Box::pin(async move {
-                    Err(DjangoOrmError::Custom("Deletion blocked".into()))
-                })
+            fn before_delete<C: sea_orm::ConnectionTrait>(
+                &self,
+                _db: &C,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<(), DjangoOrmError>> + Send + '_>,
+            > {
+                Box::pin(async move { Err(DjangoOrmError::Custom("Deletion blocked".into())) })
             }
         }
     }

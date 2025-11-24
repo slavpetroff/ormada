@@ -101,7 +101,7 @@ pub async fn create_sample_authors(db: &DatabaseRouter) -> Vec<Author> {
 // Database Fixtures
 // ============================================================================
 
-/// Minimal database fixture - creates an empty in-memory SQLite database
+/// Minimal database fixture - creates an empty in-memory `SQLite` database
 ///
 /// Use this when you want to create your own tables.
 #[fixture]
@@ -114,7 +114,7 @@ pub async fn db_empty() -> DatabaseRouter {
     DatabaseRouter::new_single(db)
 }
 
-/// Primary database fixture - creates a fresh in-memory SQLite database
+/// Primary database fixture - creates a fresh in-memory `SQLite` database
 ///
 /// Base database fixture with tables created
 ///
@@ -227,7 +227,7 @@ pub async fn db_with_author(#[future] db: DatabaseRouter) -> (DatabaseRouter, Au
     (db, author)
 }
 
-/// Combined fixture: db with authors_with_books
+/// Combined fixture: db with `authors_with_books`
 ///
 /// Creates multiple authors with books in the same database instance.
 #[fixture]

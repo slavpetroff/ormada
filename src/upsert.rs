@@ -24,8 +24,8 @@ where
     E: EntityTrait,
     C: ConnectionTrait,
 {
-    /// Create a new UpsertBuilder
-    pub fn new(db: &'a C, models: Vec<E::Model>) -> Self {
+    /// Create a new `UpsertBuilder`
+    pub const fn new(db: &'a C, models: Vec<E::Model>) -> Self {
         Self {
             db,
             models,
@@ -77,8 +77,11 @@ where
 
         // Convert to ActiveModels using IntoActiveModel (NOT to_active_model_for_create)
         // For upsert, we want all fields Set (including ID) so they can be used in ON CONFLICT
-        let active_models: Vec<E::ActiveModel> =
-            self.models.into_iter().map(|model| model.into_active_model()).collect();
+        let active_models: Vec<E::ActiveModel> = self
+            .models
+            .into_iter()
+            .map(sea_orm::IntoActiveModel::into_active_model)
+            .collect();
 
         let mut query = E::insert_many(active_models);
 

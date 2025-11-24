@@ -17,8 +17,7 @@ pub fn validate_batch_size(size: Option<usize>) -> usize {
         Some(0) => DEFAULT_BATCH_SIZE,
         Some(s) if s > MAX_BATCH_SIZE => {
             eprintln!(
-                "Warning: batch_size {} exceeds maximum {}. Using {}",
-                s, MAX_BATCH_SIZE, MAX_BATCH_SIZE
+                "Warning: batch_size {s} exceeds maximum {MAX_BATCH_SIZE}. Using {MAX_BATCH_SIZE}"
             );
             MAX_BATCH_SIZE
         }
@@ -35,7 +34,7 @@ pub fn batch_vec<T: Clone>(items: Vec<T>, batch_size: usize) -> Vec<Vec<T>> {
         .into_iter()
         .collect::<Vec<_>>()
         .chunks(batch_size)
-        .map(|chunk| chunk.to_vec())
+        .map(<[T]>::to_vec)
         .collect()
 }
 

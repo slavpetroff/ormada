@@ -1,4 +1,4 @@
-//! Core Django-like Query API for SeaORM
+//! Core Django-like Query API for `SeaORM`
 //!
 //! This module provides ergonomic query building with zero duplication.
 //!
@@ -77,10 +77,10 @@ use tokio::sync::RwLock;
 
 /// Check if a database error is a unique constraint violation
 ///
-/// Used internally by get_or_create and update_or_create to detect
+/// Used internally by `get_or_create` and `update_or_create` to detect
 /// race conditions and retry the operation.
 ///
-/// This is a heuristic check that works across SQLite, PostgreSQL, and MySQL.
+/// This is a heuristic check that works across `SQLite`, `PostgreSQL`, and `MySQL`.
 fn is_unique_violation(err: &DbErr) -> bool {
     // Check the error message for common unique constraint keywords
     // This works across all database backends
@@ -103,8 +103,8 @@ fn is_unique_violation(err: &DbErr) -> bool {
 
 /// Extension trait for ergonomic column operations
 ///
-/// This trait adds Django-like methods to ANY SeaORM Column enum.
-/// Works directly on SeaORM's generated Column enum with zero duplication.
+/// This trait adds Django-like methods to ANY `SeaORM` Column enum.
+/// Works directly on `SeaORM`'s generated Column enum with zero duplication.
 pub trait ColumnExt: ColumnTrait {
     // ===== String Operations =====
 
@@ -199,16 +199,16 @@ pub trait ColumnExt: ColumnTrait {
 impl<T: ColumnTrait> ColumnExt for T {}
 
 // ============================================================================
-/// Main QuerySet structure (Django's QuerySet equivalent)
+/// Main `QuerySet` structure (Django's `QuerySet` equivalent)
 ///
 /// Provides chainable query building with automatic caching and lazy evaluation.
-/// All operations are lazy until a terminal method (.all(), .first(), etc.) is called.
+/// All operations are lazy until a terminal method (.`all()`, .`first()`, etc.) is called.
 ///
 /// **Caching Behavior (Django-like):**
 /// - First execution of `.all()`, `.first()`, etc. hits the database
-/// - Results are cached in the QuerySet instance
-/// - Subsequent calls on the SAME QuerySet reuse cached results
-/// - Building new queries (`.filter()`, `.limit()`) creates new QuerySet with separate cache
+/// - Results are cached in the `QuerySet` instance
+/// - Subsequent calls on the SAME `QuerySet` reuse cached results
+/// - Building new queries (`.filter()`, `.limit()`) creates new `QuerySet` with separate cache
 ///
 /// **Concurrency Safety:**
 /// - Uses `Arc` for cheap cloning across async tasks
@@ -217,7 +217,7 @@ impl<T: ColumnTrait> ColumnExt for T {}
 ///
 /// # Type Parameters
 ///
-/// - `E`: The SeaORM Entity type
+/// - `E`: The `SeaORM` Entity type
 /// - `C`: The database connection type
 ///
 /// # Examples
@@ -241,7 +241,7 @@ pub struct QuerySet<'a, E: EntityTrait, C: ConnectionTrait> {
 }
 
 /// Soft delete filtering mode
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SoftDeleteMode {
     /// Exclude soft-deleted records (default)
     ExcludeDeleted,
@@ -251,7 +251,7 @@ pub enum SoftDeleteMode {
     OnlyDeleted,
 }
 
-/// Internal state for QuerySet (shared via Arc)
+/// Internal state for `QuerySet` (shared via Arc)
 pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
     pub(crate) db: &'a C,
     pub(crate) select: Select<E>,
@@ -261,14 +261,14 @@ pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
 }
 
 // Implement Clone for QuerySet (cheap Arc clone)
-impl<'a, E: EntityTrait, C: ConnectionTrait> Clone for QuerySet<'a, E, C> {
+impl<E: EntityTrait, C: ConnectionTrait> Clone for QuerySet<'_, E, C> {
     fn clone(&self) -> Self {
         Self { inner: Arc::clone(&self.inner) }
     }
 }
 
 impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
-    /// Create a new QuerySet
+    /// Create a new `QuerySet`
     pub fn new(db: &'a C) -> Self {
         Self {
             inner: Arc::new(QuerySetInner {
@@ -280,7 +280,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
     }
 
-    /// Create a new QuerySet with modified select (internal helper)
+    /// Create a new `QuerySet` with modified select (internal helper)
     fn with_select(&self, select: Select<E>) -> Self {
         Self {
             inner: Arc::new(QuerySetInner {
@@ -292,7 +292,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
     }
 
-    /// Create a new QuerySet with modified soft delete mode
+    /// Create a new `QuerySet` with modified soft delete mode
     fn with_soft_delete_mode(&self, mode: SoftDeleteMode) -> Self {
         Self {
             inner: Arc::new(QuerySetInner {
@@ -341,17 +341,17 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         select
     }
 
-    /// Filter records (Django's .filter())
+    /// Filter records (Django's .`filter()`)
     ///
-    /// Creates a new QuerySet with added filter. The new QuerySet has its own cache.
+    /// Creates a new `QuerySet` with added filter. The new `QuerySet` has its own cache.
     pub fn filter(&self, condition: impl Into<Condition>) -> Self {
         let new_select = self.inner.select.clone().filter(condition);
         self.with_select(new_select)
     }
 
-    /// Exclude records (Django's .exclude())
+    /// Exclude records (Django's .`exclude()`)
     ///
-    /// Creates a new QuerySet with added exclusion. The new QuerySet has its own cache.
+    /// Creates a new `QuerySet` with added exclusion. The new `QuerySet` has its own cache.
     pub fn exclude(&self, condition: impl Into<Condition>) -> Self {
         let cond: Condition = condition.into();
         let new_select = self.inner.select.clone().filter(cond.not());
@@ -391,7 +391,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         self.with_soft_delete_mode(SoftDeleteMode::OnlyDeleted)
     }
 
-    /// Remove duplicate rows (Django's .distinct())
+    /// Remove duplicate rows (Django's .`distinct()`)
     ///
     /// Returns only unique records. Useful when joins might create duplicates.
     ///
@@ -425,7 +425,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         self.with_select(new_select)
     }
 
-    /// Order by a column in ascending order (Django's .order_by('field'))
+    /// Order by a column in ascending order (Django's .`order_by`('field'))
     ///
     /// # Examples
     ///
@@ -447,7 +447,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         self.with_select(new_select)
     }
 
-    /// Order by a column in descending order (Django's .order_by('-field'))
+    /// Order by a column in descending order (Django's .`order_by`('-field'))
     ///
     /// # Examples
     ///
@@ -482,7 +482,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         self.with_select(new_select)
     }
 
-    /// Execute query and return all matching results (Django's .all())
+    /// Execute query and return all matching results (Django's .`all()`)
     ///
     /// Returns a vector of all models that match the query filters.
     ///
@@ -520,7 +520,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// let books = qs.all().await?;  // DB query executed
     /// ```
     ///
-    /// **Second call on same QuerySet** - Returns cached results (no DB query):
+    /// **Second call on same `QuerySet`** - Returns cached results (no DB query):
     /// ```rust,ignore
     /// let books_again = qs.all().await?;  // Cache hit! No DB query
     /// ```
@@ -552,7 +552,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(results)
     }
 
-    /// Execute query and return first result (Django's .first())
+    /// Execute query and return first result (Django's .`first()`)
     ///
     /// Returns the first matching model or error if no matches found.
     /// Useful with ordering to get the "latest" or "oldest" record.
@@ -715,7 +715,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             .ok_or_else(|| DjangoOrmError::not_found(E::default().table_name(), id_str))
     }
 
-    /// Get the earliest record by a field (Django's .earliest())
+    /// Get the earliest record by a field (Django's .`earliest()`)
     ///
     /// Orders by the specified column ascending and returns the first record.
     /// Returns an error if no records exist.
@@ -754,7 +754,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
     }
 
-    /// Get the latest record by a field (Django's .latest())
+    /// Get the latest record by a field (Django's .`latest()`)
     ///
     /// Orders by the specified column descending and returns the first record.
     /// Returns an error if no records exist.
@@ -798,7 +798,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
     }
 
-    /// Count records matching the query (Django's .count())
+    /// Count records matching the query (Django's .`count()`)
     ///
     /// Returns the number of records that match the query filters.
     /// Returns 0 if no records match (not an error).
@@ -860,7 +860,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(result.unwrap_or(0) as u64)
     }
 
-    /// Check if any records exist matching the query (Django's .exists())
+    /// Check if any records exist matching the query (Django's .`exists()`)
     ///
     /// Returns true if at least one record matches the query, false otherwise.
     /// More efficient than `.count() > 0` because it stops at the first match.
@@ -920,7 +920,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(result.is_some())
     }
 
-    /// Update all records matching the query (Django's .update())
+    /// Update all records matching the query (Django's .`update()`)
     ///
     /// Applies the same updates to all matching records using a closure.
     /// Returns the number of records updated.
@@ -976,9 +976,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(count)
     }
 
-    /// Eager load related entities (Django's prefetch_related)
+    /// Eager load related entities (Django's `prefetch_related`)
     ///
-    /// Transforms this QuerySet into a QuerySetEager that supports prefetching relations.
+    /// Transforms this `QuerySet` into a `QuerySetEager` that supports prefetching relations.
     /// This prevents N+1 queries by loading all relations in batched queries (1+M pattern).
     ///
     /// # Usage
@@ -1089,7 +1089,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// # Alternative: Raw Vec (Not Recommended)
     ///
-    /// You can also pass a raw Vec of TypeIds, but the macro is cleaner:
+    /// You can also pass a raw Vec of `TypeIds`, but the macro is cleaner:
     ///
     /// ```rust,ignore
     /// use std::any::TypeId;
@@ -1116,7 +1116,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         eager.prefetch_related(relations)
     }
 
-    /// Eager load related entities using efficient batch queries (Django's select_related)
+    /// Eager load related entities using efficient batch queries (Django's `select_related`)
     ///
     /// Currently implemented using the same batched query strategy as `prefetch_related`.
     /// This prevents N+1 queries by loading all relations in separate queries (1+M pattern).
@@ -1147,14 +1147,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// For N books with M unique authors:
     /// - Without eager loading: 1 + N queries (N+1 problem)
-    /// - With select_related: 1 + M queries (1+M pattern)
+    /// - With `select_related`: 1 + M queries (1+M pattern)
     ///
     /// Example: 100 books by 5 authors = 2 queries instead of 101!
     pub fn select_related<R>(self, relations: R) -> crate::relations::QuerySetEager<'a, E, C, R> {
         self.prefetch_related(relations)
     }
 
-    /// Create a new record (Django's .create())
+    /// Create a new record (Django's .`create()`)
     ///
     /// Creates and saves a new record in the database.
     /// Auto-increment IDs and timestamps are handled automatically.
@@ -1194,7 +1194,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(result)
     }
 
-    /// Bulk create multiple records (Django's bulk_create())
+    /// Bulk create multiple records (Django's `bulk_create()`)
     ///
     /// Creates multiple records in a single database operation for high performance.
     /// Much faster than creating records one-by-one.
@@ -1310,9 +1310,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// # Database Support
     ///
-    /// - **PostgreSQL**: Full support via `ON CONFLICT DO UPDATE`
-    /// - **SQLite**: Full support via `ON CONFLICT DO UPDATE`
-    /// - **MySQL**: Polyfill via `ON DUPLICATE KEY UPDATE` (MySQL 5.7+)
+    /// - **`PostgreSQL`**: Full support via `ON CONFLICT DO UPDATE`
+    /// - **`SQLite`**: Full support via `ON CONFLICT DO UPDATE`
+    /// - **`MySQL`**: Polyfill via `ON DUPLICATE KEY UPDATE` (`MySQL` 5.7+)
     pub fn upsert_many(self, models: Vec<E::Model>) -> UpsertBuilder<'a, E, C> {
         UpsertBuilder::new(self.inner.db, models)
     }
@@ -1403,7 +1403,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(count)
     }
 
-    /// Get existing record or create it (Django's .get_or_create())
+    /// Get existing record or create it (Django's .`get_or_create()`)
     ///
     /// Attempts to retrieve a record matching the query. If not found, creates a new
     /// record using the provided creator function.
@@ -1478,41 +1478,35 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             let txn = self.inner.db.begin().await?;
 
             // Try to get existing record
-            match self.inner.select.clone().one(&txn).await? {
-                Some(model) => {
-                    txn.commit().await?;
-                    return Ok((model, false));
-                }
-                None => {
-                    // Try to create new record
-                    let model = creator();
-                    let active_model = E::to_active_model_for_create(model)?;
+            if let Some(model) = self.inner.select.clone().one(&txn).await? {
+                txn.commit().await?;
+                return Ok((model, false));
+            } else {
+                // Try to create new record
+                let model = creator();
+                let active_model = E::to_active_model_for_create(model)?;
 
-                    match active_model.insert(&txn).await {
-                        Ok(model) => {
-                            txn.commit().await?;
-                            return Ok((model, true));
+                match active_model.insert(&txn).await {
+                    Ok(model) => {
+                        txn.commit().await?;
+                        return Ok((model, true));
+                    }
+                    Err(e) if is_unique_violation(&e) && attempt < 2 => {
+                        // Race condition detected - another transaction inserted the row
+                        // Roll back and retry. Rollback errors are logged but not fatal
+                        // since the transaction will be dropped anyway.
+                        if let Err(rollback_err) = txn.rollback().await {
+                            eprintln!("Warning: Failed to rollback transaction after unique violation: {rollback_err}");
                         }
-                        Err(e) if is_unique_violation(&e) && attempt < 2 => {
-                            // Race condition detected - another transaction inserted the row
-                            // Roll back and retry. Rollback errors are logged but not fatal
-                            // since the transaction will be dropped anyway.
-                            if let Err(rollback_err) = txn.rollback().await {
-                                eprintln!("Warning: Failed to rollback transaction after unique violation: {}", rollback_err);
-                            }
-                            continue;
+                        continue;
+                    }
+                    Err(e) => {
+                        // Attempt rollback on error. Rollback failure is logged but doesn't
+                        // change the error we return since transaction drop also rolls back.
+                        if let Err(rollback_err) = txn.rollback().await {
+                            eprintln!("Warning: Failed to rollback transaction: {rollback_err}");
                         }
-                        Err(e) => {
-                            // Attempt rollback on error. Rollback failure is logged but doesn't
-                            // change the error we return since transaction drop also rolls back.
-                            if let Err(rollback_err) = txn.rollback().await {
-                                eprintln!(
-                                    "Warning: Failed to rollback transaction: {}",
-                                    rollback_err
-                                );
-                            }
-                            return Err(e.into());
-                        }
+                        return Err(e.into());
                     }
                 }
             }
@@ -1524,7 +1518,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         ))
     }
 
-    /// Update existing record or create new one (Django's .update_or_create())
+    /// Update existing record or create new one (Django's .`update_or_create()`)
     ///
     /// Attempts to retrieve a record matching the query.
     /// - If found, applies the updates from `updater` and saves.
@@ -1587,41 +1581,35 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             let txn = self.inner.db.begin().await?;
 
             // Try to get existing record
-            match self.inner.select.clone().one(&txn).await? {
-                Some(mut model) => {
-                    // Update existing record
-                    updater(&mut model);
-                    let model = E::save_model(&txn, model).await?;
-                    txn.commit().await?;
-                    return Ok((model, false));
-                }
-                None => {
-                    // Try to create new
-                    let model = creator();
-                    let active_model = E::to_active_model_for_create(model)?;
+            if let Some(mut model) = self.inner.select.clone().one(&txn).await? {
+                // Update existing record
+                updater(&mut model);
+                let model = E::save_model(&txn, model).await?;
+                txn.commit().await?;
+                return Ok((model, false));
+            } else {
+                // Try to create new
+                let model = creator();
+                let active_model = E::to_active_model_for_create(model)?;
 
-                    match active_model.insert(&txn).await {
-                        Ok(model) => {
-                            txn.commit().await?;
-                            return Ok((model, true));
+                match active_model.insert(&txn).await {
+                    Ok(model) => {
+                        txn.commit().await?;
+                        return Ok((model, true));
+                    }
+                    Err(e) if is_unique_violation(&e) && attempt < 2 => {
+                        // Race condition detected - another transaction inserted the row
+                        // Roll back and retry (next iteration will find and update it)
+                        if let Err(rollback_err) = txn.rollback().await {
+                            eprintln!("Warning: Failed to rollback transaction after unique violation: {rollback_err}");
                         }
-                        Err(e) if is_unique_violation(&e) && attempt < 2 => {
-                            // Race condition detected - another transaction inserted the row
-                            // Roll back and retry (next iteration will find and update it)
-                            if let Err(rollback_err) = txn.rollback().await {
-                                eprintln!("Warning: Failed to rollback transaction after unique violation: {}", rollback_err);
-                            }
-                            continue;
+                        continue;
+                    }
+                    Err(e) => {
+                        if let Err(rollback_err) = txn.rollback().await {
+                            eprintln!("Warning: Failed to rollback transaction: {rollback_err}");
                         }
-                        Err(e) => {
-                            if let Err(rollback_err) = txn.rollback().await {
-                                eprintln!(
-                                    "Warning: Failed to rollback transaction: {}",
-                                    rollback_err
-                                );
-                            }
-                            return Err(e.into());
-                        }
+                        return Err(e.into());
                     }
                 }
             }
@@ -1633,7 +1621,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         ))
     }
 
-    /// Get specific column values as JSON (Django's values())
+    /// Get specific column values as JSON (Django's `values()`)
     ///
     /// Returns a Vec of JSON objects for small-medium datasets.
     /// For large datasets, automatically uses chunked fetching.
@@ -1739,7 +1727,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(stream.boxed())
     }
 
-    /// Get column values iterator (Django's values().iterator())
+    /// Get column values iterator (Django's `values().iterator()`)
     ///
     /// Returns iterator that streams results in chunks, preventing OOM.
     /// Use this directly for very large datasets where you want control.
@@ -1816,7 +1804,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(stream.boxed())
     }
 
-    /// Get column values iterator as tuples (Django's values_list().iterator())
+    /// Get column values iterator as tuples (Django's `values_list().iterator()`)
     ///
     /// Returns iterator that streams results in chunks.
     /// For single column with `flat=true`, yields scalar values.
@@ -1881,7 +1869,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                                 columns_clone
                                     .iter()
                                     .filter_map(|col| {
-                                        let col_name = format!("{:?}", col).to_lowercase();
+                                        let col_name = format!("{col:?}").to_lowercase();
                                         map.get(&col_name).cloned()
                                     })
                                     .collect()
@@ -1894,7 +1882,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
     }
 
-    /// Get specific column values as tuples (Django's values_list())
+    /// Get specific column values as tuples (Django's `values_list()`)
     ///
     /// Returns a Vec of tuples for small-medium datasets.
     /// For large datasets, automatically uses chunked fetching.
@@ -1953,7 +1941,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                             columns
                                 .iter()
                                 .filter_map(|col| {
-                                    let col_name = format!("{:?}", col).to_lowercase();
+                                    let col_name = format!("{col:?}").to_lowercase();
                                     map.get(&col_name).cloned()
                                 })
                                 .collect()
@@ -1987,7 +1975,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         stmt.to_string()
     }
 
-    /// Analyze query execution plan (Django-inspired .explain())
+    /// Analyze query execution plan (Django-inspired .`explain()`)
     ///
     /// Returns the database query execution plan without running the query.
     /// Useful for understanding how the database will execute your query
@@ -2017,9 +2005,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// # Database Support
     ///
-    /// - **SQLite**: `EXPLAIN QUERY PLAN`
-    /// - **PostgreSQL**: `EXPLAIN`
-    /// - **MySQL**: `EXPLAIN`
+    /// - **`SQLite`**: `EXPLAIN QUERY PLAN`
+    /// - **`PostgreSQL`**: `EXPLAIN`
+    /// - **`MySQL`**: `EXPLAIN`
     ///
     /// # See Also
     ///
@@ -2038,15 +2026,15 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
         // Construct EXPLAIN query based on database backend
         let explain_sql = match backend {
-            sea_orm::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {}", sql),
-            sea_orm::DatabaseBackend::Postgres => format!("EXPLAIN {}", sql),
-            sea_orm::DatabaseBackend::MySql => format!("EXPLAIN {}", sql),
-            _ => format!("EXPLAIN {}", sql), // Fallback for any future database backends
+            sea_orm::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
+            sea_orm::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
+            sea_orm::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
+            _ => format!("EXPLAIN {sql}"), // Fallback for any future database backends
         };
 
         // Return the SQL that would be explained
         // Full EXPLAIN output requires database-specific result parsing
-        Ok(format!("EXPLAIN output for query:\n{}\n\nTo run: {}", sql, explain_sql))
+        Ok(format!("EXPLAIN output for query:\n{sql}\n\nTo run: {explain_sql}"))
     }
 
     /// Analyze query with actual execution (Django-inspired .explain(analyze=True))
@@ -2084,13 +2072,13 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// - **High actual rows**: Consider pagination/limits
     /// - **Sequential scans**: Add indexes
     /// - **Slow sorts**: Index the ORDER BY columns
-    /// - **Many disk buffer reads**: Increase shared_buffers (PostgreSQL)
+    /// - **Many disk buffer reads**: Increase `shared_buffers` (`PostgreSQL`)
     ///
     /// # Database Support
     ///
-    /// - **SQLite**: Limited - same as `explain()`
-    /// - **PostgreSQL**: `EXPLAIN ANALYZE` - full statistics
-    /// - **MySQL**: `EXPLAIN ANALYZE` (MySQL 8.0.18+)
+    /// - **`SQLite`**: Limited - same as `explain()`
+    /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
+    /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
     pub async fn explain_analyze(&self) -> Result<String, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
@@ -2106,24 +2094,23 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let explain_sql = match backend {
             sea_orm::DatabaseBackend::Sqlite => {
                 // SQLite doesn't support EXPLAIN ANALYZE, fallback to EXPLAIN QUERY PLAN
-                format!("EXPLAIN QUERY PLAN {}", sql)
+                format!("EXPLAIN QUERY PLAN {sql}")
             }
-            sea_orm::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {}", sql),
+            sea_orm::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
             sea_orm::DatabaseBackend::MySql => {
                 // MySQL 8.0.18+ supports EXPLAIN ANALYZE
-                format!("EXPLAIN ANALYZE {}", sql)
+                format!("EXPLAIN ANALYZE {sql}")
             }
-            _ => format!("EXPLAIN ANALYZE {}", sql), // Fallback for any future database backends
+            _ => format!("EXPLAIN ANALYZE {sql}"), // Fallback for any future database backends
         };
 
         // Return the EXPLAIN ANALYZE SQL for manual execution
         Ok(format!(
-            "EXPLAIN ANALYZE output for query:\n{}\n\nRun this command directly:\n{}",
-            sql, explain_sql
+            "EXPLAIN ANALYZE output for query:\n{sql}\n\nRun this command directly:\n{explain_sql}"
         ))
     }
 
-    /// Type-safe projection query (alternative to JSON-based values())
+    /// Type-safe projection query (alternative to JSON-based `values()`)
     ///
     /// Returns results as a custom type with compile-time validation.
     /// Use `#[django_projection(model = YourModel)]` to define projection structs.
@@ -2155,7 +2142,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         Ok(self.inner.select.clone().into_model::<T>().all(self.inner.db).await?)
     }
 
-    /// Group query results by one or more columns (Django's .group_by())
+    /// Group query results by one or more columns (Django's .`group_by()`)
     ///
     /// Used with `.annotate()` for aggregation queries.
     ///
@@ -2177,7 +2164,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         self.with_select(new_select)
     }
 
-    /// Add computed/aggregated columns to the query (Django's .annotate())
+    /// Add computed/aggregated columns to the query (Django's .`annotate()`)
     ///
     /// Adds aliased expressions for aggregations or computed values.
     /// Must be used with `.project::<T>()` where T has `#[computed]` fields
@@ -2351,7 +2338,7 @@ impl Aggregation {
         }
     }
 
-    /// Convert to SeaORM expression
+    /// Convert to `SeaORM` expression
     fn into_expr(self) -> SimpleExpr {
         self.expr
     }
@@ -2490,7 +2477,7 @@ impl Q {
         self
     }
 
-    /// Negate this Q object (Django's ~Q())
+    /// Negate this Q object (Django's ~`Q()`)
     ///
     /// Returns a Q object that matches the opposite of the current conditions.
     ///
@@ -2532,7 +2519,7 @@ impl From<Q> for Condition {
 
 /// Extension trait to add `.objects()` method to entities
 ///
-/// This trait is automatically implemented for all SeaORM entities and provides
+/// This trait is automatically implemented for all `SeaORM` entities and provides
 /// the Django-like `.objects(db)` entry point for querying.
 ///
 /// # Basic Usage
@@ -2612,7 +2599,7 @@ impl From<Q> for Condition {
 ///     .await?;
 /// ```
 pub trait QueryExt: EntityTrait {
-    /// Create a new QuerySet for this entity (Django's .objects)
+    /// Create a new `QuerySet` for this entity (Django's .objects)
     ///
     /// This is the entry point for all queries. Returns a `QuerySet` that you
     /// can chain methods on to build your query.
@@ -2655,7 +2642,7 @@ pub trait QueryExt: EntityTrait {
     ///     .all()
     ///     .await?;
     /// ```
-    fn objects<'a, C: ConnectionTrait>(db: &'a C) -> QuerySet<'a, Self, C> {
+    fn objects<C: ConnectionTrait>(db: &C) -> QuerySet<'_, Self, C> {
         QuerySet::new(db)
     }
 }

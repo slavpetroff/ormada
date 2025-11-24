@@ -115,15 +115,15 @@ impl OnDelete {
     #[inline]
     pub const fn to_sql(&self) -> &'static str {
         match self {
-            OnDelete::Cascade => "CASCADE",
-            OnDelete::SetNull => "SET NULL",
-            OnDelete::Restrict => "RESTRICT",
-            OnDelete::SetDefault => "SET DEFAULT",
-            OnDelete::NoAction => "NO ACTION",
+            Self::Cascade => "CASCADE",
+            Self::SetNull => "SET NULL",
+            Self::Restrict => "RESTRICT",
+            Self::SetDefault => "SET DEFAULT",
+            Self::NoAction => "NO ACTION",
         }
     }
 
-    /// Check if this OnDelete variant requires the field to be nullable.
+    /// Check if this `OnDelete` variant requires the field to be nullable.
     ///
     /// Returns `true` for `SetNull`, `false` for all others.
     ///
@@ -138,7 +138,7 @@ impl OnDelete {
     /// ```
     #[inline]
     pub const fn requires_nullable(&self) -> bool {
-        matches!(self, OnDelete::SetNull)
+        matches!(self, Self::SetNull)
     }
 }
 

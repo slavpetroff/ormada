@@ -1,6 +1,6 @@
 //! # seaorm-django
 //!
-//! **Django-inspired ergonomic ORM for SeaORM with zero-cost abstractions**
+//! **Django-inspired ergonomic ORM for `SeaORM` with zero-cost abstractions**
 
 // Allow test code to use unwrap/expect for clarity
 #![cfg_attr(test, allow(clippy::unwrap_used))]
@@ -11,14 +11,14 @@
 //!
 //! This library brings Django's elegant ORM API to Rust, providing:
 //! - **🚀 Zero-cost abstractions**: Compile-time typed relations, no runtime overhead
-//! - **🎯 Type-safe**: Full compile-time checking, works with SeaORM's generated types
+//! - **🎯 Type-safe**: Full compile-time checking, works with `SeaORM`'s generated types
 //! - **🐍 Django-like**: 85%+ API compatibility for familiar, ergonomic queries
-//! - **⚡ Performance**: No duplication, direct integration with SeaORM
+//! - **⚡ Performance**: No duplication, direct integration with `SeaORM`
 //!
 //! ## Core Features
 //!
 //! ### 📊 Query API
-//! Django-style QuerySet with filtering, ordering, pagination, and aggregation:
+//! Django-style `QuerySet` with filtering, ordering, pagination, and aggregation:
 //! - `filter()` / `exclude()` - WHERE clauses with method chaining
 //! - `distinct()` - Remove duplicate rows
 //! - `order_by_asc()` / `order_by_desc()` - Ordering
@@ -173,7 +173,7 @@
 //!
 //! ## Column Operations
 //!
-//! All SeaORM Column enums automatically get Django-like methods via `ColumnExt`:
+//! All `SeaORM` Column enums automatically get Django-like methods via `ColumnExt`:
 //!
 //! ```rust,ignore
 //! // String operations
@@ -225,8 +225,8 @@
 //! ## Performance
 //!
 //! - **Zero-cost abstractions**: All relation loading is compile-time typed
-//! - **No runtime overhead**: Direct integration with SeaORM, no additional layers
-//! - **Efficient queries**: Uses SeaORM's query builder directly
+//! - **No runtime overhead**: Direct integration with `SeaORM`, no additional layers
+//! - **Efficient queries**: Uses `SeaORM`'s query builder directly
 //! - **N+1 prevention**: `prefetch_related()` uses batch loading (1+M queries, not N+1)
 
 #![deny(missing_docs)]
@@ -322,8 +322,8 @@ pub mod prelude {
     // Datetime handling
     pub use chrono::{DateTime, FixedOffset, Utc};
 
-    /// Type alias for datetime with timezone (DateTime<FixedOffset>)
-    /// This matches SeaORM's DateTimeWithTimeZone type
+    /// Type alias for datetime with timezone (`DateTime`<FixedOffset>)
+    /// This matches `SeaORM`'s `DateTimeWithTimeZone` type
     pub type DateTimeWithTimeZone = DateTime<FixedOffset>;
 }
 

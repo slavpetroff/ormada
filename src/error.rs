@@ -20,7 +20,7 @@ use std::fmt;
 /// Error type for all seaorm-django operations
 ///
 /// This enum represents all possible errors that can occur during ORM operations.
-/// It wraps SeaORM's database errors and provides custom error messages.
+/// It wraps `SeaORM`'s database errors and provides custom error messages.
 ///
 /// # Variants
 ///
@@ -81,7 +81,7 @@ use std::fmt;
 /// ```
 #[derive(Debug)]
 pub enum DjangoOrmError {
-    /// Database error from SeaORM
+    /// Database error from `SeaORM`
     ///
     /// Includes: connection errors, query syntax errors, constraint violations,
     /// transaction errors, and other database-level issues.
@@ -124,7 +124,7 @@ pub enum DjangoOrmError {
 
     /// Field validation error
     ///
-    /// Raised when model field validation fails (max_length, range, etc.)
+    /// Raised when model field validation fails (`max_length`, range, etc.)
     ///
     /// # Examples
     ///
@@ -169,14 +169,14 @@ pub enum DjangoOrmError {
 impl fmt::Display for DjangoOrmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Database(e) => write!(f, "Database error: {}", e),
+            Self::Database(e) => write!(f, "Database error: {e}"),
             Self::NotFound { entity, id } => {
-                write!(f, "{} with id '{}' not found", entity, id)
+                write!(f, "{entity} with id '{id}' not found")
             }
             Self::Validation { entity, field, reason } => {
-                write!(f, "Validation error in {}.{}: {}", entity, field, reason)
+                write!(f, "Validation error in {entity}.{field}: {reason}")
             }
-            Self::Custom(msg) => write!(f, "{}", msg),
+            Self::Custom(msg) => write!(f, "{msg}"),
         }
     }
 }
@@ -191,18 +191,18 @@ impl From<sea_orm::DbErr> for DjangoOrmError {
 
 impl From<String> for DjangoOrmError {
     fn from(msg: String) -> Self {
-        DjangoOrmError::Custom(msg)
+        Self::Custom(msg)
     }
 }
 
 impl From<&str> for DjangoOrmError {
     fn from(msg: &str) -> Self {
-        DjangoOrmError::Custom(msg.to_string())
+        Self::Custom(msg.to_string())
     }
 }
 
 impl DjangoOrmError {
-    /// Create a NotFound error
+    /// Create a `NotFound` error
     ///
     /// # Examples
     ///

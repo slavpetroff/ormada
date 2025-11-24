@@ -196,7 +196,7 @@ impl DatabaseRouter {
     }
 
     /// Get the primary connection (for transactions)
-    pub fn primary_connection(&self) -> &DatabaseConnection {
+    pub const fn primary_connection(&self) -> &DatabaseConnection {
         &self.primary
     }
 
@@ -216,7 +216,7 @@ impl DatabaseRouter {
     }
 
     /// Get the consistency context
-    pub fn context(&self) -> &ConsistencyContext {
+    pub const fn context(&self) -> &ConsistencyContext {
         &self.context
     }
 

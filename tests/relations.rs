@@ -4,7 +4,7 @@
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
 
-//! Relations integration tests - prefetch_related and N+1 prevention
+//! Relations integration tests - `prefetch_related` and N+1 prevention
 
 mod fixtures;
 
@@ -77,7 +77,7 @@ async fn test_prefetch_related_with_filter(
         .await
         .unwrap();
 
-    assert!(books.len() > 0);
+    assert!(!books.is_empty());
     assert!(books.iter().all(|b| b.published));
 
     // All should have author loaded
@@ -263,7 +263,7 @@ async fn test_prefetch_multiple_authors_parametrized(
                 .create(Book {
                     author_id: author.id,
                     title: format!("Book {} by Author {}", j + 1, i + 1),
-                    price: 1000 + (j as i32 * 500),
+                    price: 1000 + (j * 500),
                     published: true,
                     ..Default::default()
                 })
@@ -374,7 +374,7 @@ async fn test_select_related_with_filter(
         .await
         .unwrap();
 
-    assert!(books.len() > 0);
+    assert!(!books.is_empty());
     for book in &books {
         assert!(book.published);
         assert!(book.author.is_some());
@@ -487,7 +487,7 @@ async fn test_prefetch_with_filter_after(
         .await
         .unwrap();
 
-    assert!(books.len() > 0);
+    assert!(!books.is_empty());
     for book in &books {
         assert!(book.published);
         assert!(book.author.is_some());
@@ -531,7 +531,7 @@ async fn test_prefetch_exclude(
         .await
         .unwrap();
 
-    assert!(books.len() > 0);
+    assert!(!books.is_empty());
     for book in &books {
         assert!(book.published);
         assert!(book.author.is_some());
@@ -590,7 +590,7 @@ async fn test_queryset_eager_order_by_asc(
         .unwrap();
 
     assert_eq!(books.len(), 6);
-    
+
     // Verify actual ascending order by title
     for i in 0..books.len() - 1 {
         assert!(
@@ -618,7 +618,7 @@ async fn test_queryset_eager_order_by_desc(
         .unwrap();
 
     assert_eq!(books.len(), 6);
-    
+
     // Verify actual descending order by price
     for i in 0..books.len() - 1 {
         assert!(

@@ -417,7 +417,7 @@ impl AtomicExt for DatabaseTransaction {
     async fn atomic<F, T>(&self, f: F) -> Result<T, DjangoOrmError>
     where
         F: for<'a> FnOnce(
-            &'a DatabaseTransaction,
+            &'a Self,
         ) -> std::pin::Pin<
             Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
         >,
@@ -442,7 +442,7 @@ impl AtomicExt for DatabaseTransaction {
     async fn savepoint<F, T>(&self, _name: &str, f: F) -> Result<T, DjangoOrmError>
     where
         F: for<'a> FnOnce(
-            &'a DatabaseTransaction,
+            &'a Self,
         ) -> std::pin::Pin<
             Box<dyn Future<Output = Result<T, DjangoOrmError>> + Send + 'a>,
         >,

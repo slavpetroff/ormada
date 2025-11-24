@@ -457,7 +457,7 @@ async fn test_pagination_various_sizes(#[future] db: DatabaseRouter, #[case] cou
 
     assert_eq!(page1.len(), page_size.min(count));
     if count > page_size {
-        assert!(page2.len() > 0);
+        assert!(!page2.is_empty());
         assert_eq!(page2.len(), (page_size).min(count - page_size));
     }
 }
@@ -599,7 +599,7 @@ async fn test_aggregate_multiple_operations(
     assert_eq!(min, Some(25.0));
     assert!(avg.is_some());
     let avg_val = avg.unwrap();
-    assert!(avg_val >= 25.0 && avg_val <= 35.0);
+    assert!((25.0..=35.0).contains(&avg_val));
 }
 
 #[rstest]
@@ -665,7 +665,9 @@ async fn test_values_query(#[future] db_with_sample_authors: (DatabaseRouter, Ve
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_values_empty_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_values_empty_columns(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
     let values = Author::objects(&db).values(vec![]).await.unwrap();
     assert_eq!(values.len(), 0);
@@ -698,7 +700,9 @@ async fn test_values_list_flat(#[future] db_with_sample_authors: (DatabaseRouter
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_values_list_empty_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_values_list_empty_columns(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
     let values = Author::objects(&db).values_list(vec![], false).await.unwrap();
     assert_eq!(values.len(), 0);
@@ -1152,8 +1156,8 @@ async fn test_iterator_method(#[future] db: DatabaseRouter) {
     for i in 0..10 {
         Author::objects(&db)
             .create(Author {
-                name: format!("Author {}", i),
-                email: format!("author{}@test.com", i),
+                name: format!("Author {i}"),
+                email: format!("author{i}@test.com"),
                 age: 20 + i,
                 ..Default::default()
             })
@@ -1197,7 +1201,9 @@ async fn test_values_iter_method(#[future] db_with_sample_authors: (DatabaseRout
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_values_iter_empty_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_values_iter_empty_columns(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
 
     use futures::StreamExt;
@@ -1215,7 +1221,9 @@ async fn test_values_iter_empty_columns(#[future] db_with_sample_authors: (Datab
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_values_list_iter_flat(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_values_list_iter_flat(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
 
     use futures::StreamExt;
@@ -1236,7 +1244,9 @@ async fn test_values_list_iter_flat(#[future] db_with_sample_authors: (DatabaseR
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_values_list_iter_not_flat(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_values_list_iter_not_flat(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
 
     use futures::StreamExt;
@@ -1258,14 +1268,12 @@ async fn test_values_list_iter_not_flat(#[future] db_with_sample_authors: (Datab
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_group_by_basic(
-    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
-) {
+async fn test_group_by_basic(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
 
     // Test that group_by returns a modified queryset
     let qs = Author::objects(&db).group_by(Author::Age);
-    
+
     // Verify it's still queryable (implementation detail - group_by just modifies select)
     let sql = qs.debug_sql();
     assert!(sql.contains("GROUP BY") || sql.contains("group by"));
@@ -1274,19 +1282,15 @@ async fn test_group_by_basic(
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_annotate_basic(
-    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
-) {
+async fn test_annotate_basic(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
 
     // Test that annotate returns a modified queryset with aggregation expressions
-    let qs = Author::objects(&db)
-        .group_by(Author::Age)
-        .annotate([
-            ("count_all", Aggregation::count_all()),
-            ("max_age", Aggregation::max(Author::Age)),
-        ]);
-    
+    let qs = Author::objects(&db).group_by(Author::Age).annotate([
+        ("count_all", Aggregation::count_all()),
+        ("max_age", Aggregation::max(Author::Age)),
+    ]);
+
     let sql = qs.debug_sql();
     assert!(!sql.is_empty());
 }
@@ -1302,7 +1306,7 @@ async fn test_aggregation_helpers() {
     let _avg = Aggregation::avg(Author::Age);
     let _max = Aggregation::max(Author::Age);
     let _min = Aggregation::min(Author::Age);
-    
+
     // Just verify they can be constructed
     assert!(true);
 }
@@ -1631,7 +1635,7 @@ async fn test_distinct_returns_unique(#[future] db: DatabaseRouter) {
         Author::objects(&db)
             .create(Author {
                 name: format!("Author {}", i % 2), // Only 2 unique names
-                email: format!("author{}@test.com", i),
+                email: format!("author{i}@test.com"),
                 age: 30,
                 ..Default::default()
             })
@@ -1690,8 +1694,8 @@ async fn test_pagination_consistency(#[future] db: DatabaseRouter) {
     for i in 0..20 {
         Author::objects(&db)
             .create(Author {
-                name: format!("Author {}", i),
-                email: format!("author{}@test.com", i),
+                name: format!("Author {i}"),
+                email: format!("author{i}@test.com"),
                 age: 20 + (i % 10),
                 ..Default::default()
             })
@@ -1730,7 +1734,7 @@ async fn test_filter_string_operations(
     let authors = Author::objects(&db).filter(Author::Name.starts_with("A")).all().await.unwrap();
 
     assert_eq!(authors.len(), 1); // Alice
-    assert!(authors[0].name.starts_with("A"));
+    assert!(authors[0].name.starts_with('A'));
 }
 
 #[rstest]
@@ -1768,11 +1772,7 @@ async fn test_debug_sql(#[future] db_with_sample_authors: (DatabaseRouter, Vec<A
 async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    let explain = Author::objects(&db)
-        .filter(Author::Age.gte(25))
-        .explain()
-        .await
-        .unwrap();
+    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain().await.unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());
@@ -1781,7 +1781,9 @@ async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, V
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_explain_analyze_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+async fn test_explain_analyze_query(
+    #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
+) {
     let (db, _sample_authors) = db_with_sample_authors;
 
     let explain = Author::objects(&db)

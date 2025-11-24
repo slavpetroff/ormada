@@ -47,7 +47,7 @@
 //!     .await?;
 //! ```
 //!
-//! This module provides the DeleteExt trait. Create and Update operations
+//! This module provides the `DeleteExt` trait. Create and Update operations
 //! are generated directly on Entity and Model by the `#[derive(DjangoModel)]` macro.
 
 use crate::error::DjangoOrmError;
@@ -69,7 +69,7 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, ModelTrait};
 ///
 /// # Bulk Delete
 ///
-/// For bulk deletions, use `.delete()` on a QuerySet:
+/// For bulk deletions, use `.delete()` on a `QuerySet`:
 ///
 /// ```rust,ignore
 /// // Delete all drafts

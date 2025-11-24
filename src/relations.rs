@@ -8,7 +8,7 @@
 //! - All original model fields as direct properties
 //! - Relation fields as `Option<RelatedModel>`
 //!
-//! This is achieved via the `#[derive(DjangoModel)]` macro which reads SeaORM's
+//! This is achieved via the `#[derive(DjangoModel)]` macro which reads `SeaORM`'s
 //! Relation definitions and generates the extended struct at compile time.
 
 use crate::error::DjangoOrmError;
@@ -105,7 +105,7 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait {
 
 /// Trait for loading relations at compile time
 pub trait LoadRelations<Parent: EntityTrait> {
-    /// The type of data loaded (tuple of HashMaps)
+    /// The type of data loaded (tuple of `HashMaps`)
     type Output;
 
     /// Load all relations
@@ -191,7 +191,7 @@ where
 // QuerySet with Eager Loading
 // ============================================================================
 
-/// QuerySet that supports eager loading of relations
+/// `QuerySet` that supports eager loading of relations
 pub struct QuerySetEager<'a, E: EntityTrait, C: ConnectionTrait, Relations = ()> {
     pub(crate) db: &'a C,
     pub(crate) select: Select<E>,
@@ -199,8 +199,8 @@ pub struct QuerySetEager<'a, E: EntityTrait, C: ConnectionTrait, Relations = ()>
 }
 
 impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
-    /// Create from a regular QuerySet
-    pub fn new(db: &'a C, select: Select<E>) -> Self {
+    /// Create from a regular `QuerySet`
+    pub const fn new(db: &'a C, select: Select<E>) -> Self {
         Self {
             db,
             select,
@@ -211,7 +211,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
     /// Add relations to prefetch
     ///
     /// Use the `relations!` macro for clean syntax. You can also chain multiple
-    /// calls or pass a raw Vec of TypeIds.
+    /// calls or pass a raw Vec of `TypeIds`.
     ///
     /// # Examples
     ///
@@ -251,7 +251,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
 }
 
 // Separate impl block for typed relation methods
-impl<'a, E, C, Relations> QuerySetEager<'a, E, C, Relations>
+impl<E, C, Relations> QuerySetEager<'_, E, C, Relations>
 where
     E: EntityTrait + crate::traits::WithRelationsTrait<Model = <E as EntityTrait>::Model>,
     <E as EntityTrait>::Model: Sync + Clone,
