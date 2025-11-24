@@ -390,8 +390,9 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
 
     // Add necessary derives to the struct
     // Note: DeriveEntityModel generates Entity, Column, PrimaryKey, ActiveModel
+    // Note: We don't derive Default here because we inject relation fields later
     input.attrs.push(syn::parse_quote! {
-        #[derive(Clone, Debug, PartialEq, Eq, ::sea_orm::entity::prelude::DeriveEntityModel, Default)]
+        #[derive(Clone, Debug, PartialEq, Eq, ::sea_orm::entity::prelude::DeriveEntityModel)]
     });
 
     // Add sea_orm table_name attribute
@@ -446,6 +447,7 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     let model_save_impl = generate_model_save_impl(&field_configs)?;
     let model_delete_impl = generate_model_delete_impl(soft_delete_field.as_ref())?;
     let model_convenience_impl = generate_model_convenience_methods(&input, &config.ordering)?;
+    let default_impl = generate_default_impl(&field_configs, &foreign_keys);
 
     // Generate code with nested module to avoid conflicts
     // This creates the internal SeaORM types and exposes Model as the main interface
@@ -480,6 +482,9 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
 
             // WithRelationsTrait implementation (required for relations system)
             #with_relations_trait_impl
+
+            // Default implementation that handles injected relation fields
+            #default_impl
         }
 
         // Export Model as the primary type - this is what users work with!
@@ -1303,4 +1308,43 @@ fn to_pascal_case(s: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Generate Default implementation for Model that handles injected relation fields
+fn generate_default_impl(
+    field_configs: &[(Ident, syn::Type, FieldConfig)],
+    foreign_keys: &[(Ident, ForeignKeyConfig)],
+) -> TokenStream {
+    let mut field_defaults = Vec::new();
+
+    // Generate defaults for all original fields
+    for (field_name, field_type, _config) in field_configs {
+        field_defaults.push(quote! {
+            #field_name: ::core::default::Default::default()
+        });
+    }
+
+    // Generate defaults for injected relation fields
+    for (field_ident, _fk) in foreign_keys {
+        let field_name_str = field_ident.to_string();
+        let relation_name_str = if field_name_str.ends_with("_id") {
+            &field_name_str[..field_name_str.len() - 3]
+        } else {
+            &field_name_str
+        };
+        let relation_name = format_ident!("{}", relation_name_str);
+        field_defaults.push(quote! {
+            #relation_name: ::core::option::Option::None
+        });
+    }
+
+    quote! {
+        impl ::core::default::Default for Model {
+            fn default() -> Self {
+                Self {
+                    #(#field_defaults,)*
+                }
+            }
+        }
+    }
 }

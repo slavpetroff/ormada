@@ -258,7 +258,7 @@ pub mod prelude {
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
     pub use crate::hooks::{AsyncLifecycleHooks, LifecycleHooks};
-    pub use crate::query::{Aggregation, QueryExt, QuerySet, Q};
+    pub use crate::query::{Aggregation, ColumnExt, QueryExt, QuerySet, Q};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::router::{ConsistencyContext, DatabaseRouter, RoutingStrategy};
     pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
@@ -280,8 +280,6 @@ pub mod prelude {
         ActiveModelTrait,
         // Value types
         ActiveValue,
-        // Column and query traits
-        ColumnTrait,
         // Query builders
         Condition,
         // Database connection

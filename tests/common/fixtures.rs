@@ -15,10 +15,6 @@ pub mod simple_item {
         pub value: i32,
     }
     impl AsyncLifecycleHooks for Model {}
-
-    pub fn sample_items(count: usize) -> Vec<SimpleItem> {
-        (0..count).map(|i| Model { id: 0, value: i as i32 }).collect()
-    }
 }
 
 /// Rich item model - for testing with multiple field types
@@ -35,24 +31,6 @@ pub mod rich_item {
         pub created_at: DateTimeWithTimeZone,
     }
     impl AsyncLifecycleHooks for Model {}
-
-    pub async fn create_table(db: &DatabaseRouter) {
-        Model::create_table(db).await.unwrap();
-    }
-
-    pub fn sample_items(count: usize, base_name: &str) -> Vec<Model> {
-        use crate::common::test_helpers::test_timestamp;
-        let timestamp = test_timestamp();
-
-        (0..count)
-            .map(|i| Model {
-                id: 0,
-                value: i as i32,
-                name: format!("{} {}", base_name, i),
-                created_at: timestamp,
-            })
-            .collect()
-    }
 }
 
 /// Aggregate test item - for testing aggregations with NULLs
@@ -68,32 +46,6 @@ pub mod agg_item {
         pub category: i32,
     }
     impl AsyncLifecycleHooks for Model {}
-
-    pub async fn create_table(db: &DatabaseRouter) {
-        Model::create_table(db).await.unwrap();
-    }
-
-    pub fn sample_items_with_nulls(count: usize, category: i32) -> Vec<Model> {
-        (0..count)
-            .map(|i| Model {
-                id: 0,
-                int_value: if i % 2 == 0 { Some(i as i32) } else { None },
-                dec_value: None,
-                category,
-            })
-            .collect()
-    }
-
-    pub fn sample_items_no_nulls(count: usize, category: i32) -> Vec<Model> {
-        (0..count)
-            .map(|i| Model {
-                id: 0,
-                int_value: Some(i as i32 * 10),
-                dec_value: Some(i as i64),
-                category,
-            })
-            .collect()
-    }
 }
 
 // Fixture tests are in tests/EXAMPLE_TEST.rs

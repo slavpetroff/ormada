@@ -46,6 +46,7 @@ tokio = { version = "1", features = ["full"] }
 sea-orm = { workspace = true, features = ["sqlx-sqlite", "runtime-tokio-native-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 criterion = { version = "0.7.0", features = ["async_tokio", "html_reports"] }
+rstest = "0.26.1"
 
 [[bench]]
 name = "query_performance"
