@@ -292,6 +292,8 @@ pub mod prelude {
 
         // Entity and model traits
         EntityTrait,
+        // Expression trait for .or(), .and() on expressions
+        ExprTrait,
         // Transaction isolation
         IsolationLevel,
         JoinType,

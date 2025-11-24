@@ -450,3 +450,163 @@ async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] a
     let result = Author::objects(&db).get(100).await;
     assert!(result.is_err());
 }
+
+// ============================================================================
+// Upsert Edge Cases
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_single_then_update(#[future] db: DatabaseRouter) {
+    // Insert new
+    Author::objects(&db)
+        .upsert_many(vec![Author {
+            id: 999,
+            name: "Single".to_string(),
+            email: "single@example.com".to_string(),
+            age: 30,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        }])
+        .on_conflict(Author::Id)
+        .update_fields(&[Author::Name])
+        .execute()
+        .await
+        .unwrap();
+    
+    let author = Author::objects(&db).get(999).await.unwrap();
+    assert_eq!(author.name, "Single");
+    
+    // Update existing
+    Author::objects(&db)
+        .upsert_many(vec![Author {
+            id: 999,
+            name: "Updated Single".to_string(),
+            email: "single@example.com".to_string(),
+            age: 30,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        }])
+        .on_conflict(Author::Id)
+        .update_fields(&[Author::Name])
+        .execute()
+        .await
+        .unwrap();
+    
+    let author = Author::objects(&db).get(999).await.unwrap();
+    assert_eq!(author.name, "Updated Single");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_with_empty_vec(#[future] db: DatabaseRouter) {
+    let result = Author::objects(&db)
+        .upsert_many(vec![])
+        .on_conflict(Author::Id)
+        .update_fields(&[Author::Name])
+        .execute()
+        .await
+        .unwrap();
+    
+    assert_eq!(result, 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_all_new_records(#[future] db: DatabaseRouter) {
+    let authors: Vec<Author> = (1..=5)
+        .map(|i| Author {
+            id: i * 100,
+            name: format!("Author {}", i),
+            email: format!("author{}@example.com", i),
+            age: 25 + i,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        })
+        .collect();
+    
+    Author::objects(&db)
+        .upsert_many(authors)
+        .on_conflict(Author::Id)
+        .update_fields(&[Author::Name])
+        .execute()
+        .await
+        .unwrap();
+    
+    let count = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count, 5);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_all_existing_records(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, sample_authors) = db_with_sample_authors;
+    
+    let mut updated_authors: Vec<Author> = sample_authors
+        .into_iter()
+        .map(|mut a| {
+            a.name = format!("{} Updated", a.name);
+            a
+        })
+        .collect();
+    
+    Author::objects(&db)
+        .upsert_many(updated_authors)
+        .on_conflict(Author::Id)
+        .update_fields(&[Author::Name])
+        .execute()
+        .await
+        .unwrap();
+    
+    let all_authors = Author::objects(&db).all().await.unwrap();
+    assert_eq!(all_authors.len(), 3);
+    assert!(all_authors.iter().all(|a| a.name.contains("Updated")));
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_upsert_mixed_new_and_existing(#[future] db_with_author: (DatabaseRouter, Author)) {
+    let (db, existing_author) = db_with_author;
+    
+    let authors = vec![
+        Author {
+            id: existing_author.id,
+            name: "Updated Existing".to_string(),
+            email: existing_author.email.clone(),
+            age: existing_author.age + 10,
+            created_at: existing_author.created_at,
+            updated_at: chrono::Utc::now().fixed_offset(),
+        },
+        Author {
+            id: 888,
+            name: "New Author".to_string(),
+            email: "new@example.com".to_string(),
+            age: 40,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        },
+    ];
+    
+    Author::objects(&db)
+        .upsert_many(authors)
+        .on_conflict(Author::Id)
+        .update_fields(&[Author::Name, Author::Age])
+        .execute()
+        .await
+        .unwrap();
+    
+    let count = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count, 2);
+    
+    let updated = Author::objects(&db).get(existing_author.id).await.unwrap();
+    assert_eq!(updated.name, "Updated Existing");
+    assert_eq!(updated.age, existing_author.age + 10);
+    
+    let new = Author::objects(&db).get(888).await.unwrap();
+    assert_eq!(new.name, "New Author");
+}

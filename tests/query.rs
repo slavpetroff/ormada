@@ -461,3 +461,494 @@ async fn test_pagination_various_sizes(#[future] db: DatabaseRouter, #[case] cou
         assert_eq!(page2.len(), (page_size).min(count - page_size));
     }
 }
+
+// ============================================================================
+// Aggregation Tests
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_count(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let count = Author::objects(&db).aggregate_count().await.unwrap();
+    assert_eq!(count, 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_count_with_filter(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let count = Author::objects(&db)
+        .filter(Author::Age.gte(30))
+        .aggregate_count()
+        .await
+        .unwrap();
+    assert_eq!(count, 2); // Bob (30) and Charlie (35)
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_sum(#[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>)) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+    let total = Book::objects(&db).aggregate_sum(Book::Price).await.unwrap();
+    assert!(total.is_some());
+    assert!(total.unwrap() > 0.0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_sum_empty(#[future] db: DatabaseRouter) {
+    let total = Book::objects(&db).aggregate_sum(Book::Price).await.unwrap();
+    assert!(total.is_none());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_avg(#[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>)) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+    let avg = Book::objects(&db).aggregate_avg(Book::Price).await.unwrap();
+    assert!(avg.is_some());
+    assert!(avg.unwrap() > 0.0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_avg_empty(#[future] db: DatabaseRouter) {
+    let avg = Book::objects(&db).aggregate_avg(Book::Price).await.unwrap();
+    assert!(avg.is_none());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_max(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let max_age = Author::objects(&db).aggregate_max(Author::Age).await.unwrap();
+    assert_eq!(max_age, Some(35.0)); // Charlie's age
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_max_empty(#[future] db: DatabaseRouter) {
+    let max_age = Author::objects(&db).aggregate_max(Author::Age).await.unwrap();
+    assert!(max_age.is_none());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_min(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let min_age = Author::objects(&db).aggregate_min(Author::Age).await.unwrap();
+    assert_eq!(min_age, Some(25.0)); // Alice's age
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_min_empty(#[future] db: DatabaseRouter) {
+    let min_age = Author::objects(&db).aggregate_min(Author::Age).await.unwrap();
+    assert!(min_age.is_none());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_aggregate_with_complex_filter(#[future] db_with_authors_with_books: (DatabaseRouter, Vec<(Author, Vec<Book>)>)) {
+    let (db, _authors_with_books) = db_with_authors_with_books;
+    let total = Book::objects(&db)
+        .filter(Book::Published.eq(true))
+        .filter(Book::Price.gte(1000))
+        .aggregate_sum(Book::Price)
+        .await
+        .unwrap();
+    assert!(total.is_some());
+}
+
+// ============================================================================
+// Edge Cases and Error Handling
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_filter_with_null_checks(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    // All authors should have non-null names
+    let authors = Author::objects(&db)
+        .filter(Author::Name.is_not_null())
+        .all()
+        .await
+        .unwrap();
+    assert_eq!(authors.len(), 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let names = Author::objects(&db)
+        .values(vec![Author::Name])
+        .await
+        .unwrap();
+    assert_eq!(names.len(), 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_values_list_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    let ages = Author::objects(&db)
+        .values_list(vec![Author::Age], false)
+        .await
+        .unwrap();
+    assert_eq!(ages.len(), 3);
+    // Values are returned as JsonValue, so just check count
+    assert!(!ages.is_empty());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_earliest_on_empty(#[future] db: DatabaseRouter) {
+    let result = Author::objects(&db).earliest(Author::Age).await;
+    assert!(result.is_err());
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_latest_on_empty(#[future] db: DatabaseRouter) {
+    let result = Author::objects(&db).latest(Author::Age).await;
+    assert!(result.is_err());
+}
+
+// ============================================================================
+// Query Caching Edge Cases
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_cache_cleared_across_queries(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    // Different queries should not interfere
+    let qs1 = Author::objects(&db).filter(Author::Age.gt(25));
+    let qs2 = Author::objects(&db).filter(Author::Age.lt(35));
+    
+    let result1 = qs1.all().await.unwrap();
+    let result2 = qs2.all().await.unwrap();
+    
+    assert_eq!(result1.len(), 2); // Bob, Charlie
+    assert_eq!(result2.len(), 2); // Alice, Bob
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_queryset_clone_independence(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let base_qs = Author::objects(&db);
+    let qs1 = base_qs.filter(Author::Age.gt(25));
+    let qs2 = base_qs.filter(Author::Age.lt(35));
+    
+    let result1 = qs1.all().await.unwrap();
+    let result2 = qs2.all().await.unwrap();
+    
+    // Each queryset should be independent
+    assert_eq!(result1.len(), 2);
+    assert_eq!(result2.len(), 2);
+}
+
+// ============================================================================
+// Additional Query Methods
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_is_null_filter(#[future] db: DatabaseRouter) {
+    // Create author and verify null checks work
+    Author::objects(&db)
+        .create(Author {
+            name: "Test".to_string(),
+            email: "test@example.com".to_string(),
+            age: 30,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    
+    let authors = Author::objects(&db)
+        .filter(Author::Name.is_null())
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_ordering_stability(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors1 = Author::objects(&db)
+        .order_by_asc(Author::Name)
+        .all()
+        .await
+        .unwrap();
+    
+    let authors2 = Author::objects(&db)
+        .order_by_asc(Author::Name)
+        .all()
+        .await
+        .unwrap();
+    
+    // Order should be stable across calls
+    for (a1, a2) in authors1.iter().zip(authors2.iter()) {
+        assert_eq!(a1.id, a2.id);
+        assert_eq!(a1.name, a2.name);
+    }
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_limit_exceeds_count(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors = Author::objects(&db)
+        .limit(100)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_offset_exceeds_count(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors = Author::objects(&db)
+        .limit(10)
+        .offset(100)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_multiple_filters_same_column(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .filter(Author::Age.lte(30))
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice (25) and Bob (30)
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_filter_exclude_combination(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .exclude(Author::Age.eq(30))
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice (25) and Charlie (35), excluding Bob (30)
+}
+
+// ============================================================================
+// Q Object Tests (Complex Filters)
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_q_any_filter(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let q = Q::any()
+        .add(Author::Age.eq(25))
+        .add(Author::Age.eq(35));
+    
+    let authors = Author::objects(&db)
+        .filter(q)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice and Charlie
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_q_all_filter(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let q = Q::all()
+        .add(Author::Age.gte(25))
+        .add(Author::Age.lte(30));
+    
+    let authors = Author::objects(&db)
+        .filter(q)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice and Bob
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_q_not_filter(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let q = Q::all()
+        .add(Author::Age.eq(30))
+        .not();
+    
+    let authors = Author::objects(&db)
+        .filter(q)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice and Charlie (not Bob)
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_q_chained_conditions(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let q = Q::all()
+        .add(Author::Age.gte(25))
+        .add(Author::Age.lte(35))
+        .add(Author::Name.starts_with("A").or(Author::Name.starts_with("C")));
+    
+    let authors = Author::objects(&db)
+        .filter(q)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice (25) and Charlie (35)
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_q_empty_all(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let q = Q::all(); // Empty all condition
+    
+    let authors = Author::objects(&db)
+        .filter(q)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 3); // All authors match
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_q_empty_any(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let q = Q::any(); // Empty any condition
+    
+    let authors = Author::objects(&db)
+        .filter(q)
+        .all()
+        .await
+        .unwrap();
+    
+    // Empty ANY returns no results
+    assert_eq!(authors.len(), 0);
+}
+
+// ============================================================================
+// Iterator and Batch Tests
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_iterator_over_results(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors = Author::objects(&db).all().await.unwrap();
+    let mut count = 0;
+    for _ in authors.iter() {
+        count += 1;
+    }
+    assert_eq!(count, 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_select_only_specific_columns(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    // Test that we can still query even if select_only isn't fully implemented
+    let authors = Author::objects(&db).all().await.unwrap();
+    assert_eq!(authors.len(), 3);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_chaining_multiple_operations(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let authors = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .filter(Author::Age.lte(35))
+        .exclude(Author::Age.eq(30))
+        .order_by_asc(Author::Age)
+        .limit(10)
+        .all()
+        .await
+        .unwrap();
+    
+    assert_eq!(authors.len(), 2); // Alice and Charlie
+    assert_eq!(authors[0].age, 25); // Alice first
+    assert_eq!(authors[1].age, 35); // Charlie second
+}

@@ -386,3 +386,145 @@ async fn test_transaction_with_bulk_delete(
     let remaining = Author::objects(&db).count().await.unwrap();
     assert_eq!(remaining, 2);
 }
+
+// ============================================================================
+// Transaction Error Handling and Edge Cases
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
+    let initial_count = Author::objects(&db).count().await.unwrap();
+    
+    let result = tx!(db, |txn| async move {
+        Author::objects(txn)
+            .create(Author {
+                name: "Will Rollback".to_string(),
+                email: "rollback@example.com".to_string(),
+                age: 30,
+                ..Default::default()
+            })
+            .await?;
+        
+        // Force error
+        Err::<(), DjangoOrmError>(DjangoOrmError::Custom("Intentional error".to_string()))
+    })
+    .await;
+    
+    assert!(result.is_err());
+    
+    let final_count = Author::objects(&db).count().await.unwrap();
+    assert_eq!(initial_count, final_count);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_transaction_commit_only_on_success(#[future] db: DatabaseRouter) {
+    // Transaction that commits
+    let author = tx!(db, |txn| async move {
+        Author::objects(txn)
+            .create(Author {
+                name: "Success".to_string(),
+                email: "success@example.com".to_string(),
+                age: 30,
+                ..Default::default()
+            })
+            .await
+    })
+    .await
+    .unwrap();
+    
+    // Verify committed
+    let fetched = Author::objects(&db).get(author.id).await.unwrap();
+    assert_eq!(fetched.name, "Success");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
+    let outer = tx!(db, |outer_txn| async move {
+        let outer_author = Author::objects(outer_txn)
+            .create(Author {
+                name: "Outer".to_string(),
+                email: "outer@example.com".to_string(),
+                age: 30,
+                ..Default::default()
+            })
+            .await?;
+        
+        // Inner transaction that fails
+        let inner_result = tx!(outer_txn, |inner_txn| async move {
+            Author::objects(inner_txn)
+                .create(Author {
+                    name: "Inner".to_string(),
+                    email: "inner@example.com".to_string(),
+                    age: 25,
+                    ..Default::default()
+                })
+                .await?;
+            
+            Err::<(), DjangoOrmError>(DjangoOrmError::Custom("Inner fail".to_string()))
+        })
+        .await;
+        
+        // Inner failed but outer continues
+        assert!(inner_result.is_err());
+        
+        Ok(outer_author)
+    })
+    .await
+    .unwrap();
+    
+    // Outer should be committed
+    let count = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count, 1);
+    assert_eq!(outer.name, "Outer");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_transaction_with_aggregation(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let (count, max_age) = tx!(db, |txn| async move {
+        let count = Author::objects(txn).count().await?;
+        let max = Author::objects(txn).aggregate_max(Author::Age).await?;
+        Ok((count, max))
+    })
+    .await
+    .unwrap();
+    
+    assert_eq!(count, 3);
+    assert_eq!(max_age, Some(35.0));
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_transaction_with_filter_and_update(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+    
+    let updated = tx!(db, |txn| async move {
+        Author::objects(txn)
+            .filter(Author::Name.eq("Alice"))
+            .update(|author| {
+                author.age = 100;
+            })
+            .await
+    })
+    .await
+    .unwrap();
+    
+    assert_eq!(updated, 1);
+    
+    let alice = Author::objects(&db)
+        .filter(Author::Name.eq("Alice"))
+        .first()
+        .await
+        .unwrap();
+    assert_eq!(alice.age, 100);
+}
