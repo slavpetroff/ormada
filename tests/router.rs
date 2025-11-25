@@ -567,8 +567,6 @@ async fn test_router_nested_tx_macro() {
 
 #[tokio::test]
 async fn test_router_multiple_queries() {
-    use sea_orm::QueryTrait;
-
     let primary = Database::connect("sqlite::memory:").await.unwrap();
     let router = DatabaseRouter::new_single(primary);
 

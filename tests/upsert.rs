@@ -423,6 +423,7 @@ async fn test_upsert_in_transaction(#[future] db: DatabaseRouter) {
 #[awt]
 #[tokio::test]
 async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] author: Author) {
+    let _author = author;
     let result: Result<(), DjangoOrmError> = tx!(db, |txn| async move {
         // Upsert that would succeed
         Author::objects(txn)
@@ -548,7 +549,7 @@ async fn test_upsert_all_existing_records(
 ) {
     let (db, sample_authors) = db_with_sample_authors;
 
-    let mut updated_authors: Vec<Author> = sample_authors
+    let updated_authors: Vec<Author> = sample_authors
         .into_iter()
         .map(|mut a| {
             a.name = format!("{} Updated", a.name);

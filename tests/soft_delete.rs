@@ -62,7 +62,7 @@ async fn test_soft_delete_excludes_deleted_by_default(#[future] db_soft: Databas
         .await
         .unwrap();
 
-    let article2 = SoftArticle::objects(&db_soft)
+    let _article2 = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
             id: 0,
             title: "Another Active".to_string(),
@@ -208,7 +208,7 @@ async fn test_force_delete_permanently_removes(#[future] db_soft: DatabaseRouter
         .await
         .unwrap();
 
-    let id = article.id;
+    let _id = article.id;
 
     // Force delete (permanent)
     article.force_delete(&db_soft).await.unwrap();

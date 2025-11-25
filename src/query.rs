@@ -3277,7 +3277,7 @@ impl FilterOp {
 pub enum FilterExpr {
     /// AND combination of multiple conditions
     And(Vec<FilterExpr>),
-    /// OR combination of multiple conditions  
+    /// OR combination of multiple conditions
     Or(Vec<FilterExpr>),
     /// NOT (negation) of a condition
     Not(Box<FilterExpr>),

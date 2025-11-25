@@ -454,7 +454,7 @@ mod tests {
         let _write_conn = router.write_connection();
 
         // Subsequent read should use primary (not replica)
-        let read_conn = router.read_connection().await;
+        let _read_conn = router.read_connection().await;
 
         // In single-threaded test, we can verify it's using primary
         // by checking the context flag
@@ -471,7 +471,7 @@ mod tests {
         router.begin_transaction().await;
 
         // Even reads should use primary
-        let read_conn = router.read_connection().await;
+        let _read_conn = router.read_connection().await;
 
         // Verify we're in transaction mode
         assert!(router.is_in_transaction().await);
