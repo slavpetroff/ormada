@@ -727,7 +727,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let new_select = self.inner.select.clone().order_by(column, Order::Asc);
         self.with_select_and_op(
             new_select,
-            QueryOp::OrderBy { column: col_ref, direction: OrderDirection::Asc },
+            QueryOp::OrderBy {
+                column: col_ref,
+                direction: OrderDirection::Asc,
+            },
         )
     }
 
@@ -754,7 +757,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let new_select = self.inner.select.clone().order_by(column, Order::Desc);
         self.with_select_and_op(
             new_select,
-            QueryOp::OrderBy { column: col_ref, direction: OrderDirection::Desc },
+            QueryOp::OrderBy {
+                column: col_ref,
+                direction: OrderDirection::Desc,
+            },
         )
     }
 
@@ -3532,5 +3538,70 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    // ========================================================================
+    // QueryOp Variant Tests
+    // ========================================================================
+
+    #[test]
+    fn test_query_op_soft_delete_variant() {
+        let op = QueryOp::SoftDelete(SoftDeleteMode::OnlyDeleted);
+
+        match op {
+            QueryOp::SoftDelete(mode) => {
+                assert_eq!(mode, SoftDeleteMode::OnlyDeleted);
+            }
+            _ => panic!("Expected SoftDelete"),
+        }
+    }
+
+    #[test]
+    fn test_query_op_annotate_variant() {
+        let op = QueryOp::Annotate {
+            alias: "total".to_string(),
+            aggregation: Aggregation::CountAll,
+        };
+
+        match op {
+            QueryOp::Annotate { alias, aggregation } => {
+                assert_eq!(alias, "total");
+                assert!(matches!(aggregation, Aggregation::CountAll));
+            }
+            _ => panic!("Expected Annotate"),
+        }
+    }
+
+    #[test]
+    fn test_query_op_order_by_variant() {
+        let op = QueryOp::OrderBy {
+            column: sea_orm::sea_query::ColumnRef::Asterisk(None),
+            direction: OrderDirection::Desc,
+        };
+
+        assert!(op.is_order_by());
+        match op {
+            QueryOp::OrderBy { direction, .. } => {
+                assert_eq!(direction, OrderDirection::Desc);
+            }
+            _ => panic!("Expected OrderBy"),
+        }
+    }
+
+    #[test]
+    fn test_query_op_group_by_variant() {
+        let op = QueryOp::GroupBy(sea_orm::sea_query::ColumnRef::Asterisk(None));
+
+        match op {
+            QueryOp::GroupBy(_) => {}
+            _ => panic!("Expected GroupBy"),
+        }
+    }
+
+    #[test]
+    fn test_query_op_exclude_variant() {
+        let op = QueryOp::Exclude(FilterExpr::And(vec![]));
+        assert!(op.is_exclude());
+        assert!(!op.is_filter());
     }
 }

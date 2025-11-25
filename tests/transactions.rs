@@ -532,3 +532,193 @@ async fn test_transaction_with_filter_and_update(
     let alice = Author::objects(&db).filter(Author::Name.eq("Alice")).first().await.unwrap();
     assert_eq!(alice.age, 100);
 }
+
+// ============================================================================
+// AtomicExt on DatabaseConnection Tests (for coverage)
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_atomic_ext_on_db_connection(#[future] db: DatabaseRouter) {
+    use seaorm_django::transaction::AtomicExt;
+
+    // Use AtomicExt trait on raw DatabaseConnection
+    let author = db
+        .primary_connection()
+        .atomic(|txn| {
+            Box::pin(async move {
+                Author::objects(txn)
+                    .create(Author {
+                        name: "DB Connection Atomic".to_string(),
+                        email: "dbconn@test.com".to_string(),
+                        age: 25,
+                        ..Default::default()
+                    })
+                    .await
+            })
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(author.name, "DB Connection Atomic");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_atomic_ext_rollback_path(#[future] db: DatabaseRouter) {
+    use seaorm_django::transaction::AtomicExt;
+
+    let result: Result<Author, _> = db
+        .primary_connection()
+        .atomic(|txn| {
+            Box::pin(async move {
+                let _author = Author::objects(txn)
+                    .create(Author {
+                        name: "Will Rollback".to_string(),
+                        email: "rollback@test.com".to_string(),
+                        age: 30,
+                        ..Default::default()
+                    })
+                    .await?;
+
+                // Force error to trigger rollback path
+                Err::<Author, _>(DjangoOrmError::validation("Author", "test", "Intentional error"))
+            })
+        })
+        .await;
+
+    assert!(result.is_err());
+
+    // Verify rollback worked - nothing persisted
+    let count = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count, 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_atomic_ext_savepoint_method(#[future] db: DatabaseRouter) {
+    use seaorm_django::transaction::AtomicExt;
+
+    // Test savepoint method on DatabaseConnection
+    let author = db
+        .primary_connection()
+        .savepoint("test_sp", |txn| {
+            Box::pin(async move {
+                Author::objects(txn)
+                    .create(Author {
+                        name: "Savepoint Method".to_string(),
+                        email: "savepoint@test.com".to_string(),
+                        age: 35,
+                        ..Default::default()
+                    })
+                    .await
+            })
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(author.name, "Savepoint Method");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_atomic_ext_nested_on_transaction(#[future] db: DatabaseRouter) {
+    use sea_orm::TransactionTrait;
+    use seaorm_django::transaction::AtomicExt;
+
+    // Get a transaction, then use AtomicExt on it for nested tx
+    let txn = db.primary_connection().begin().await.unwrap();
+
+    let author = txn
+        .atomic(|inner_txn| {
+            Box::pin(async move {
+                Author::objects(inner_txn)
+                    .create(Author {
+                        name: "Nested Atomic".to_string(),
+                        email: "nested@test.com".to_string(),
+                        age: 40,
+                        ..Default::default()
+                    })
+                    .await
+            })
+        })
+        .await
+        .unwrap();
+
+    // Commit outer transaction
+    txn.commit().await.unwrap();
+
+    assert_eq!(author.name, "Nested Atomic");
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_atomic_ext_nested_rollback(#[future] db: DatabaseRouter) {
+    use sea_orm::TransactionTrait;
+    use seaorm_django::transaction::AtomicExt;
+
+    let txn = db.primary_connection().begin().await.unwrap();
+
+    // Nested transaction that fails
+    let result: Result<Author, _> = txn
+        .atomic(|inner_txn| {
+            Box::pin(async move {
+                let _author = Author::objects(inner_txn)
+                    .create(Author {
+                        name: "Will Fail".to_string(),
+                        email: "fail@test.com".to_string(),
+                        age: 45,
+                        ..Default::default()
+                    })
+                    .await?;
+
+                Err::<Author, _>(DjangoOrmError::validation("Author", "test", "Nested error"))
+            })
+        })
+        .await;
+
+    assert!(result.is_err());
+
+    // Rollback outer
+    txn.rollback().await.unwrap();
+
+    // Verify nothing persisted
+    let count = Author::objects(&db).count().await.unwrap();
+    assert_eq!(count, 0);
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_atomic_ext_nested_savepoint(#[future] db: DatabaseRouter) {
+    use sea_orm::TransactionTrait;
+    use seaorm_django::transaction::AtomicExt;
+
+    let txn = db.primary_connection().begin().await.unwrap();
+
+    // Use savepoint method on transaction
+    let author = txn
+        .savepoint("nested_sp", |inner_txn| {
+            Box::pin(async move {
+                Author::objects(inner_txn)
+                    .create(Author {
+                        name: "Nested Savepoint".to_string(),
+                        email: "nestedsp@test.com".to_string(),
+                        age: 50,
+                        ..Default::default()
+                    })
+                    .await
+            })
+        })
+        .await
+        .unwrap();
+
+    txn.commit().await.unwrap();
+
+    assert_eq!(author.name, "Nested Savepoint");
+}

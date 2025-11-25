@@ -314,6 +314,32 @@ async fn test_latest(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Auth
 }
 
 // ============================================================================
+// Test QueryPlan Access
+// ============================================================================
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_query_plan_access(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _authors) = db_with_sample_authors;
+
+    // Build a query with filters and ordering
+    let query = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .order_by_asc(Author::Name)
+        .limit(10);
+
+    // Access the query plan
+    let plan = query.plan();
+
+    // Verify plan has expected operations
+    assert!(plan.has_filters());
+    assert!(plan.has_ordering());
+    assert!(plan.has_limit());
+    assert_eq!(plan.get_limit(), Some(10));
+}
+
+// ============================================================================
 // Pagination
 // ============================================================================
 

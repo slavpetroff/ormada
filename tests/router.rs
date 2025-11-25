@@ -176,3 +176,310 @@ async fn test_router_read_after_write_uses_primary() {
     let fetched = Author::objects(&router).get(author.id).await.unwrap();
     assert_eq!(fetched.email, "write@test.com");
 }
+
+// ============================================================================
+// ConsistencyContext Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_consistency_context_default() {
+    // Test Default implementation
+    let ctx: ConsistencyContext = Default::default();
+    assert!(!ctx.has_write_occurred());
+}
+
+#[tokio::test]
+async fn test_consistency_context_clone() {
+    let ctx = ConsistencyContext::new();
+    ctx.mark_write();
+
+    // Clone should share the same underlying state
+    let cloned = ctx.clone();
+    assert!(cloned.has_write_occurred());
+}
+
+#[tokio::test]
+async fn test_consistency_context_debug() {
+    let ctx = ConsistencyContext::new();
+    let debug_str = format!("{:?}", ctx);
+    assert!(debug_str.contains("ConsistencyContext"));
+}
+
+// ============================================================================
+// Router ConnectionTrait Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_router_get_database_backend() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    let backend = router.get_database_backend();
+    assert!(matches!(backend, sea_orm::DatabaseBackend::Sqlite));
+}
+
+#[tokio::test]
+async fn test_router_execute_raw_statement() {
+    use sea_orm::Statement;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Execute a simple SQL statement
+    let stmt =
+        Statement::from_string(sea_orm::DatabaseBackend::Sqlite, "SELECT 1 as value".to_string());
+
+    let result = router.query_one_raw(stmt).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_query_all_via_orm() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Create table using ORM
+    Author::create_table(&router).await.unwrap();
+
+    // Create data using ORM
+    Author::objects(&router)
+        .create(Author {
+            id: 0,
+            name: "Test 1".to_string(),
+            email: "test1@example.com".to_string(),
+            age: 25,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        })
+        .await
+        .unwrap();
+
+    Author::objects(&router)
+        .create(Author {
+            id: 0,
+            name: "Test 2".to_string(),
+            email: "test2@example.com".to_string(),
+            age: 30,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        })
+        .await
+        .unwrap();
+
+    // Query all using ORM
+    let authors = Author::objects(&router).all().await.unwrap();
+    assert_eq!(authors.len(), 2);
+}
+
+#[tokio::test]
+async fn test_router_transaction_with_config() {
+    use sea_orm::TransactionTrait;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Begin with config
+    let txn = router.begin_with_config(None, None).await.unwrap();
+    txn.rollback().await.unwrap();
+}
+
+// ============================================================================
+// Router Routing Strategy Tests
+// ============================================================================
+
+#[rstest]
+#[case(RoutingStrategy::Primary)]
+#[case(RoutingStrategy::RoundRobin)]
+#[tokio::test]
+async fn test_routing_strategy_variants(#[case] strategy: RoutingStrategy) {
+    // Verify all routing strategies can be constructed and debugged
+    let debug_str = format!("{:?}", strategy);
+    assert!(!debug_str.is_empty());
+}
+
+#[tokio::test]
+async fn test_routing_strategy_clone_and_eq() {
+    let s1 = RoutingStrategy::Primary;
+    let s2 = s1.clone();
+    assert_eq!(s1, s2);
+
+    let s3 = RoutingStrategy::RoundRobin;
+    assert_ne!(s1, s3);
+}
+
+// ============================================================================
+// Router Method Coverage Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_router_primary_connection() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Access primary connection directly
+    let _primary_conn = router.primary_connection();
+    assert!(true);
+}
+
+#[tokio::test]
+async fn test_router_reset_context() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Mark a write
+    router.context().mark_write();
+    assert!(router.context().has_write_occurred());
+
+    // Reset context
+    router.reset_context();
+    assert!(!router.context().has_write_occurred());
+}
+
+#[tokio::test]
+async fn test_router_transaction_state() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Initially not in transaction
+    assert!(!router.is_in_transaction().await);
+
+    // Begin transaction
+    router.begin_transaction().await;
+    assert!(router.is_in_transaction().await);
+
+    // End transaction
+    router.end_transaction().await;
+    assert!(!router.is_in_transaction().await);
+}
+
+#[tokio::test]
+async fn test_router_execute_unprepared() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Execute unprepared SQL
+    let result = router.execute_unprepared("SELECT 1").await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_execute_raw() {
+    use sea_orm::Statement;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Execute raw statement
+    let stmt =
+        Statement::from_string(sea_orm::DatabaseBackend::Sqlite, "SELECT 1 as value".to_string());
+    let result = router.execute_raw(stmt).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_query_all_raw() {
+    use sea_orm::Statement;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Query all raw
+    let stmt =
+        Statement::from_string(sea_orm::DatabaseBackend::Sqlite, "SELECT 1 as value".to_string());
+    let result = router.query_all_raw(stmt).await;
+    assert!(result.is_ok());
+}
+
+// ============================================================================
+// &DatabaseRouter Implementation Tests (borrowed reference)
+// ============================================================================
+
+#[tokio::test]
+async fn test_router_ref_execute() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    // Use borrowed reference
+    let router_ref: &DatabaseRouter = &router;
+
+    // Create table via reference
+    Author::create_table(router_ref).await.unwrap();
+
+    // Create via reference
+    let author = Author::objects(router_ref)
+        .create(Author {
+            id: 0,
+            name: "Ref Test".to_string(),
+            email: "ref@test.com".to_string(),
+            age: 25,
+            created_at: chrono::Utc::now().fixed_offset(),
+            updated_at: chrono::Utc::now().fixed_offset(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(author.name, "Ref Test");
+}
+
+#[tokio::test]
+async fn test_router_ref_query_one() {
+    use sea_orm::Statement;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+    let router_ref: &DatabaseRouter = &router;
+
+    // Execute a simple query via reference
+    let stmt =
+        Statement::from_string(sea_orm::DatabaseBackend::Sqlite, "SELECT 1 as value".to_string());
+    let result = router_ref.query_one_raw(stmt).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_ref_query_all() {
+    use sea_orm::Statement;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+    let router_ref: &DatabaseRouter = &router;
+
+    let stmt =
+        Statement::from_string(sea_orm::DatabaseBackend::Sqlite, "SELECT 1 as value".to_string());
+    let result = router_ref.query_all_raw(stmt).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_ref_execute_unprepared() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+    let router_ref: &DatabaseRouter = &router;
+
+    let result = router_ref.execute_unprepared("SELECT 1").await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_ref_execute_raw() {
+    use sea_orm::Statement;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+    let router_ref: &DatabaseRouter = &router;
+
+    let stmt =
+        Statement::from_string(sea_orm::DatabaseBackend::Sqlite, "SELECT 1 as value".to_string());
+    let result = router_ref.execute_raw(stmt).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_router_ref_get_database_backend() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+    let router_ref: &DatabaseRouter = &router;
+
+    let backend = router_ref.get_database_backend();
+    assert!(matches!(backend, sea_orm::DatabaseBackend::Sqlite));
+}

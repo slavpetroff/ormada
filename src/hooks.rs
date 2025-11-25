@@ -115,8 +115,16 @@ mod tests {
     async fn test_default_hooks_do_nothing() {
         let mut model = TestModel { value: 42 };
 
+        // Test all default "before" hooks
         assert!(model.before_create().await.is_ok());
         assert!(model.before_update().await.is_ok());
         assert!(model.before_save().await.is_ok());
+        assert!(model.before_delete().await.is_ok());
+
+        // Test all default "after" hooks
+        assert!(model.after_create().await.is_ok());
+        assert!(model.after_update().await.is_ok());
+        assert!(model.after_save().await.is_ok());
+        assert!(model.after_delete().await.is_ok());
     }
 }

@@ -430,10 +430,7 @@ macro_rules! tx {
             use sea_orm::TransactionTrait;
 
             // Begin transaction - static dispatch, no boxing
-            let __txn = $db
-                .begin()
-                .await
-                .map_err($crate::error::DjangoOrmError::from)?;
+            let __txn = $db.begin().await.map_err($crate::error::DjangoOrmError::from)?;
 
             // Execute the body directly - user controls the return type
             let __result: Result<_, $crate::error::DjangoOrmError> = (|| async {
@@ -445,10 +442,7 @@ macro_rules! tx {
             // Commit or rollback based on result
             match __result {
                 Ok(__value) => {
-                    __txn
-                        .commit()
-                        .await
-                        .map_err($crate::error::DjangoOrmError::from)?;
+                    __txn.commit().await.map_err($crate::error::DjangoOrmError::from)?;
                     Ok(__value)
                 }
                 Err(__err) => {
@@ -499,46 +493,6 @@ impl AtomicExt for DatabaseTransaction {
         // Nested savepoint - use nested transaction
         self.atomic(f).await
     }
-}
-
-/// Alternative atomic transaction macro
-///
-/// **Note**: Prefer using the `tx!` macro for most cases - it's cleaner and more explicit.
-///
-/// This macro wraps the body in `async move {}` automatically, but `tx!` is recommended
-/// because it's clearer that you're writing an async block.
-///
-/// # Recommended: Use `tx!` instead
-///
-/// ```rust,ignore
-/// use seaorm_django::tx;
-///
-/// let author = tx!(db, |txn| async move {
-///     Author::objects(txn).create(Author {
-///         name: "John".to_string(),
-///         ..Default::default()
-///     }).await
-/// })?;
-/// ```
-///
-/// # This macro's syntax
-///
-/// ```rust,ignore
-/// use seaorm_django::atomic;
-///
-/// // Body is automatically wrapped in async move
-/// let author = atomic!(db, |txn| {
-///     Author::objects(txn).create(Author {
-///         name: "John".to_string(),
-///         ..Default::default()
-///     }).await
-/// })?;
-/// ```
-#[macro_export]
-macro_rules! atomic {
-    ($db:expr, |$txn:ident| $body:expr) => {
-        $db.atomic(|$txn| Box::pin(async move { $body })).await
-    };
 }
 
 #[cfg(test)]

@@ -433,7 +433,7 @@ async fn test_delete_single_record(#[future] db_with_author: (DatabaseRouter, Au
     let (db, author) = db_with_author;
     let id = author.id;
 
-    // Delete the record using DeleteExt trait
+    // Delete the record using model's delete() method
     author.delete(&db).await.unwrap();
 
     // Verify it's gone
