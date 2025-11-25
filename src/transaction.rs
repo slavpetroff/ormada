@@ -374,9 +374,21 @@ impl AtomicExt for DatabaseConnection {
     }
 }
 
-/// Ergonomic transaction macro (recommended!)
+/// Ergonomic transaction macro with static dispatch (recommended!)
 ///
-/// This macro provides Django-like transaction syntax without `Box::pin` boilerplate.
+/// This macro provides Django-like transaction syntax with zero boxing overhead.
+/// Uses **static dispatch** - no `Box::pin` or `dyn Future`.
+///
+/// # Syntax
+///
+/// ```rust,ignore
+/// tx!(connection, |txn| async move {
+///     // Your transaction code here
+///     Ok(result)
+/// })
+/// ```
+///
+/// **Important:** The body MUST be `async move { ... }` with braces.
 ///
 /// # Examples
 ///
@@ -405,10 +417,46 @@ impl AtomicExt for DatabaseConnection {
 ///     Ok((author, books))
 /// }).await?;
 /// ```
+///
+/// # Static Dispatch Benefits
+///
+/// - **Zero heap allocation** - no `Box::pin`
+/// - **No vtable lookup** - concrete future types
+/// - **Better optimization** - compiler can inline
 #[macro_export]
 macro_rules! tx {
-    ($db:expr, |$txn:ident| $body:expr) => {
-        $db.atomic(|$txn| Box::pin($body))
+    ($db:expr, |$txn:ident| async move $body:block) => {
+        async {
+            use sea_orm::TransactionTrait;
+
+            // Begin transaction - static dispatch, no boxing
+            let __txn = $db
+                .begin()
+                .await
+                .map_err($crate::error::DjangoOrmError::from)?;
+
+            // Execute the body directly - user controls the return type
+            let __result: Result<_, $crate::error::DjangoOrmError> = (|| async {
+                let $txn = &__txn;
+                $body
+            })()
+            .await;
+
+            // Commit or rollback based on result
+            match __result {
+                Ok(__value) => {
+                    __txn
+                        .commit()
+                        .await
+                        .map_err($crate::error::DjangoOrmError::from)?;
+                    Ok(__value)
+                }
+                Err(__err) => {
+                    let _ = __txn.rollback().await;
+                    Err(__err)
+                }
+            }
+        }
     };
 }
 

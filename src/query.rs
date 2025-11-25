@@ -252,11 +252,256 @@ pub enum SoftDeleteMode {
     OnlyDeleted,
 }
 
+// ============================================================================
+// QueryOp Enum - Introspectable Query Operations
+// ============================================================================
+
+/// Order direction for sorting
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderDirection {
+    /// Ascending order (ASC)
+    Asc,
+    /// Descending order (DESC)
+    Desc,
+}
+
+/// Represents a single query operation - fully introspectable
+///
+/// This enum captures all query modifications in a pattern-matchable form,
+/// enabling query plan inspection, optimization, and debugging.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// let plan = Book::objects(db).filter(Book::Price.lt(50)).plan();
+///
+/// // Inspect the query plan
+/// for op in plan.operations() {
+///     match op {
+///         QueryOp::Filter(expr) => println!("Filter: {:?}", expr),
+///         QueryOp::Limit(n) => println!("Limit: {}", n),
+///         QueryOp::OrderBy { column, direction } => {
+///             println!("Order by {:?} {:?}", column, direction);
+///         }
+///         _ => {}
+///     }
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub enum QueryOp {
+    /// Filter condition (WHERE clause)
+    Filter(FilterExpr),
+    /// Exclusion condition (WHERE NOT clause)
+    Exclude(FilterExpr),
+    /// Order by column with direction
+    OrderBy {
+        /// Column reference for ordering
+        column: sea_orm::sea_query::ColumnRef,
+        /// Sort direction
+        direction: OrderDirection,
+    },
+    /// Limit number of results
+    Limit(u64),
+    /// Offset for pagination
+    Offset(u64),
+    /// DISTINCT clause
+    Distinct,
+    /// GROUP BY clause
+    GroupBy(sea_orm::sea_query::ColumnRef),
+    /// Soft delete mode
+    SoftDelete(SoftDeleteMode),
+    /// Annotation (aggregate expression with alias)
+    Annotate {
+        /// Alias for the aggregation result
+        alias: String,
+        /// Aggregation expression
+        aggregation: Aggregation,
+    },
+}
+
+impl QueryOp {
+    /// Create a filter operation
+    pub fn filter(expr: FilterExpr) -> Self {
+        Self::Filter(expr)
+    }
+
+    /// Create an exclude operation
+    pub fn exclude(expr: FilterExpr) -> Self {
+        Self::Exclude(expr)
+    }
+
+    /// Create an order by ascending operation
+    pub fn order_asc(column: impl ColumnTrait) -> Self {
+        Self::OrderBy {
+            column: column.as_column_ref().into(),
+            direction: OrderDirection::Asc,
+        }
+    }
+
+    /// Create an order by descending operation
+    pub fn order_desc(column: impl ColumnTrait) -> Self {
+        Self::OrderBy {
+            column: column.as_column_ref().into(),
+            direction: OrderDirection::Desc,
+        }
+    }
+
+    /// Create a limit operation
+    pub fn limit(n: u64) -> Self {
+        Self::Limit(n)
+    }
+
+    /// Create an offset operation
+    pub fn offset(n: u64) -> Self {
+        Self::Offset(n)
+    }
+
+    /// Create a distinct operation
+    pub fn distinct() -> Self {
+        Self::Distinct
+    }
+
+    /// Create a group by operation
+    pub fn group_by(column: impl ColumnTrait) -> Self {
+        Self::GroupBy(column.as_column_ref().into())
+    }
+
+    /// Check if this is a filter operation
+    pub const fn is_filter(&self) -> bool {
+        matches!(self, Self::Filter(_))
+    }
+
+    /// Check if this is an exclude operation
+    pub const fn is_exclude(&self) -> bool {
+        matches!(self, Self::Exclude(_))
+    }
+
+    /// Check if this is an order by operation
+    pub const fn is_order_by(&self) -> bool {
+        matches!(self, Self::OrderBy { .. })
+    }
+
+    /// Check if this is a limit operation
+    pub const fn is_limit(&self) -> bool {
+        matches!(self, Self::Limit(_))
+    }
+
+    /// Check if this is an offset operation
+    pub const fn is_offset(&self) -> bool {
+        matches!(self, Self::Offset(_))
+    }
+
+    /// Check if this is a distinct operation
+    pub const fn is_distinct(&self) -> bool {
+        matches!(self, Self::Distinct)
+    }
+}
+
+/// Query plan - a collection of operations that can be inspected and optimized
+///
+/// The query plan captures all operations applied to a QuerySet in order,
+/// enabling introspection before execution.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let plan = Book::objects(db)
+///     .filter(Book::Price.lt(50))
+///     .order_by_desc(Book::CreatedAt)
+///     .limit(10)
+///     .plan();
+///
+/// println!("Query has {} operations", plan.len());
+/// println!("Debug: {:?}", plan);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct QueryPlan {
+    operations: Vec<QueryOp>,
+}
+
+impl QueryPlan {
+    /// Create a new empty query plan
+    pub fn new() -> Self {
+        Self { operations: Vec::new() }
+    }
+
+    /// Add an operation to the plan
+    pub fn push(&mut self, op: QueryOp) {
+        self.operations.push(op);
+    }
+
+    /// Get the number of operations
+    pub fn len(&self) -> usize {
+        self.operations.len()
+    }
+
+    /// Check if the plan is empty
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
+    }
+
+    /// Get a slice of operations
+    pub fn operations(&self) -> &[QueryOp] {
+        &self.operations
+    }
+
+    /// Iterate over operations
+    pub fn iter(&self) -> impl Iterator<Item = &QueryOp> {
+        self.operations.iter()
+    }
+
+    /// Check if plan contains any filter operations
+    pub fn has_filters(&self) -> bool {
+        self.operations.iter().any(|op| op.is_filter() || op.is_exclude())
+    }
+
+    /// Check if plan has ordering
+    pub fn has_ordering(&self) -> bool {
+        self.operations.iter().any(|op| op.is_order_by())
+    }
+
+    /// Check if plan has limit
+    pub fn has_limit(&self) -> bool {
+        self.operations.iter().any(|op| op.is_limit())
+    }
+
+    /// Get all filter expressions
+    pub fn filters(&self) -> Vec<&FilterExpr> {
+        self.operations
+            .iter()
+            .filter_map(|op| match op {
+                QueryOp::Filter(expr) => Some(expr),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Get limit value if set
+    pub fn get_limit(&self) -> Option<u64> {
+        self.operations.iter().find_map(|op| match op {
+            QueryOp::Limit(n) => Some(*n),
+            _ => None,
+        })
+    }
+
+    /// Get offset value if set
+    pub fn get_offset(&self) -> Option<u64> {
+        self.operations.iter().find_map(|op| match op {
+            QueryOp::Offset(n) => Some(*n),
+            _ => None,
+        })
+    }
+}
+
 /// Internal state for `QuerySet` (shared via Arc)
 pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
     pub(crate) db: &'a C,
     pub(crate) select: Select<E>,
     pub(crate) soft_delete_mode: SoftDeleteMode,
+    /// Query plan for introspection
+    pub(crate) plan: QueryPlan,
     // Thread-safe cache for query results
     pub(crate) cache: RwLock<Option<Arc<Vec<E::Model>>>>,
 }
@@ -276,18 +521,22 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 db,
                 select: E::find(),
                 soft_delete_mode: SoftDeleteMode::ExcludeDeleted,
+                plan: QueryPlan::new(),
                 cache: RwLock::new(None),
             }),
         }
     }
 
-    /// Create a new `QuerySet` with modified select (internal helper)
-    fn with_select(&self, select: Select<E>) -> Self {
+    /// Create a new `QuerySet` with modified select and operation (internal helper)
+    fn with_select_and_op(&self, select: Select<E>, op: QueryOp) -> Self {
+        let mut plan = self.inner.plan.clone();
+        plan.push(op);
         Self {
             inner: Arc::new(QuerySetInner {
                 db: self.inner.db,
                 select,
                 soft_delete_mode: self.inner.soft_delete_mode,
+                plan,
                 cache: RwLock::new(None), // New cache for modified query
             }),
         }
@@ -295,14 +544,38 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 
     /// Create a new `QuerySet` with modified soft delete mode
     fn with_soft_delete_mode(&self, mode: SoftDeleteMode) -> Self {
+        let mut plan = self.inner.plan.clone();
+        plan.push(QueryOp::SoftDelete(mode));
         Self {
             inner: Arc::new(QuerySetInner {
                 db: self.inner.db,
                 select: self.inner.select.clone(),
                 soft_delete_mode: mode,
+                plan,
                 cache: RwLock::new(None),
             }),
         }
+    }
+
+    /// Get the query plan for introspection
+    ///
+    /// Returns a clone of the current query plan, allowing you to inspect
+    /// all operations that will be applied when the query is executed.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let plan = Book::objects(db)
+    ///     .filter(Book::Price.lt(50))
+    ///     .limit(10)
+    ///     .plan();
+    ///
+    /// for op in plan.iter() {
+    ///     println!("{:?}", op);
+    /// }
+    /// ```
+    pub fn plan(&self) -> QueryPlan {
+        self.inner.plan.clone()
     }
 
     /// Apply soft delete filter to the query based on current mode
@@ -351,8 +624,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///
     /// Creates a new `QuerySet` with added filter. The new `QuerySet` has its own cache.
     pub fn filter(&self, condition: impl Into<Condition>) -> Self {
-        let new_select = self.inner.select.clone().filter(condition);
-        self.with_select(new_select)
+        let cond: Condition = condition.into();
+        let new_select = self.inner.select.clone().filter(cond.clone());
+        self.with_select_and_op(new_select, QueryOp::Filter(FilterExpr::raw(cond)))
     }
 
     /// Exclude records (Django's .`exclude()`)
@@ -360,8 +634,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// Creates a new `QuerySet` with added exclusion. The new `QuerySet` has its own cache.
     pub fn exclude(&self, condition: impl Into<Condition>) -> Self {
         let cond: Condition = condition.into();
-        let new_select = self.inner.select.clone().filter(cond.not());
-        self.with_select(new_select)
+        let new_select = self.inner.select.clone().filter(cond.clone().not());
+        self.with_select_and_op(new_select, QueryOp::Exclude(FilterExpr::raw(cond)))
     }
 
     /// Include soft-deleted records in query results
@@ -428,7 +702,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     pub fn distinct(&self) -> Self {
         use sea_orm::QuerySelect;
         let new_select = self.inner.select.clone().distinct();
-        self.with_select(new_select)
+        self.with_select_and_op(new_select, QueryOp::Distinct)
     }
 
     /// Order by a column in ascending order (Django's .`order_by`('field'))
@@ -449,8 +723,12 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .await?;
     /// ```
     pub fn order_by_asc(&self, column: impl ColumnTrait) -> Self {
+        let col_ref = column.as_column_ref().into();
         let new_select = self.inner.select.clone().order_by(column, Order::Asc);
-        self.with_select(new_select)
+        self.with_select_and_op(
+            new_select,
+            QueryOp::OrderBy { column: col_ref, direction: OrderDirection::Asc },
+        )
     }
 
     /// Order by a column in descending order (Django's .`order_by`('-field'))
@@ -472,20 +750,24 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .await?;
     /// ```
     pub fn order_by_desc(&self, column: impl ColumnTrait) -> Self {
+        let col_ref = column.as_column_ref().into();
         let new_select = self.inner.select.clone().order_by(column, Order::Desc);
-        self.with_select(new_select)
+        self.with_select_and_op(
+            new_select,
+            QueryOp::OrderBy { column: col_ref, direction: OrderDirection::Desc },
+        )
     }
 
     /// Limit results (Django's [:n])
     pub fn limit(&self, limit: u64) -> Self {
         let new_select = self.inner.select.clone().limit(limit);
-        self.with_select(new_select)
+        self.with_select_and_op(new_select, QueryOp::Limit(limit))
     }
 
     /// Offset results
     pub fn offset(&self, offset: u64) -> Self {
         let new_select = self.inner.select.clone().offset(offset);
-        self.with_select(new_select)
+        self.with_select_and_op(new_select, QueryOp::Offset(offset))
     }
 
     /// Execute query and return all matching results (Django's .`all()`)
@@ -2174,8 +2456,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// ```
     pub fn group_by(&self, column: E::Column) -> Self {
         use sea_orm::QuerySelect;
+        let col_ref = column.as_column_ref().into();
         let new_select = self.inner.select.clone().group_by(column);
-        self.with_select(new_select)
+        self.with_select_and_op(new_select, QueryOp::GroupBy(col_ref))
     }
 
     /// Add computed/aggregated columns to the query (Django's .`annotate()`)
@@ -2256,12 +2539,23 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         use sea_orm::QuerySelect;
 
         let mut new_select = self.inner.select.clone();
+        let mut plan = self.inner.plan.clone();
+
         for (alias, aggregation) in annotations {
-            let expr = aggregation.into_expr();
+            let expr = aggregation.clone().into_expr();
             new_select = new_select.expr_as(expr, alias);
+            plan.push(QueryOp::Annotate { alias: alias.to_string(), aggregation });
         }
 
-        self.with_select(new_select)
+        Self {
+            inner: Arc::new(QuerySetInner {
+                db: self.inner.db,
+                select: new_select,
+                soft_delete_mode: self.inner.soft_delete_mode,
+                plan,
+                cache: RwLock::new(None),
+            }),
+        }
     }
 }
 
@@ -3039,6 +3333,203 @@ mod tests {
                     assert!(!filter.is_or());
                     assert!(!filter.is_not());
                 }
+            }
+        }
+    }
+
+    // ========================================================================
+    // QueryOp Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_query_op_limit() {
+        let op = QueryOp::limit(10);
+        assert!(op.is_limit());
+        assert!(!op.is_filter());
+        assert!(!op.is_order_by());
+    }
+
+    #[test]
+    fn test_query_op_offset() {
+        let op = QueryOp::offset(20);
+        assert!(op.is_offset());
+        assert!(!op.is_limit());
+    }
+
+    #[test]
+    fn test_query_op_distinct() {
+        let op = QueryOp::distinct();
+        assert!(op.is_distinct());
+        assert!(!op.is_filter());
+    }
+
+    #[test]
+    fn test_query_op_filter() {
+        let op = QueryOp::filter(FilterExpr::And(vec![]));
+        assert!(op.is_filter());
+        assert!(!op.is_exclude());
+    }
+
+    #[test]
+    fn test_query_op_exclude() {
+        let op = QueryOp::exclude(FilterExpr::And(vec![]));
+        assert!(op.is_exclude());
+        assert!(!op.is_filter());
+    }
+
+    #[test]
+    fn test_query_op_is_debug() {
+        let op = QueryOp::Limit(10);
+        let debug_str = format!("{:?}", op);
+        assert!(debug_str.contains("Limit"));
+        assert!(debug_str.contains("10"));
+    }
+
+    #[test]
+    fn test_query_op_is_clone() {
+        let op = QueryOp::Limit(10);
+        let cloned = op.clone();
+        assert!(cloned.is_limit());
+    }
+
+    #[test]
+    fn test_order_direction() {
+        assert_eq!(OrderDirection::Asc, OrderDirection::Asc);
+        assert_ne!(OrderDirection::Asc, OrderDirection::Desc);
+    }
+
+    // ========================================================================
+    // QueryPlan Tests
+    // ========================================================================
+
+    #[test]
+    fn test_query_plan_new() {
+        let plan = QueryPlan::new();
+        assert!(plan.is_empty());
+        assert_eq!(plan.len(), 0);
+    }
+
+    #[test]
+    fn test_query_plan_push() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::Limit(10));
+        plan.push(QueryOp::Offset(5));
+        assert_eq!(plan.len(), 2);
+        assert!(!plan.is_empty());
+    }
+
+    #[test]
+    fn test_query_plan_operations() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::Limit(10));
+        plan.push(QueryOp::Distinct);
+
+        let ops = plan.operations();
+        assert_eq!(ops.len(), 2);
+        assert!(ops[0].is_limit());
+        assert!(ops[1].is_distinct());
+    }
+
+    #[test]
+    fn test_query_plan_has_filters() {
+        let mut plan = QueryPlan::new();
+        assert!(!plan.has_filters());
+
+        plan.push(QueryOp::filter(FilterExpr::And(vec![])));
+        assert!(plan.has_filters());
+    }
+
+    #[test]
+    fn test_query_plan_has_ordering() {
+        let mut plan = QueryPlan::new();
+        assert!(!plan.has_ordering());
+
+        // Use Asterisk ColumnRef (None = no table prefix)
+        plan.push(QueryOp::OrderBy {
+            column: sea_orm::sea_query::ColumnRef::Asterisk(None),
+            direction: OrderDirection::Asc,
+        });
+        assert!(plan.has_ordering());
+    }
+
+    #[test]
+    fn test_query_plan_has_limit() {
+        let mut plan = QueryPlan::new();
+        assert!(!plan.has_limit());
+
+        plan.push(QueryOp::Limit(10));
+        assert!(plan.has_limit());
+    }
+
+    #[test]
+    fn test_query_plan_get_limit() {
+        let mut plan = QueryPlan::new();
+        assert_eq!(plan.get_limit(), None);
+
+        plan.push(QueryOp::Limit(25));
+        assert_eq!(plan.get_limit(), Some(25));
+    }
+
+    #[test]
+    fn test_query_plan_get_offset() {
+        let mut plan = QueryPlan::new();
+        assert_eq!(plan.get_offset(), None);
+
+        plan.push(QueryOp::Offset(100));
+        assert_eq!(plan.get_offset(), Some(100));
+    }
+
+    #[test]
+    fn test_query_plan_filters() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::filter(FilterExpr::And(vec![])));
+        plan.push(QueryOp::Limit(10));
+        plan.push(QueryOp::filter(FilterExpr::Or(vec![])));
+
+        let filters = plan.filters();
+        assert_eq!(filters.len(), 2);
+    }
+
+    #[test]
+    fn test_query_plan_iter() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::Limit(10));
+        plan.push(QueryOp::Offset(5));
+
+        let count = plan.iter().count();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_query_plan_is_debug() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::Limit(10));
+        let debug_str = format!("{:?}", plan);
+        assert!(debug_str.contains("QueryPlan"));
+        assert!(debug_str.contains("Limit"));
+    }
+
+    #[test]
+    fn test_query_plan_is_clone() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::Limit(10));
+        let cloned = plan.clone();
+        assert_eq!(cloned.len(), 1);
+    }
+
+    #[test]
+    fn test_query_plan_pattern_matching() {
+        let mut plan = QueryPlan::new();
+        plan.push(QueryOp::Filter(FilterExpr::And(vec![])));
+        plan.push(QueryOp::Limit(10));
+        plan.push(QueryOp::Distinct);
+
+        for op in plan.iter() {
+            match op {
+                QueryOp::Filter(_) => assert!(op.is_filter()),
+                QueryOp::Limit(n) => assert_eq!(*n, 10),
+                QueryOp::Distinct => assert!(op.is_distinct()),
+                _ => {}
             }
         }
     }
