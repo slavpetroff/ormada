@@ -1034,7 +1034,7 @@ fn generate_model_save_impl(
                 let model = result.try_into_model()?;
 
                 // Post-save hooks
-                <Self as LifecycleHooks>::after_save(&model, db).await?;
+                <Self as LifecycleHooks>::after_save(&model).await?;
 
                 ::core::result::Result::Ok(model)
             }
@@ -1060,7 +1060,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     use ::sea_orm::{ActiveModelTrait, Set, ActiveValue};
                     use ::seaorm_django::hooks::LifecycleHooks;
 
-                    <Self as LifecycleHooks>::before_delete(&self, db).await?;
+                    <Self as LifecycleHooks>::before_delete(&self).await?;
 
                     // Convert to ActiveModel and set deleted_at
                     let mut active = ActiveModel::from(self);
@@ -1069,7 +1069,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     // Update in database
                     let updated = active.update(db).await?;
 
-                    <Self as LifecycleHooks>::after_delete(&updated, db).await?;
+                    <Self as LifecycleHooks>::after_delete(&updated).await?;
 
                     ::core::result::Result::Ok(updated)
                 }
@@ -1084,12 +1084,12 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     use ::sea_orm::ActiveModelTrait;
                     use ::seaorm_django::hooks::LifecycleHooks;
 
-                    <Self as LifecycleHooks>::before_delete(&self, db).await?;
+                    <Self as LifecycleHooks>::before_delete(&self).await?;
 
                     let active = ActiveModel::from(self.clone());
                     active.delete(db).await?;
 
-                    <Self as LifecycleHooks>::after_delete(&self, db).await?;
+                    <Self as LifecycleHooks>::after_delete(&self).await?;
 
                     ::core::result::Result::Ok(())
                 }
@@ -1116,8 +1116,8 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     // Update in database
                     let updated = active.update(db).await?;
 
-                    <Self as LifecycleHooks>::after_update(&updated, db).await?;
-                    <Self as LifecycleHooks>::after_save(&updated, db).await?;
+                    <Self as LifecycleHooks>::after_update(&updated).await?;
+                    <Self as LifecycleHooks>::after_save(&updated).await?;
 
                     ::core::result::Result::Ok(updated)
                 }
@@ -1135,12 +1135,12 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                     use ::sea_orm::ActiveModelTrait;
                     use ::seaorm_django::hooks::LifecycleHooks;
 
-                    <Self as LifecycleHooks>::before_delete(&self, db).await?;
+                    <Self as LifecycleHooks>::before_delete(&self).await?;
 
                     let active = ActiveModel::from(self.clone());
                     active.delete(db).await?;
 
-                    <Self as LifecycleHooks>::after_delete(&self, db).await?;
+                    <Self as LifecycleHooks>::after_delete(&self).await?;
 
                     ::core::result::Result::Ok(())
                 }

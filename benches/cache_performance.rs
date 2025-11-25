@@ -51,7 +51,8 @@ mod benchmark_item {
         pub data: String,
     }
 
-    impl AsyncLifecycleHooks for Model {}
+    #[async_trait]
+    impl LifecycleHooks for Model {}
 }
 
 async fn setup_db() -> DatabaseConnection {

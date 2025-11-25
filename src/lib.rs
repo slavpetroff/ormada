@@ -257,7 +257,8 @@ pub mod prelude {
     pub use crate::aggregations::AggregateExt;
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
-    pub use crate::hooks::{AsyncLifecycleHooks, LifecycleHooks};
+    pub use async_trait::async_trait;
+    pub use crate::hooks::LifecycleHooks;
     pub use crate::query::{Aggregation, ColumnExt, QueryExt, QuerySet, Q};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::router::{ConsistencyContext, DatabaseRouter, RoutingStrategy};

@@ -37,7 +37,8 @@ pub mod models {
             pub updated_at: DateTimeWithTimeZone,
         }
 
-        impl AsyncLifecycleHooks for Model {}
+        #[async_trait]
+        impl LifecycleHooks for Model {}
     }
 
     pub mod book {
@@ -64,7 +65,8 @@ pub mod models {
             pub updated_at: DateTimeWithTimeZone,
         }
 
-        impl AsyncLifecycleHooks for Model {}
+        #[async_trait]
+        impl LifecycleHooks for Model {}
     }
 }
 

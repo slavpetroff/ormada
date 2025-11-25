@@ -1616,12 +1616,25 @@ async fn test_first_on_ordered_queryset(
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_last_on_ordered_queryset(
+async fn test_last_by_pk(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
+    let (db, _sample_authors) = db_with_sample_authors;
+
+    // last() returns the record with the highest PK value
+    let last = Author::objects(&db).last().await.unwrap();
+    assert_eq!(last.name, "Charlie"); // Created last, so has highest PK
+}
+
+#[rstest]
+#[awt]
+#[tokio::test]
+async fn test_last_by_custom_field(
     #[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>),
 ) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    let oldest = Author::objects(&db).order_by_asc(Author::Age).last().await.unwrap();
+    // To get "last" by a custom ordering, use order_by_desc().first()
+    // This is the recommended pattern per last() documentation
+    let oldest = Author::objects(&db).order_by_desc(Author::Age).first().await.unwrap();
 
     assert_eq!(oldest.age, 35); // Charlie
 }

@@ -32,17 +32,11 @@ pub mod tracked_author {
     // Track hook calls
     pub static DELETE_HOOK_CALLED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-    impl AsyncLifecycleHooks for Model {
-        fn before_delete<C: sea_orm::ConnectionTrait>(
-            &self,
-            _db: &C,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<(), DjangoOrmError>> + Send + '_>,
-        > {
-            Box::pin(async move {
-                DELETE_HOOK_CALLED.lock().unwrap().push(format!("before_delete:{}", self.name));
-                Ok(())
-            })
+    #[async_trait]
+    impl LifecycleHooks for Model {
+        async fn before_delete(&self) -> Result<(), DjangoOrmError> {
+            DELETE_HOOK_CALLED.lock().unwrap().push(format!("before_delete:{}", self.name));
+            Ok(())
         }
     }
 }
@@ -109,14 +103,10 @@ async fn test_delete_hook_prevents_deletion_on_error(#[future] db: DatabaseRoute
             pub created_at: DateTimeWithTimeZone,
         }
 
-        impl AsyncLifecycleHooks for Model {
-            fn before_delete<C: sea_orm::ConnectionTrait>(
-                &self,
-                _db: &C,
-            ) -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = Result<(), DjangoOrmError>> + Send + '_>,
-            > {
-                Box::pin(async move { Err(DjangoOrmError::Custom("Deletion blocked".into())) })
+        #[async_trait]
+        impl LifecycleHooks for Model {
+            async fn before_delete(&self) -> Result<(), DjangoOrmError> {
+                Err(DjangoOrmError::validation("BlockingAuthor", "delete", "Deletion blocked"))
             }
         }
     }

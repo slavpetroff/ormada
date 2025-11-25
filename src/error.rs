@@ -20,33 +20,29 @@ use std::fmt;
 /// Error type for all seaorm-django operations
 ///
 /// This enum represents all possible errors that can occur during ORM operations.
-/// It wraps `SeaORM`'s database errors and provides custom error messages.
+/// Uses Rust enums for type-safe, exhaustive error handling.
 ///
 /// # Variants
 ///
-/// - `Database(DbErr)` - A database operation failed (connection, query, constraint, etc.)
-/// - `Custom(String)` - A custom error message (e.g., "Record not found")
+/// - `Database` - Wraps SeaORM database errors
+/// - `NotFound` - Record not found by ID
+/// - `Validation` - Field validation failed
+/// - `EmptyResult` - Query returned no results (first, last, etc.)
+/// - `MissingConfiguration` - Builder missing required config
+/// - `ConcurrencyConflict` - Race condition after retries
 ///
-/// # Error Handling
-///
-/// ## Using the ? operator
-///
-/// ```rust,ignore
-/// // Errors propagate automatically
-/// let book = Book::objects(db).get(1).await?;  // Propagates if not found or DB error
-/// ```
-///
-/// ## Pattern matching
+/// # Pattern Matching
 ///
 /// ```rust,ignore
 /// match Book::objects(db).get(id).await {
 ///     Ok(book) => println!("Found: {}", book.title),
+///     Err(DjangoOrmError::NotFound { entity, id }) => {
+///         eprintln!("{entity} {id} not found");
+///     }
 ///     Err(DjangoOrmError::Database(e)) => {
 ///         eprintln!("Database error: {}", e);
 ///     }
-///     Err(DjangoOrmError::Custom(msg)) => {
-///         eprintln!("Custom error: {}", msg);
-///     }
+///     Err(e) => eprintln!("Error: {}", e),
 /// }
 /// ```
 ///
@@ -146,24 +142,35 @@ pub enum DjangoOrmError {
         reason: String,
     },
 
-    /// Custom error message (deprecated - use specific variants)
+    /// Empty result error
     ///
-    /// Used for application-level errors. Consider using `NotFound` or `Validation`
-    /// for structured error handling.
+    /// Returned when a query expects at least one record but finds none.
+    /// Used for `first()`, `last()`, `earliest()`, `latest()`.
+    EmptyResult {
+        /// The operation that returned no results
+        operation: &'static str,
+    },
+
+    /// Missing configuration error
     ///
-    /// # Migration
+    /// Returned when a builder method is called without required configuration.
+    MissingConfiguration {
+        /// The method that failed
+        method: &'static str,
+        /// The missing configuration
+        missing: &'static str,
+    },
+
+    /// Concurrency conflict error
     ///
-    /// ```rust,ignore
-    /// // Old:
-    /// Err(DjangoOrmError::Custom(format!("Book {} not found", id)))
-    ///
-    /// // New:
-    /// Err(DjangoOrmError::NotFound {
-    ///     entity: "Book",
-    ///     id: id.to_string(),
-    /// })
-    /// ```
-    Custom(String),
+    /// Returned when concurrent operations conflict after retry attempts.
+    ConcurrencyConflict {
+        /// The operation that failed
+        operation: &'static str,
+        /// Number of retry attempts made
+        attempts: u8,
+    },
+
 }
 
 impl fmt::Display for DjangoOrmError {
@@ -176,7 +183,15 @@ impl fmt::Display for DjangoOrmError {
             Self::Validation { entity, field, reason } => {
                 write!(f, "Validation error in {entity}.{field}: {reason}")
             }
-            Self::Custom(msg) => write!(f, "{msg}"),
+            Self::EmptyResult { operation } => {
+                write!(f, "No records found for {operation}")
+            }
+            Self::MissingConfiguration { method, missing } => {
+                write!(f, "{method}: {missing} must be called first")
+            }
+            Self::ConcurrencyConflict { operation, attempts } => {
+                write!(f, "{operation} failed after {attempts} retry attempts due to concurrent operations")
+            }
         }
     }
 }
@@ -189,17 +204,6 @@ impl From<sea_orm::DbErr> for DjangoOrmError {
     }
 }
 
-impl From<String> for DjangoOrmError {
-    fn from(msg: String) -> Self {
-        Self::Custom(msg)
-    }
-}
-
-impl From<&str> for DjangoOrmError {
-    fn from(msg: &str) -> Self {
-        Self::Custom(msg.to_string())
-    }
-}
 
 impl DjangoOrmError {
     /// Create a `NotFound` error
@@ -231,36 +235,45 @@ impl DjangoOrmError {
             reason: reason.to_string(),
         }
     }
+
+    /// Create an EmptyResult error
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// return Err(DjangoOrmError::empty_result("first"));
+    /// ```
+    pub const fn empty_result(operation: &'static str) -> Self {
+        Self::EmptyResult { operation }
+    }
+
+    /// Create a MissingConfiguration error
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// return Err(DjangoOrmError::missing_config("execute", "on_conflict"));
+    /// ```
+    pub const fn missing_config(method: &'static str, missing: &'static str) -> Self {
+        Self::MissingConfiguration { method, missing }
+    }
+
+    /// Create a ConcurrencyConflict error
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// return Err(DjangoOrmError::concurrency_conflict("get_or_create", 3));
+    /// ```
+    pub const fn concurrency_conflict(operation: &'static str, attempts: u8) -> Self {
+        Self::ConcurrencyConflict { operation, attempts }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use sea_orm::DbErr;
-
-    #[test]
-    fn test_custom_error_display() {
-        let error = DjangoOrmError::Custom("Test error message".to_string());
-        assert_eq!(error.to_string(), "Test error message");
-    }
-
-    #[test]
-    fn test_custom_error_with_empty_string() {
-        let error = DjangoOrmError::Custom(String::new());
-        assert_eq!(error.to_string(), "");
-    }
-
-    #[test]
-    fn test_custom_error_from_string() {
-        let error: DjangoOrmError = "Test error".to_string().into();
-        assert_eq!(error.to_string(), "Test error");
-    }
-
-    #[test]
-    fn test_custom_error_from_str() {
-        let error: DjangoOrmError = "Test error".into();
-        assert_eq!(error.to_string(), "Test error");
-    }
 
     #[test]
     fn test_database_error_conversion() {
@@ -295,22 +308,8 @@ mod tests {
 
     #[test]
     fn test_error_trait_implementation() {
-        let error = DjangoOrmError::Custom("test".to_string());
+        let error = DjangoOrmError::validation("test", "field", "reason");
         let _: &dyn std::error::Error = &error;
-    }
-
-    #[test]
-    fn test_custom_error_with_special_characters() {
-        let error = DjangoOrmError::Custom("Error with 'quotes' and \"double quotes\"".to_string());
-        assert!(error.to_string().contains("'quotes'"));
-        assert!(error.to_string().contains("\"double quotes\""));
-    }
-
-    #[test]
-    fn test_custom_error_with_unicode() {
-        let error = DjangoOrmError::Custom("Error with emoji 🚀 and unicode ñ".to_string());
-        assert!(error.to_string().contains("🚀"));
-        assert!(error.to_string().contains("ñ"));
     }
 
     #[test]
@@ -365,10 +364,32 @@ mod tests {
     fn test_error_variants_are_distinct() {
         let not_found = DjangoOrmError::not_found("Book", 1);
         let validation = DjangoOrmError::validation("Book", "title", "required");
-        let custom = DjangoOrmError::Custom("custom".to_string());
+        let empty = DjangoOrmError::empty_result("first");
 
         assert!(matches!(not_found, DjangoOrmError::NotFound { .. }));
         assert!(matches!(validation, DjangoOrmError::Validation { .. }));
-        assert!(matches!(custom, DjangoOrmError::Custom(_)));
+        assert!(matches!(empty, DjangoOrmError::EmptyResult { .. }));
+    }
+
+    #[test]
+    fn test_empty_result_error() {
+        let error = DjangoOrmError::empty_result("first");
+        assert!(error.to_string().contains("No records found"));
+        assert!(error.to_string().contains("first"));
+    }
+
+    #[test]
+    fn test_missing_config_error() {
+        let error = DjangoOrmError::missing_config("execute", "on_conflict");
+        assert!(error.to_string().contains("execute"));
+        assert!(error.to_string().contains("on_conflict"));
+    }
+
+    #[test]
+    fn test_concurrency_conflict_error() {
+        let error = DjangoOrmError::concurrency_conflict("get_or_create", 3);
+        assert!(error.to_string().contains("get_or_create"));
+        assert!(error.to_string().contains("3"));
+        assert!(error.to_string().contains("retry"));
     }
 }

@@ -325,10 +325,7 @@ where
     /// ```
     pub async fn first(self) -> Result<E::ModelWithRelations, DjangoOrmError> {
         let results = self.all().await?;
-        results
-            .into_iter()
-            .next()
-            .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
+        results.into_iter().next().ok_or_else(|| DjangoOrmError::empty_result("first"))
     }
 
     /// Get the last record with prefetched relations
@@ -354,10 +351,7 @@ where
     /// ```
     pub async fn last(self) -> Result<E::ModelWithRelations, DjangoOrmError> {
         let results = self.all().await?;
-        results
-            .into_iter()
-            .last()
-            .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
+        results.into_iter().last().ok_or_else(|| DjangoOrmError::empty_result("last"))
     }
 
     /// Count records matching the query

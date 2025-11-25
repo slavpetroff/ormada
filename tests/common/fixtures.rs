@@ -14,7 +14,8 @@ pub mod simple_item {
         pub id: i32,
         pub value: i32,
     }
-    impl AsyncLifecycleHooks for Model {}
+    #[async_trait]
+    impl LifecycleHooks for Model {}
 }
 
 /// Rich item model - for testing with multiple field types
@@ -30,7 +31,8 @@ pub mod rich_item {
         pub name: String,
         pub created_at: DateTimeWithTimeZone,
     }
-    impl AsyncLifecycleHooks for Model {}
+    #[async_trait]
+    impl LifecycleHooks for Model {}
 }
 
 /// Aggregate test item - for testing aggregations with NULLs
@@ -45,7 +47,8 @@ pub mod agg_item {
         pub dec_value: Option<i64>,
         pub category: i32,
     }
-    impl AsyncLifecycleHooks for Model {}
+    #[async_trait]
+    impl LifecycleHooks for Model {}
 }
 
 // Fixture tests are in tests/EXAMPLE_TEST.rs

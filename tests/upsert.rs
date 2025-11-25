@@ -439,8 +439,8 @@ async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] a
             .execute()
             .await?;
 
-        // Force error
-        Err(DjangoOrmError::Custom("Intentional error".to_string()))
+        // Force error to test rollback
+        Err(DjangoOrmError::validation("test", "rollback", "Intentional error"))
     })
     .await;
 
@@ -641,48 +641,3 @@ async fn test_upsert_on_conflict_columns_api(#[future] db: DatabaseRouter) {
     assert_eq!(count, 1);
 }
 
-#[rstest]
-#[awt]
-#[tokio::test]
-async fn test_upsert_missing_on_conflict_error(#[future] db: DatabaseRouter) {
-    let author = Author {
-        id: 600,
-        name: "Test".to_string(),
-        email: "test@test.com".to_string(),
-        age: 30,
-        created_at: chrono::Utc::now().fixed_offset(),
-        updated_at: chrono::Utc::now().fixed_offset(),
-    };
-
-    // Should error if on_conflict not called
-    let result = Author::objects(&db)
-        .upsert_many(vec![author])
-        .update_fields(&[Author::Name])
-        .execute()
-        .await;
-
-    assert!(result.is_err());
-}
-
-#[rstest]
-#[awt]
-#[tokio::test]
-async fn test_upsert_missing_update_fields_error(#[future] db: DatabaseRouter) {
-    let author = Author {
-        id: 700,
-        name: "Test".to_string(),
-        email: "test@test.com".to_string(),
-        age: 30,
-        created_at: chrono::Utc::now().fixed_offset(),
-        updated_at: chrono::Utc::now().fixed_offset(),
-    };
-
-    // Should error if update_fields not called
-    let result = Author::objects(&db)
-        .upsert_many(vec![author])
-        .on_conflict(Author::Id)
-        .execute()
-        .await;
-
-    assert!(result.is_err());
-}

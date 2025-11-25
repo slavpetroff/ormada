@@ -68,8 +68,8 @@ async fn test_tx_macro_rollback_on_error(#[future] db: DatabaseRouter) {
             })
             .await?;
 
-        // Trigger error
-        return Err(DjangoOrmError::Custom("Intentional error".to_string()));
+        // Trigger error to test rollback
+        return Err(DjangoOrmError::validation("test", "rollback", "Intentional error"));
     })
     .await;
 
@@ -407,8 +407,8 @@ async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
             })
             .await?;
 
-        // Force error
-        Err::<(), DjangoOrmError>(DjangoOrmError::Custom("Intentional error".to_string()))
+        // Force error to test rollback
+        Err::<(), DjangoOrmError>(DjangoOrmError::validation("test", "rollback", "Intentional error"))
     })
     .await;
 
@@ -466,7 +466,7 @@ async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
                 })
                 .await?;
 
-            Err::<(), DjangoOrmError>(DjangoOrmError::Custom("Inner fail".to_string()))
+            Err::<(), DjangoOrmError>(DjangoOrmError::validation("test", "rollback", "Inner fail"))
         })
         .await;
 

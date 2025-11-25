@@ -62,6 +62,7 @@
 //! ```
 
 use crate::error::DjangoOrmError;
+use crate::hooks::LifecycleHooks;
 use crate::upsert::UpsertBuilder;
 use sea_orm::sea_query::{Expr, Func, SimpleExpr};
 use sea_orm::{
@@ -560,7 +561,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Returns
     ///
     /// - `Ok(E::Model)` - First matching model found
-    /// - `Err(DjangoOrmError::Custom("No records found"))` - No matching models
+    /// - `Err(DjangoOrmError::EmptyResult { .. })` - No matching models
     /// - `Err(DjangoOrmError::Database(_))` - Database error occurred
     ///
     /// # Examples
@@ -581,7 +582,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// // Handle no results
     /// match Book::objects(db).first().await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(DjangoOrmError::Custom(msg)) if msg.contains("No records") => {
+    ///     Err(DjangoOrmError::EmptyResult { .. }) => {
     ///         println!("No books in database");
     ///     }
     ///     Err(e) => return Err(e),
@@ -608,7 +609,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 return cached_results
                     .first()
                     .cloned()
-                    .ok_or_else(|| DjangoOrmError::Custom("No records found".into()));
+                    .ok_or_else(|| DjangoOrmError::empty_result("first"));
             }
         }
 
@@ -619,57 +620,64 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
+            .ok_or_else(|| DjangoOrmError::empty_result("first"))
     }
 
     /// Execute query and return last result
     ///
     /// Returns the last matching model or error if no matches found.
-    /// Reverses the order and gets the first result.
+    /// Orders by primary key descending and returns the first result.
     ///
     /// # Returns
     ///
     /// - `Ok(E::Model)` - Last matching model found
-    /// - `Err(DjangoOrmError::Custom("No records found"))` - No matching models
+    /// - `Err(DjangoOrmError::NotFound { .. })` - No matching models
     /// - `Err(DjangoOrmError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // Get last book
-    /// let book = Book::objects(db)
-    ///     .order_by_asc(Column::CreatedAt)
-    ///     .last()
-    ///     .await?;
-    /// println!("Most recent: {}", book.title);
-    ///
-    /// // Get oldest published book
-    /// let oldest_published = Book::objects(db)
-    ///     .filter(Column::Published.eq(true))
-    ///     .order_by_desc(Column::CreatedAt)  // Ordered newest first
-    ///     .last()  // Gets the oldest
-    ///     .await?;
+    /// // Get last book (by primary key)
+    /// let book = Book::objects(db).last().await?;
+    /// println!("Last book: {}", book.title);
     ///
     /// // Handle no results
     /// match Book::objects(db).last().await {
     ///     Ok(book) => println!("Last: {}", book.title),
-    ///     Err(DjangoOrmError::Custom(msg)) if msg.contains("No records") => {
+    ///     Err(DjangoOrmError::NotFound { .. }) => {
     ///         println!("No books found");
     ///     }
     ///     Err(e) => return Err(e),
     /// }
     /// ```
-    pub async fn last(self) -> Result<E::Model, DjangoOrmError> {
-        // Performance note: Currently loads all matching records to get the last one.
-        // This is a known limitation due to SeaORM's query API not exposing order reversal.
-        // For better performance on large datasets, use .order_by_desc().first() instead.
-        // TODO: Optimize by reversing order clauses and using LIMIT 1
-        let models = self.inner.select.clone().all(self.inner.db).await?;
+    ///
+    /// # Note
+    ///
+    /// This method orders by primary key descending to efficiently get the last record.
+    /// If you need the last record based on a different ordering, use
+    /// `.order_by_desc(field).first()` instead.
+    pub async fn last(&self) -> Result<E::Model, DjangoOrmError>
+    where
+        E: crate::traits::DjangoEntity,
+    {
+        use sea_orm::{Iterable, PrimaryKeyToColumn};
 
-        models
-            .into_iter()
-            .last()
-            .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
+        // Get the primary key column(s)
+        let pk_columns: Vec<_> = E::PrimaryKey::iter().collect();
+
+        // Build query ordered by PK descending
+        let mut query = self.inner.select.clone();
+        for pk in pk_columns {
+            query = query.order_by(pk.into_column(), Order::Desc);
+        }
+
+        // Apply soft delete filter and get one record
+        let query = self.apply_soft_delete_filter(query);
+
+        query
+            .one(self.inner.db)
+            .await?
+            .ok_or_else(|| DjangoOrmError::not_found(E::default().table_name(), "last".to_string()))
     }
 
     /// Get a single record by primary key (Django's .get(pk=))
@@ -738,7 +746,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Returns
     ///
     /// - `Ok(Model)` - The earliest record
-    /// - `Err(DjangoOrmError::Custom)` - No records found
+    /// - `Err(DjangoOrmError::EmptyResult { .. })` - No records found
     /// - `Err(DjangoOrmError::Database)` - Database error
     ///
     /// # Equivalent to
@@ -751,7 +759,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             .order_by(column, Order::Asc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
+            .ok_or_else(|| DjangoOrmError::empty_result("earliest"))
     }
 
     /// Get the latest record by a field (Django's .`latest()`)
@@ -782,7 +790,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// # Returns
     ///
     /// - `Ok(Model)` - The latest record
-    /// - `Err(DjangoOrmError::Custom)` - No records found
+    /// - `Err(DjangoOrmError::EmptyResult { .. })` - No records found
     /// - `Err(DjangoOrmError::Database)` - Database error
     ///
     /// # Equivalent to
@@ -795,7 +803,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             .order_by(column, Order::Desc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::Custom("No records found".into()))
+            .ok_or_else(|| DjangoOrmError::empty_result("latest"))
     }
 
     /// Count records matching the query (Django's .`count()`)
@@ -1173,7 +1181,6 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         E::Model: sea_orm::IntoActiveModel<E::ActiveModel> + crate::hooks::LifecycleHooks,
         E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + Send,
     {
-        use crate::hooks::LifecycleHooks;
         use sea_orm::ActiveModelTrait;
 
         // Call before_save hook (common to both create and update)
@@ -1186,10 +1193,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         let result = active_model.insert(self.inner.db).await?;
 
         // Call after_create hook
-        result.after_create(self.inner.db).await?;
+        result.after_create().await?;
 
         // Call after_save hook (common to both create and update)
-        result.after_save(self.inner.db).await?;
+        result.after_save().await?;
 
         Ok(result)
     }
@@ -1513,9 +1520,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
 
         // All retries exhausted
-        Err(DjangoOrmError::Custom(
-            "get_or_create failed after 3 retry attempts due to concurrent inserts".into(),
-        ))
+        Err(DjangoOrmError::concurrency_conflict("get_or_create", 3))
     }
 
     /// Update existing record or create new one (Django's .`update_or_create()`)
@@ -1616,9 +1621,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         }
 
         // All retries exhausted
-        Err(DjangoOrmError::Custom(
-            "update_or_create failed after 3 retry attempts due to concurrent inserts".into(),
-        ))
+        Err(DjangoOrmError::concurrency_conflict("update_or_create", 3))
     }
 
     /// Get specific column values as JSON (Django's `values()`)
@@ -1855,7 +1858,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                     result.and_then(|obj| {
                         obj.as_object()
                             .and_then(|map| map.values().next().cloned())
-                            .ok_or_else(|| DjangoOrmError::Custom("Invalid value format".into()))
+                            .ok_or_else(|| DjangoOrmError::validation("QuerySet", "values_list", "Invalid value format"))
                     })
                 })
                 .boxed())

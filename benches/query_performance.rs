@@ -19,7 +19,8 @@ pub struct BenchmarkItem {
     pub category: String,
 }
 
-impl AsyncLifecycleHooks for BenchmarkItem {}
+#[async_trait]
+impl LifecycleHooks for BenchmarkItem {}
 
 // Use the generated module directly
 
