@@ -258,8 +258,9 @@ pub mod prelude {
     pub use crate::error::DjangoOrmError;
     pub use crate::hooks::LifecycleHooks;
     pub use crate::query::{
-        Aggregation, ColumnExt, FilterExpr, FilterOp, OrderDirection, QueryExt, QueryOp, QueryPlan,
-        QuerySet, QueryState, Q,
+        Aggregation, CanExecute, CanFilter, CanOrder, CanPaginate, ColumnExt, FilterExpr, FilterOp,
+        Filtered, Fresh, OrderDirection, Ordered, Paginated, QueryExt, QueryOp, QueryPlan, QuerySet,
+        QuerySetState, QueryState, Aggregated, Q,
     };
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::router::{ConsistencyContext, DatabaseRouter, RoutingStrategy, TransactionState};

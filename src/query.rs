@@ -220,25 +220,35 @@ impl<T: ColumnTrait> ColumnExt for T {}
 ///
 /// - `E`: The `SeaORM` Entity type
 /// - `C`: The database connection type
+/// - `S`: The typestate marker (defaults to `Fresh`)
+///
+/// # Typestate Pattern
+///
+/// The `S` parameter tracks the query building state at compile time:
+/// - `Fresh` → initial state, can filter, order, or execute
+/// - `Filtered` → has filters, can add more filters, order, or execute
+/// - `Ordered` → has ordering, can paginate or execute
+/// - `Paginated` → has limit/offset, can execute
+/// - `Aggregated` → has aggregations, can execute
+///
+/// Methods transition between states, preventing invalid operations
+/// at compile time.
 ///
 /// # Examples
 ///
 /// ```rust,ignore
-/// // Build query
-/// let queryset = Book::objects(db)
-///     .filter(Book::Published.eq(true));
+/// // Build query with typestate
+/// let queryset = Book::objects(db)           // QuerySet<_, _, Fresh>
+///     .filter(Book::Published.eq(true))      // QuerySet<_, _, Filtered>
+///     .order_by_asc(Book::Title)             // QuerySet<_, _, Ordered>
+///     .limit(10);                            // QuerySet<_, _, Paginated>
 ///
-/// // First call - hits DB, caches results
+/// // Execute the query
 /// let books = queryset.all().await?;
-///
-/// // Second call - uses cache, no DB query!
-/// let books_again = queryset.all().await?;
-///
-/// // Modify query - creates new QuerySet with new cache
-/// let limited = queryset.limit(10).all().await?;
 /// ```
-pub struct QuerySet<'a, E: EntityTrait, C: ConnectionTrait> {
+pub struct QuerySet<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState = Fresh> {
     pub(crate) inner: Arc<QuerySetInner<'a, E, C>>,
+    pub(crate) _state: std::marker::PhantomData<S>,
 }
 
 /// Soft delete filtering mode
@@ -251,6 +261,64 @@ pub enum SoftDeleteMode {
     /// Only show soft-deleted records
     OnlyDeleted,
 }
+
+// ============================================================================
+// QuerySet Typestate Markers - Zero-sized types for compile-time state tracking
+// ============================================================================
+
+/// Marker trait for all valid QuerySet states
+pub trait QuerySetState: Clone + Copy + Default + std::fmt::Debug {}
+
+/// Fresh state - initial QuerySet, no operations applied
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Fresh;
+impl QuerySetState for Fresh {}
+
+/// Filtered state - has filter/exclude operations
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Filtered;
+impl QuerySetState for Filtered {}
+
+/// Ordered state - has ordering applied
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Ordered;
+impl QuerySetState for Ordered {}
+
+/// Paginated state - has limit/offset applied
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Paginated;
+impl QuerySetState for Paginated {}
+
+/// Aggregated state - has aggregations/annotations
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Aggregated;
+impl QuerySetState for Aggregated {}
+
+/// Marker trait for states that can add filters
+pub trait CanFilter: QuerySetState {}
+impl CanFilter for Fresh {}
+impl CanFilter for Filtered {}
+
+/// Marker trait for states that can add ordering
+pub trait CanOrder: QuerySetState {}
+impl CanOrder for Fresh {}
+impl CanOrder for Filtered {}
+impl CanOrder for Ordered {}
+
+/// Marker trait for states that can add pagination
+pub trait CanPaginate: QuerySetState {}
+impl CanPaginate for Fresh {}
+impl CanPaginate for Filtered {}
+impl CanPaginate for Ordered {}
+impl CanPaginate for Paginated {}
+
+/// Marker trait for states that can execute queries
+pub trait CanExecute: QuerySetState {}
+impl CanExecute for Fresh {}
+impl CanExecute for Filtered {}
+impl CanExecute for Ordered {}
+impl CanExecute for Paginated {}
+impl CanExecute for Aggregated {}
 
 /// Query building state for introspection
 ///
@@ -608,14 +676,17 @@ pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
 }
 
 // Implement Clone for QuerySet (cheap Arc clone)
-impl<E: EntityTrait, C: ConnectionTrait> Clone for QuerySet<'_, E, C> {
+impl<E: EntityTrait, C: ConnectionTrait, S: QuerySetState> Clone for QuerySet<'_, E, C, S> {
     fn clone(&self) -> Self {
-        Self { inner: Arc::clone(&self.inner) }
+        Self {
+            inner: Arc::clone(&self.inner),
+            _state: std::marker::PhantomData,
+        }
     }
 }
 
-impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
-    /// Create a new `QuerySet`
+impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C, Fresh> {
+    /// Create a new `QuerySet` in Fresh state
     pub fn new(db: &'a C) -> Self {
         Self {
             inner: Arc::new(QuerySetInner {
@@ -626,23 +697,37 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 query_state: QueryState::Fresh,
                 cache: RwLock::new(None),
             }),
+            _state: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C, S> {
+    /// Create a new `QuerySet` with modified select and operation, transitioning to new state
+    fn with_select_and_op_to<NewS: QuerySetState>(
+        &self,
+        select: Select<E>,
+        op: QueryOp,
+        new_query_state: QueryState,
+    ) -> QuerySet<'a, E, C, NewS> {
+        let mut plan = self.inner.plan.clone();
+        plan.push(op);
+        QuerySet {
+            inner: Arc::new(QuerySetInner {
+                db: self.inner.db,
+                select,
+                soft_delete_mode: self.inner.soft_delete_mode,
+                plan,
+                query_state: new_query_state,
+                cache: RwLock::new(None),
+            }),
+            _state: std::marker::PhantomData,
         }
     }
 
-    /// Create a new `QuerySet` with modified select and operation (internal helper)
+    /// Create a new `QuerySet` with modified select and operation (preserves typestate)
     fn with_select_and_op(&self, select: Select<E>, op: QueryOp) -> Self {
         let mut plan = self.inner.plan.clone();
-        let mut state = self.inner.query_state;
-        
-        // Update state based on operation type
-        match &op {
-            QueryOp::Filter(_) | QueryOp::Exclude(_) => state.filter(),
-            QueryOp::OrderBy { .. } => state.order(),
-            QueryOp::Limit(_) | QueryOp::Offset(_) => state.paginate(),
-            QueryOp::Annotate { .. } => state.aggregate(),
-            _ => {}
-        }
-        
         plan.push(op);
         Self {
             inner: Arc::new(QuerySetInner {
@@ -650,13 +735,14 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 select,
                 soft_delete_mode: self.inner.soft_delete_mode,
                 plan,
-                query_state: state,
-                cache: RwLock::new(None), // New cache for modified query
+                query_state: self.inner.query_state,
+                cache: RwLock::new(None),
             }),
+            _state: std::marker::PhantomData,
         }
     }
 
-    /// Create a new `QuerySet` with modified soft delete mode
+    /// Create a new `QuerySet` with modified soft delete mode (preserves state)
     fn with_soft_delete_mode(&self, mode: SoftDeleteMode) -> Self {
         let mut plan = self.inner.plan.clone();
         plan.push(QueryOp::SoftDelete(mode));
@@ -669,6 +755,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 query_state: self.inner.query_state,
                 cache: RwLock::new(None),
             }),
+            _state: std::marker::PhantomData,
         }
     }
 
@@ -753,23 +840,44 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         select
     }
 
+}
+
+// ============================================================================
+// Typestate: Filter operations (Fresh, Filtered states)
+// ============================================================================
+
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanFilter> QuerySet<'a, E, C, S> {
     /// Filter records (Django's .`filter()`)
     ///
-    /// Creates a new `QuerySet` with added filter. The new `QuerySet` has its own cache.
-    pub fn filter(&self, condition: impl Into<Condition>) -> Self {
+    /// Creates a new `QuerySet` with added filter. Transitions to `Filtered` state.
+    /// Available on `Fresh` and `Filtered` states.
+    ///
+    /// # Typestate
+    /// - Input: `QuerySet<Fresh>` or `QuerySet<Filtered>`
+    /// - Output: `QuerySet<Filtered>`
+    pub fn filter(&self, condition: impl Into<Condition>) -> QuerySet<'a, E, C, Filtered> {
         let cond: Condition = condition.into();
         let new_select = self.inner.select.clone().filter(cond.clone());
-        self.with_select_and_op(new_select, QueryOp::Filter(FilterExpr::raw(cond)))
+        self.with_select_and_op_to(new_select, QueryOp::Filter(FilterExpr::raw(cond)), QueryState::Filtered)
     }
 
     /// Exclude records (Django's .`exclude()`)
     ///
-    /// Creates a new `QuerySet` with added exclusion. The new `QuerySet` has its own cache.
-    pub fn exclude(&self, condition: impl Into<Condition>) -> Self {
+    /// Creates a new `QuerySet` with added exclusion. Transitions to `Filtered` state.
+    /// Available on `Fresh` and `Filtered` states.
+    ///
+    /// # Typestate
+    /// - Input: `QuerySet<Fresh>` or `QuerySet<Filtered>`
+    /// - Output: `QuerySet<Filtered>`
+    pub fn exclude(&self, condition: impl Into<Condition>) -> QuerySet<'a, E, C, Filtered> {
         let cond: Condition = condition.into();
         let new_select = self.inner.select.clone().filter(cond.clone().not());
-        self.with_select_and_op(new_select, QueryOp::Exclude(FilterExpr::raw(cond)))
+        self.with_select_and_op_to(new_select, QueryOp::Exclude(FilterExpr::raw(cond)), QueryState::Filtered)
     }
+}
+
+// Continue with common methods that preserve state
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C, S> {
 
     /// Include soft-deleted records in query results
     ///
@@ -838,7 +946,20 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         self.with_select_and_op(new_select, QueryOp::Distinct)
     }
 
+}
+
+// ============================================================================
+// Typestate: Ordering operations (Fresh, Filtered, Ordered states)
+// ============================================================================
+
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanOrder> QuerySet<'a, E, C, S> {
     /// Order by a column in ascending order (Django's .`order_by`('field'))
+    ///
+    /// Transitions to `Ordered` state. Available on `Fresh`, `Filtered`, and `Ordered` states.
+    ///
+    /// # Typestate
+    /// - Input: `QuerySet<Fresh>`, `QuerySet<Filtered>`, or `QuerySet<Ordered>`
+    /// - Output: `QuerySet<Ordered>`
     ///
     /// # Examples
     ///
@@ -848,26 +969,27 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .order_by_asc(Book::Price)
     ///     .all()
     ///     .await?;
-    ///
-    /// // Order by name alphabetically
-    /// let authors = Author::objects(db)
-    ///     .order_by_asc(Author::Name)
-    ///     .all()
-    ///     .await?;
     /// ```
-    pub fn order_by_asc(&self, column: impl ColumnTrait) -> Self {
+    pub fn order_by_asc(&self, column: impl ColumnTrait) -> QuerySet<'a, E, C, Ordered> {
         let col_ref = column.as_column_ref().into();
         let new_select = self.inner.select.clone().order_by(column, Order::Asc);
-        self.with_select_and_op(
+        self.with_select_and_op_to(
             new_select,
             QueryOp::OrderBy {
                 column: col_ref,
                 direction: OrderDirection::Asc,
             },
+            QueryState::Ordered,
         )
     }
 
     /// Order by a column in descending order (Django's .`order_by`('-field'))
+    ///
+    /// Transitions to `Ordered` state. Available on `Fresh`, `Filtered`, and `Ordered` states.
+    ///
+    /// # Typestate
+    /// - Input: `QuerySet<Fresh>`, `QuerySet<Filtered>`, or `QuerySet<Ordered>`
+    /// - Output: `QuerySet<Ordered>`
     ///
     /// # Examples
     ///
@@ -877,37 +999,59 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     ///     .order_by_desc(Book::Price)
     ///     .all()
     ///     .await?;
-    ///
-    /// // Get newest books first
-    /// let recent = Book::objects(db)
-    ///     .order_by_desc(Book::CreatedAt)
-    ///     .limit(10)
-    ///     .all()
-    ///     .await?;
     /// ```
-    pub fn order_by_desc(&self, column: impl ColumnTrait) -> Self {
+    pub fn order_by_desc(&self, column: impl ColumnTrait) -> QuerySet<'a, E, C, Ordered> {
         let col_ref = column.as_column_ref().into();
         let new_select = self.inner.select.clone().order_by(column, Order::Desc);
-        self.with_select_and_op(
+        self.with_select_and_op_to(
             new_select,
             QueryOp::OrderBy {
                 column: col_ref,
                 direction: OrderDirection::Desc,
             },
+            QueryState::Ordered,
         )
     }
+}
 
+// ============================================================================
+// Typestate: Pagination operations (Fresh, Filtered, Ordered, Paginated states)
+// ============================================================================
+
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, S> {
     /// Limit results (Django's [:n])
-    pub fn limit(&self, limit: u64) -> Self {
+    ///
+    /// Transitions to `Paginated` state. Available on `Fresh`, `Filtered`, `Ordered`, and `Paginated` states.
+    ///
+    /// # Typestate
+    /// - Input: `QuerySet<Fresh>`, `QuerySet<Filtered>`, `QuerySet<Ordered>`, or `QuerySet<Paginated>`
+    /// - Output: `QuerySet<Paginated>`
+    pub fn limit(&self, limit: u64) -> QuerySet<'a, E, C, Paginated> {
         let new_select = self.inner.select.clone().limit(limit);
-        self.with_select_and_op(new_select, QueryOp::Limit(limit))
+        self.with_select_and_op_to(new_select, QueryOp::Limit(limit), QueryState::Paginated)
     }
 
     /// Offset results
-    pub fn offset(&self, offset: u64) -> Self {
+    ///
+    /// Transitions to `Paginated` state. Available on `Fresh`, `Filtered`, `Ordered`, and `Paginated` states.
+    ///
+    /// # Typestate
+    /// - Input: `QuerySet<Fresh>`, `QuerySet<Filtered>`, `QuerySet<Ordered>`, or `QuerySet<Paginated>`
+    /// - Output: `QuerySet<Paginated>`
+    pub fn offset(&self, offset: u64) -> QuerySet<'a, E, C, Paginated> {
         let new_select = self.inner.select.clone().offset(offset);
-        self.with_select_and_op(new_select, QueryOp::Offset(offset))
+        self.with_select_and_op_to(new_select, QueryOp::Offset(offset), QueryState::Paginated)
     }
+}
+
+// ============================================================================
+// Typestate: Execution operations (all executable states)
+// ============================================================================
+
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExecute + 'a> QuerySet<'a, E, C, S>
+where
+    E: crate::traits::DjangoEntity,
+{
 
     /// Execute query and return all matching results (Django's .`all()`)
     ///
@@ -2118,7 +2262,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         &self,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<E::Model, DjangoOrmError>> + use<'a, E, C>,
+        impl futures::Stream<Item = Result<E::Model, DjangoOrmError>> + use<'a, E, C, S>,
         DjangoOrmError,
     > {
         use futures::stream::{self, StreamExt};
@@ -2181,7 +2325,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         columns: Vec<E::Column>,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C>,
+        impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C, S>,
         DjangoOrmError,
     > {
         use futures::stream::{self, StreamExt};
@@ -2269,7 +2413,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
         flat: bool,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C>,
+        impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C, S>,
         DjangoOrmError,
     > {
         use futures::stream::StreamExt;
@@ -2698,6 +2842,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 query_state: state,
                 cache: RwLock::new(None),
             }),
+            _state: std::marker::PhantomData,
         }
     }
 }
@@ -4161,5 +4306,106 @@ mod tests {
                 FilterExpr::Raw(_) => assert!(filter.is_raw()),
             }
         }
+    }
+
+    // ========================================================================
+    // Typestate Marker Tests
+    // ========================================================================
+
+    #[test]
+    fn test_typestate_fresh_default() {
+        let _fresh: Fresh = Fresh::default();
+        // Should compile - Fresh implements QuerySetState
+        fn assert_state<S: QuerySetState>() {}
+        assert_state::<Fresh>();
+    }
+
+    #[test]
+    fn test_typestate_filtered_default() {
+        let _filtered: Filtered = Filtered::default();
+        fn assert_state<S: QuerySetState>() {}
+        assert_state::<Filtered>();
+    }
+
+    #[test]
+    fn test_typestate_ordered_default() {
+        let _ordered: Ordered = Ordered::default();
+        fn assert_state<S: QuerySetState>() {}
+        assert_state::<Ordered>();
+    }
+
+    #[test]
+    fn test_typestate_paginated_default() {
+        let _paginated: Paginated = Paginated::default();
+        fn assert_state<S: QuerySetState>() {}
+        assert_state::<Paginated>();
+    }
+
+    #[test]
+    fn test_typestate_aggregated_default() {
+        let _aggregated: Aggregated = Aggregated::default();
+        fn assert_state<S: QuerySetState>() {}
+        assert_state::<Aggregated>();
+    }
+
+    #[test]
+    fn test_can_filter_trait() {
+        fn assert_can_filter<S: CanFilter>() {}
+        // Fresh and Filtered can filter
+        assert_can_filter::<Fresh>();
+        assert_can_filter::<Filtered>();
+        // Ordered, Paginated, Aggregated cannot filter - won't compile
+    }
+
+    #[test]
+    fn test_can_order_trait() {
+        fn assert_can_order<S: CanOrder>() {}
+        // Fresh, Filtered, and Ordered can order
+        assert_can_order::<Fresh>();
+        assert_can_order::<Filtered>();
+        assert_can_order::<Ordered>();
+        // Paginated, Aggregated cannot order - won't compile
+    }
+
+    #[test]
+    fn test_can_paginate_trait() {
+        fn assert_can_paginate<S: CanPaginate>() {}
+        // Fresh, Filtered, Ordered, and Paginated can paginate
+        assert_can_paginate::<Fresh>();
+        assert_can_paginate::<Filtered>();
+        assert_can_paginate::<Ordered>();
+        assert_can_paginate::<Paginated>();
+        // Aggregated cannot paginate - won't compile
+    }
+
+    #[test]
+    fn test_can_execute_trait() {
+        fn assert_can_execute<S: CanExecute>() {}
+        // All states can execute
+        assert_can_execute::<Fresh>();
+        assert_can_execute::<Filtered>();
+        assert_can_execute::<Ordered>();
+        assert_can_execute::<Paginated>();
+        assert_can_execute::<Aggregated>();
+    }
+
+    #[test]
+    fn test_typestate_clone_copy() {
+        let fresh = Fresh;
+        let _cloned = fresh.clone();
+        let _copied = fresh; // Copy
+
+        let filtered = Filtered;
+        let _cloned = filtered.clone();
+        let _copied = filtered; // Copy
+    }
+
+    #[test]
+    fn test_typestate_debug() {
+        assert!(format!("{:?}", Fresh).contains("Fresh"));
+        assert!(format!("{:?}", Filtered).contains("Filtered"));
+        assert!(format!("{:?}", Ordered).contains("Ordered"));
+        assert!(format!("{:?}", Paginated).contains("Paginated"));
+        assert!(format!("{:?}", Aggregated).contains("Aggregated"));
     }
 }
