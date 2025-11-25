@@ -354,40 +354,6 @@ impl TransactionTrait for DatabaseRouter {
     }
 }
 
-impl crate::transaction::AtomicExt for DatabaseRouter {
-    async fn atomic<F, T>(&self, f: F) -> Result<T, crate::error::DjangoOrmError>
-    where
-        F: for<'a> FnOnce(
-            &'a DatabaseTransaction,
-        ) -> std::pin::Pin<
-            Box<dyn Future<Output = Result<T, crate::error::DjangoOrmError>> + Send + 'a>,
-        >,
-        T: Send,
-    {
-        self.begin_transaction().await;
-
-        // Use the primary connection for the actual transaction
-        let result = self.primary.atomic(f).await;
-
-        self.end_transaction().await;
-        result
-    }
-
-    async fn savepoint<F, T>(&self, name: &str, f: F) -> Result<T, crate::error::DjangoOrmError>
-    where
-        F: for<'a> FnOnce(
-            &'a DatabaseTransaction,
-        ) -> std::pin::Pin<
-            Box<dyn Future<Output = Result<T, crate::error::DjangoOrmError>> + Send + 'a>,
-        >,
-        T: Send,
-    {
-        // Savepoints on the router just delegate to primary
-        // Note: The router itself doesn't track savepoint depth differently than transaction status
-        self.primary.savepoint(name, f).await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

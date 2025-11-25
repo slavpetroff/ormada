@@ -1,16 +1,15 @@
 //! Core traits for Django-like ORM functionality
 
 use crate::error::DjangoOrmError;
-use crate::transaction::AtomicExt;
 use sea_orm::{ConnectionTrait, EntityTrait};
 
 /// Trait alias for connections that support Django-style operations
 ///
-/// This combines `ConnectionTrait` (`SeaORM`) and `AtomicExt` (Transactions).
-/// Use this to avoid writing `where C: ConnectionTrait + AtomicExt`.
-pub trait DjangoConnection: ConnectionTrait + AtomicExt {}
+/// This is a marker trait for types that implement `ConnectionTrait`.
+/// For transactions, use the `tx!` macro or `#[atomic]` attribute.
+pub trait DjangoConnection: ConnectionTrait {}
 
-impl<T: ConnectionTrait + AtomicExt> DjangoConnection for T {}
+impl<T: ConnectionTrait> DjangoConnection for T {}
 
 // ============================================================================
 // Entity Capability Enums

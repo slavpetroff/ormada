@@ -483,3 +483,122 @@ async fn test_router_ref_get_database_backend() {
     let backend = router_ref.get_database_backend();
     assert!(matches!(backend, sea_orm::DatabaseBackend::Sqlite));
 }
+
+// ============================================================================
+// tx! Macro on DatabaseRouter Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_router_tx_macro() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    Author::create_table(&router).await.unwrap();
+
+    // Use tx! macro on router
+    let author = seaorm_django::tx!(router, |txn| async move {
+        Author::objects(txn)
+            .create(Author {
+                id: 0,
+                name: "TX Macro Test".to_string(),
+                email: "tx@test.com".to_string(),
+                age: 30,
+                created_at: chrono::Utc::now().fixed_offset(),
+                updated_at: chrono::Utc::now().fixed_offset(),
+            })
+            .await
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(author.name, "TX Macro Test");
+
+    // Verify persisted
+    let count = Author::objects(&router).count().await.unwrap();
+    assert_eq!(count, 1);
+}
+
+#[tokio::test]
+async fn test_router_nested_tx_macro() {
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    Author::create_table(&router).await.unwrap();
+    Book::create_table(&router).await.unwrap();
+
+    // Use nested tx! on router
+    let (author, book) = seaorm_django::tx!(router, |txn| async move {
+        let author = Author::objects(txn)
+            .create(Author {
+                id: 0,
+                name: "Nested TX Author".to_string(),
+                email: "nested@test.com".to_string(),
+                age: 35,
+                created_at: chrono::Utc::now().fixed_offset(),
+                updated_at: chrono::Utc::now().fixed_offset(),
+            })
+            .await?;
+
+        // Nested transaction
+        let book = seaorm_django::tx!(txn, |inner| async move {
+            Book::objects(inner)
+                .create(Book {
+                    id: 0,
+                    author_id: author.id,
+                    author: Default::default(),
+                    title: "Nested TX Book".to_string(),
+                    price: 1999,
+                    published: true,
+                    created_at: chrono::Utc::now().fixed_offset(),
+                    updated_at: chrono::Utc::now().fixed_offset(),
+                })
+                .await
+        })
+        .await?;
+
+        Ok((author, book))
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(author.name, "Nested TX Author");
+    assert_eq!(book.title, "Nested TX Book");
+}
+
+#[tokio::test]
+async fn test_router_multiple_queries() {
+    use sea_orm::QueryTrait;
+
+    let primary = Database::connect("sqlite::memory:").await.unwrap();
+    let router = DatabaseRouter::new_single(primary);
+
+    Author::create_table(&router).await.unwrap();
+
+    // Create some data
+    for i in 0..5 {
+        Author::objects(&router)
+            .create(Author {
+                id: 0,
+                name: format!("Author {}", i),
+                email: format!("author{}@test.com", i),
+                age: 20 + i,
+                created_at: chrono::Utc::now().fixed_offset(),
+                updated_at: chrono::Utc::now().fixed_offset(),
+            })
+            .await
+            .unwrap();
+    }
+
+    // Various query operations that go through router
+    let count = Author::objects(&router).count().await.unwrap();
+    assert_eq!(count, 5);
+
+    let authors = Author::objects(&router).all().await.unwrap();
+    assert_eq!(authors.len(), 5);
+
+    let first = Author::objects(&router).first().await.unwrap();
+    assert_eq!(first.name, "Author 0");
+
+    let filtered = Author::objects(&router).filter(Author::Age.gte(22)).all().await.unwrap();
+    assert_eq!(filtered.len(), 3);
+}

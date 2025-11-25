@@ -245,7 +245,6 @@ pub mod traits;
 pub mod transaction;
 pub mod types;
 pub mod upsert;
-pub mod write;
 
 /// Convenience re-exports for common usage
 ///
@@ -265,7 +264,6 @@ pub mod prelude {
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
     pub use crate::router::{ConsistencyContext, DatabaseRouter, RoutingStrategy};
     pub use crate::traits::{DjangoConnection, DjangoEntity, SoftDeleteConfig, WithRelationsTrait};
-    pub use crate::transaction::AtomicExt;
     pub use crate::types::OnDelete;
     pub use async_trait::async_trait;
 
