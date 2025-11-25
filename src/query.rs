@@ -839,7 +839,6 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
         }
         select
     }
-
 }
 
 // ============================================================================
@@ -858,7 +857,11 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanFilter> QuerySet<'a, E, C, S>
     pub fn filter(&self, condition: impl Into<Condition>) -> QuerySet<'a, E, C, Filtered> {
         let cond: Condition = condition.into();
         let new_select = self.inner.select.clone().filter(cond.clone());
-        self.with_select_and_op_to(new_select, QueryOp::Filter(FilterExpr::raw(cond)), QueryState::Filtered)
+        self.with_select_and_op_to(
+            new_select,
+            QueryOp::Filter(FilterExpr::raw(cond)),
+            QueryState::Filtered,
+        )
     }
 
     /// Exclude records (Django's .`exclude()`)
@@ -872,13 +875,16 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanFilter> QuerySet<'a, E, C, S>
     pub fn exclude(&self, condition: impl Into<Condition>) -> QuerySet<'a, E, C, Filtered> {
         let cond: Condition = condition.into();
         let new_select = self.inner.select.clone().filter(cond.clone().not());
-        self.with_select_and_op_to(new_select, QueryOp::Exclude(FilterExpr::raw(cond)), QueryState::Filtered)
+        self.with_select_and_op_to(
+            new_select,
+            QueryOp::Exclude(FilterExpr::raw(cond)),
+            QueryState::Filtered,
+        )
     }
 }
 
 // Continue with common methods that preserve state
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C, S> {
-
     /// Include soft-deleted records in query results
     ///
     /// By default, models with `#[soft_delete]` automatically exclude deleted records.
@@ -945,7 +951,6 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
         let new_select = self.inner.select.clone().distinct();
         self.with_select_and_op(new_select, QueryOp::Distinct)
     }
-
 }
 
 // ============================================================================
@@ -1052,7 +1057,6 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExecute + 'a> QuerySet<'a, E,
 where
     E: crate::traits::DjangoEntity,
 {
-
     /// Execute query and return all matching results (Django's .`all()`)
     ///
     /// Returns a vector of all models that match the query filters.
@@ -2832,7 +2836,7 @@ where
 
         let mut state = self.inner.query_state;
         state.aggregate();
-        
+
         Self {
             inner: Arc::new(QuerySetInner {
                 db: self.inner.db,
@@ -3226,7 +3230,10 @@ impl FilterOp {
 
     /// Check if this is a string operation
     pub const fn is_string_op(&self) -> bool {
-        matches!(self, Self::Like | Self::NotLike | Self::Contains | Self::StartsWith | Self::EndsWith)
+        matches!(
+            self,
+            Self::Like | Self::NotLike | Self::Contains | Self::StartsWith | Self::EndsWith
+        )
     }
 
     /// Check if this is a null check
@@ -3311,7 +3318,12 @@ impl FilterExpr {
     }
 
     /// Create a typed filter expression
-    fn typed<C: ColumnTrait>(column: C, op: FilterOp, value_repr: String, expr: SimpleExpr) -> Self {
+    fn typed<C: ColumnTrait>(
+        column: C,
+        op: FilterOp,
+        value_repr: String,
+        expr: SimpleExpr,
+    ) -> Self {
         Self::Typed {
             column: format!("{:?}", column),
             op,
@@ -3321,37 +3333,55 @@ impl FilterExpr {
     }
 
     /// Create equality filter: column = value
-    pub fn eq<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+    pub fn eq<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
+        column: C,
+        value: V,
+    ) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Eq, value_repr, column.eq(value).into())
     }
 
     /// Create not-equal filter: column != value
-    pub fn ne<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+    pub fn ne<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
+        column: C,
+        value: V,
+    ) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Ne, value_repr, column.ne(value).into())
     }
 
     /// Create less-than filter: column < value
-    pub fn lt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+    pub fn lt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
+        column: C,
+        value: V,
+    ) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Lt, value_repr, column.lt(value).into())
     }
 
     /// Create less-than-or-equal filter: column <= value
-    pub fn lte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+    pub fn lte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
+        column: C,
+        value: V,
+    ) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Lte, value_repr, column.lte(value).into())
     }
 
     /// Create greater-than filter: column > value
-    pub fn gt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+    pub fn gt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
+        column: C,
+        value: V,
+    ) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Gt, value_repr, column.gt(value).into())
     }
 
     /// Create greater-than-or-equal filter: column >= value
-    pub fn gte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+    pub fn gte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
+        column: C,
+        value: V,
+    ) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Gte, value_repr, column.gte(value).into())
     }
@@ -3363,7 +3393,12 @@ impl FilterExpr {
 
     /// Create IS NOT NULL filter
     pub fn is_not_null<C: ColumnTrait>(column: C) -> Self {
-        Self::typed(column, FilterOp::IsNotNull, "NOT NULL".to_string(), column.is_not_null().into())
+        Self::typed(
+            column,
+            FilterOp::IsNotNull,
+            "NOT NULL".to_string(),
+            column.is_not_null().into(),
+        )
     }
 
     /// Check if this is an AND expression
