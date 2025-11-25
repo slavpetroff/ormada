@@ -310,32 +310,37 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     where
         E: crate::traits::DjangoEntity,
     {
-        // Check if this entity has soft deletes enabled
-        if let Some(field_name) = E::soft_delete_column() {
-            use sea_orm::sea_query::{Alias, SimpleExpr};
+        use crate::traits::SoftDeleteConfig;
+        use sea_orm::sea_query::{Alias, SimpleExpr};
 
-            match self.inner.soft_delete_mode {
-                SoftDeleteMode::ExcludeDeleted => {
-                    // Filter WHERE deleted_at IS NULL
-                    // Construct: Expr::col(field_name).is_null()
-                    let condition = SimpleExpr::Binary(
-                        Box::new(Expr::col(Alias::new(field_name))),
-                        sea_orm::sea_query::BinOper::Is,
-                        Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
-                    );
-                    select = select.filter(condition);
-                }
-                SoftDeleteMode::OnlyDeleted => {
-                    // Filter WHERE deleted_at IS NOT NULL
-                    let condition = SimpleExpr::Binary(
-                        Box::new(Expr::col(Alias::new(field_name))),
-                        sea_orm::sea_query::BinOper::IsNot,
-                        Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
-                    );
-                    select = select.filter(condition);
-                }
-                SoftDeleteMode::IncludeDeleted => {
-                    // No filter - include all records
+        // Check if this entity has soft deletes enabled using enum pattern matching
+        match E::soft_delete() {
+            SoftDeleteConfig::Disabled => {
+                // No soft delete - return query unchanged
+            }
+            SoftDeleteConfig::Enabled { column } => {
+                match self.inner.soft_delete_mode {
+                    SoftDeleteMode::ExcludeDeleted => {
+                        // Filter WHERE deleted_at IS NULL
+                        let condition = SimpleExpr::Binary(
+                            Box::new(Expr::col(Alias::new(column))),
+                            sea_orm::sea_query::BinOper::Is,
+                            Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
+                        );
+                        select = select.filter(condition);
+                    }
+                    SoftDeleteMode::OnlyDeleted => {
+                        // Filter WHERE deleted_at IS NOT NULL
+                        let condition = SimpleExpr::Binary(
+                            Box::new(Expr::col(Alias::new(column))),
+                            sea_orm::sea_query::BinOper::IsNot,
+                            Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
+                        );
+                        select = select.filter(condition);
+                    }
+                    SoftDeleteMode::IncludeDeleted => {
+                        // No filter - include all records
+                    }
                 }
             }
         }
@@ -2261,15 +2266,41 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
 }
 
 // ============================================================================
-// Aggregation Helpers
+// Aggregation Enum - Type-safe SQL aggregation functions
 // ============================================================================
 
-/// Aggregation helper for use with `.annotate()`
+/// SQL aggregation function for use with `.annotate()`
 ///
-/// Provides type-safe aggregation functions for queries.
-#[derive(Clone)]
-pub struct Aggregation {
-    expr: SimpleExpr,
+/// This enum provides type-safe, pattern-matchable aggregation functions.
+/// Use constructor methods to create instances.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let stats = Book::objects(db)
+///     .group_by(Book::AuthorId)
+///     .annotate([
+///         ("book_count", Aggregation::count_all()),
+///         ("avg_price", Aggregation::avg(Book::Price)),
+///         ("total_sales", Aggregation::sum(Book::Sales)),
+///     ])
+///     .project::<AuthorStats>()
+///     .await?;
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub enum Aggregation {
+    /// COUNT(*) - Count all rows
+    CountAll,
+    /// COUNT(column) - Count non-NULL values
+    Count(sea_orm::sea_query::ColumnRef),
+    /// SUM(column) - Sum of numeric values
+    Sum(sea_orm::sea_query::ColumnRef),
+    /// AVG(column) - Average of numeric values
+    Avg(sea_orm::sea_query::ColumnRef),
+    /// MAX(column) - Maximum value
+    Max(sea_orm::sea_query::ColumnRef),
+    /// MIN(column) - Minimum value
+    Min(sea_orm::sea_query::ColumnRef),
 }
 
 impl Aggregation {
@@ -2280,11 +2311,7 @@ impl Aggregation {
     /// .annotate([("total", Aggregation::count_all())])
     /// ```
     pub fn count_all() -> Self {
-        Self {
-            // Using custom SQL since Expr::asterisk() is deprecated
-            #[allow(deprecated)]
-            expr: Expr::expr(Func::count(Expr::asterisk())),
-        }
+        Self::CountAll
     }
 
     /// COUNT(column) - Count non-NULL values in column
@@ -2294,9 +2321,7 @@ impl Aggregation {
     /// .annotate([("published_count", Aggregation::count(Book::PublishedDate))])
     /// ```
     pub fn count(column: impl ColumnTrait) -> Self {
-        Self {
-            expr: Expr::expr(Func::count(Expr::col(column.as_column_ref()))),
-        }
+        Self::Count(column.as_column_ref().into())
     }
 
     /// SUM(column) - Sum of numeric column
@@ -2306,9 +2331,7 @@ impl Aggregation {
     /// .annotate([("total_sales", Aggregation::sum(Book::Sales))])
     /// ```
     pub fn sum(column: impl ColumnTrait) -> Self {
-        Self {
-            expr: Expr::expr(Func::sum(Expr::col(column.as_column_ref()))),
-        }
+        Self::Sum(column.as_column_ref().into())
     }
 
     /// AVG(column) - Average of numeric column
@@ -2318,9 +2341,7 @@ impl Aggregation {
     /// .annotate([("avg_price", Aggregation::avg(Book::Price))])
     /// ```
     pub fn avg(column: impl ColumnTrait) -> Self {
-        Self {
-            expr: Expr::expr(Func::avg(Expr::col(column.as_column_ref()))),
-        }
+        Self::Avg(column.as_column_ref().into())
     }
 
     /// MAX(column) - Maximum value
@@ -2330,9 +2351,7 @@ impl Aggregation {
     /// .annotate([("max_price", Aggregation::max(Book::Price))])
     /// ```
     pub fn max(column: impl ColumnTrait) -> Self {
-        Self {
-            expr: Expr::expr(Func::max(Expr::col(column.as_column_ref()))),
-        }
+        Self::Max(column.as_column_ref().into())
     }
 
     /// MIN(column) - Minimum value
@@ -2342,14 +2361,23 @@ impl Aggregation {
     /// .annotate([("min_price", Aggregation::min(Book::Price))])
     /// ```
     pub fn min(column: impl ColumnTrait) -> Self {
-        Self {
-            expr: Expr::expr(Func::min(Expr::col(column.as_column_ref()))),
-        }
+        Self::Min(column.as_column_ref().into())
     }
 
-    /// Convert to `SeaORM` expression
-    fn into_expr(self) -> SimpleExpr {
-        self.expr
+    /// Convert to `SeaORM` expression for query building
+    pub(crate) fn into_expr(self) -> SimpleExpr {
+        match self {
+            Self::CountAll =>
+            {
+                #[allow(deprecated)]
+                Expr::expr(Func::count(Expr::asterisk()))
+            }
+            Self::Count(col) => Expr::expr(Func::count(Expr::col(col))),
+            Self::Sum(col) => Expr::expr(Func::sum(Expr::col(col))),
+            Self::Avg(col) => Expr::expr(Func::avg(Expr::col(col))),
+            Self::Max(col) => Expr::expr(Func::max(Expr::col(col))),
+            Self::Min(col) => Expr::expr(Func::min(Expr::col(col))),
+        }
     }
 }
 
@@ -2519,6 +2547,158 @@ impl Q {
 impl From<Q> for Condition {
     fn from(q: Q) -> Self {
         q.condition
+    }
+}
+
+// ============================================================================
+// FilterExpr Enum - Type-safe filter expressions
+// ============================================================================
+
+/// Type-safe filter expression for building queries
+///
+/// This enum represents common filter operations in a pattern-matchable,
+/// introspectable way. Use with `Q` objects or directly with `.filter()`.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// // Using FilterExpr variants directly
+/// let filter = FilterExpr::And(vec![
+///     FilterExpr::eq(Book::Published, true),
+///     FilterExpr::lt(Book::Price, 50),
+/// ]);
+///
+/// // Pattern matching
+/// match &filter {
+///     FilterExpr::And(conditions) => println!("{} conditions", conditions.len()),
+///     FilterExpr::Or(conditions) => println!("OR with {} conditions", conditions.len()),
+///     _ => {}
+/// }
+/// ```
+#[derive(Debug, Clone)]
+pub enum FilterExpr {
+    /// AND combination of multiple conditions
+    And(Vec<FilterExpr>),
+    /// OR combination of multiple conditions  
+    Or(Vec<FilterExpr>),
+    /// NOT (negation) of a condition
+    Not(Box<FilterExpr>),
+    /// Raw SimpleExpr for compatibility with SeaORM
+    Raw(SimpleExpr),
+}
+
+impl FilterExpr {
+    /// Create an AND combination of filters
+    pub fn and(filters: Vec<FilterExpr>) -> Self {
+        Self::And(filters)
+    }
+
+    /// Create an OR combination of filters
+    pub fn or(filters: Vec<FilterExpr>) -> Self {
+        Self::Or(filters)
+    }
+
+    /// Negate this filter expression
+    pub fn not(self) -> Self {
+        Self::Not(Box::new(self))
+    }
+
+    /// Create from any SimpleExpr (for compatibility)
+    pub fn raw(expr: impl Into<SimpleExpr>) -> Self {
+        Self::Raw(expr.into())
+    }
+
+    /// Create equality filter: column = value
+    pub fn eq<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
+        Self::Raw(column.eq(value).into())
+    }
+
+    /// Create not-equal filter: column != value
+    pub fn ne<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
+        Self::Raw(column.ne(value).into())
+    }
+
+    /// Create less-than filter: column < value
+    pub fn lt<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
+        Self::Raw(column.lt(value).into())
+    }
+
+    /// Create less-than-or-equal filter: column <= value
+    pub fn lte<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
+        Self::Raw(column.lte(value).into())
+    }
+
+    /// Create greater-than filter: column > value
+    pub fn gt<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
+        Self::Raw(column.gt(value).into())
+    }
+
+    /// Create greater-than-or-equal filter: column >= value
+    pub fn gte<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
+        Self::Raw(column.gte(value).into())
+    }
+
+    /// Create IS NULL filter
+    pub fn is_null<C: ColumnTrait>(column: C) -> Self {
+        Self::Raw(column.is_null().into())
+    }
+
+    /// Create IS NOT NULL filter
+    pub fn is_not_null<C: ColumnTrait>(column: C) -> Self {
+        Self::Raw(column.is_not_null().into())
+    }
+
+    /// Check if this is an AND expression
+    pub const fn is_and(&self) -> bool {
+        matches!(self, Self::And(_))
+    }
+
+    /// Check if this is an OR expression
+    pub const fn is_or(&self) -> bool {
+        matches!(self, Self::Or(_))
+    }
+
+    /// Check if this is a NOT expression
+    pub const fn is_not(&self) -> bool {
+        matches!(self, Self::Not(_))
+    }
+
+    /// Convert to SeaORM Condition for query execution
+    pub fn into_condition(self) -> Condition {
+        match self {
+            Self::And(filters) => {
+                let mut condition = Condition::all();
+                for f in filters {
+                    condition = condition.add(f.into_condition());
+                }
+                condition
+            }
+            Self::Or(filters) => {
+                let mut condition = Condition::any();
+                for f in filters {
+                    condition = condition.add(f.into_condition());
+                }
+                condition
+            }
+            Self::Not(inner) => inner.into_condition().not(),
+            Self::Raw(expr) => Condition::all().add(expr),
+        }
+    }
+}
+
+impl From<FilterExpr> for Condition {
+    fn from(expr: FilterExpr) -> Self {
+        expr.into_condition()
+    }
+}
+
+impl From<FilterExpr> for SimpleExpr {
+    fn from(expr: FilterExpr) -> Self {
+        // Convert to condition first, then extract as SimpleExpr
+        let condition: Condition = expr.into();
+        condition.into()
     }
 }
 
@@ -2714,5 +2894,152 @@ mod tests {
         let q = Q::all().add(Expr::value(true)).add(Expr::value(false));
         // Should allow chaining multiple add calls
         assert!(matches!(q.condition, Condition));
+    }
+
+    // ========================================================================
+    // Aggregation Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_aggregation_count_all() {
+        let agg = Aggregation::count_all();
+        assert!(matches!(agg, Aggregation::CountAll));
+    }
+
+    #[test]
+    fn test_aggregation_enum_is_debug() {
+        let agg = Aggregation::count_all();
+        let debug_str = format!("{:?}", agg);
+        assert!(debug_str.contains("CountAll"));
+    }
+
+    #[test]
+    fn test_aggregation_enum_is_clone() {
+        let agg = Aggregation::count_all();
+        let cloned = agg.clone();
+        assert_eq!(agg, cloned);
+    }
+
+    #[test]
+    fn test_aggregation_enum_is_eq() {
+        let agg1 = Aggregation::count_all();
+        let agg2 = Aggregation::count_all();
+        assert_eq!(agg1, agg2);
+    }
+
+    #[test]
+    fn test_aggregation_pattern_matching() {
+        let aggregations = vec![Aggregation::count_all()];
+
+        for agg in aggregations {
+            match agg {
+                Aggregation::CountAll => assert!(true),
+                Aggregation::Count(_) => panic!("Expected CountAll"),
+                Aggregation::Sum(_) => panic!("Expected CountAll"),
+                Aggregation::Avg(_) => panic!("Expected CountAll"),
+                Aggregation::Max(_) => panic!("Expected CountAll"),
+                Aggregation::Min(_) => panic!("Expected CountAll"),
+            }
+        }
+    }
+
+    // ========================================================================
+    // FilterExpr Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_expr_and() {
+        let filter = FilterExpr::And(vec![]);
+        assert!(filter.is_and());
+        assert!(!filter.is_or());
+        assert!(!filter.is_not());
+    }
+
+    #[test]
+    fn test_filter_expr_or() {
+        let filter = FilterExpr::Or(vec![]);
+        assert!(filter.is_or());
+        assert!(!filter.is_and());
+        assert!(!filter.is_not());
+    }
+
+    #[test]
+    fn test_filter_expr_not() {
+        let inner = FilterExpr::And(vec![]);
+        let filter = inner.not();
+        assert!(filter.is_not());
+        assert!(!filter.is_and());
+        assert!(!filter.is_or());
+    }
+
+    #[test]
+    fn test_filter_expr_is_debug() {
+        let filter = FilterExpr::And(vec![FilterExpr::Or(vec![])]);
+        let debug_str = format!("{:?}", filter);
+        assert!(debug_str.contains("And"));
+        assert!(debug_str.contains("Or"));
+    }
+
+    #[test]
+    fn test_filter_expr_is_clone() {
+        let filter = FilterExpr::And(vec![FilterExpr::Or(vec![])]);
+        let cloned = filter.clone();
+        assert!(cloned.is_and());
+    }
+
+    #[test]
+    fn test_filter_expr_nested_structure() {
+        // Build: (A AND B) OR (C AND D)
+        let ab = FilterExpr::And(vec![
+            FilterExpr::Raw(Expr::value(true).into()),
+            FilterExpr::Raw(Expr::value(false).into()),
+        ]);
+        let cd = FilterExpr::And(vec![
+            FilterExpr::Raw(Expr::value(true).into()),
+            FilterExpr::Raw(Expr::value(true).into()),
+        ]);
+        let combined = FilterExpr::Or(vec![ab, cd]);
+
+        // Verify structure via pattern matching
+        match combined {
+            FilterExpr::Or(children) => {
+                assert_eq!(children.len(), 2);
+                for child in children {
+                    assert!(child.is_and());
+                }
+            }
+            _ => panic!("Expected Or"),
+        }
+    }
+
+    #[test]
+    fn test_filter_expr_into_condition() {
+        // Test that conversion to Condition works
+        let filter = FilterExpr::And(vec![FilterExpr::Raw(Expr::value(true).into())]);
+        let _condition: Condition = filter.into();
+        // If it compiles and runs, conversion works
+    }
+
+    #[test]
+    fn test_filter_expr_pattern_matching() {
+        let filters = vec![
+            FilterExpr::And(vec![]),
+            FilterExpr::Or(vec![]),
+            FilterExpr::Not(Box::new(FilterExpr::And(vec![]))),
+            FilterExpr::Raw(Expr::value(true).into()),
+        ];
+
+        for filter in filters {
+            match &filter {
+                FilterExpr::And(_) => assert!(filter.is_and()),
+                FilterExpr::Or(_) => assert!(filter.is_or()),
+                FilterExpr::Not(_) => assert!(filter.is_not()),
+                FilterExpr::Raw(_) => {
+                    assert!(!filter.is_and());
+                    assert!(!filter.is_or());
+                    assert!(!filter.is_not());
+                }
+            }
+        }
     }
 }

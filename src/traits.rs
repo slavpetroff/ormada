@@ -12,6 +12,60 @@ pub trait DjangoConnection: ConnectionTrait + AtomicExt {}
 
 impl<T: ConnectionTrait + AtomicExt> DjangoConnection for T {}
 
+// ============================================================================
+// Entity Capability Enums
+// ============================================================================
+
+/// Soft delete configuration for an entity
+///
+/// This enum clearly expresses whether an entity supports soft deletion
+/// and which column is used to track it.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Entity with soft delete
+/// fn soft_delete() -> SoftDeleteConfig {
+///     SoftDeleteConfig::Enabled { column: "deleted_at" }
+/// }
+///
+/// // Entity without soft delete (default)
+/// fn soft_delete() -> SoftDeleteConfig {
+///     SoftDeleteConfig::Disabled
+/// }
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SoftDeleteConfig {
+    /// Soft delete is disabled - records are permanently deleted
+    Disabled,
+    /// Soft delete is enabled - records are marked with a timestamp
+    Enabled {
+        /// Column name storing the deletion timestamp (e.g., "deleted_at")
+        column: &'static str,
+    },
+}
+
+impl SoftDeleteConfig {
+    /// Check if soft delete is enabled
+    pub const fn is_enabled(&self) -> bool {
+        matches!(self, Self::Enabled { .. })
+    }
+
+    /// Get the column name if soft delete is enabled
+    pub const fn column(&self) -> Option<&'static str> {
+        match self {
+            Self::Disabled => None,
+            Self::Enabled { column } => Some(column),
+        }
+    }
+}
+
+impl Default for SoftDeleteConfig {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
 /// Trait for entities that support Django-style creation behavior
 ///
 /// This is automatically implemented by #[derive(DjangoModel)] and #[`django_model`].
@@ -32,12 +86,12 @@ pub trait DjangoEntity: EntityTrait {
         model: Self::Model,
     ) -> Result<Self::Model, DjangoOrmError>;
 
-    /// Get the soft delete field name if this entity uses soft deletes
+    /// Get soft delete configuration for this entity
     ///
-    /// Returns the column name used for soft deletes (e.g., "`deleted_at`").
-    /// If None, the entity uses hard deletes.
-    fn soft_delete_column() -> Option<&'static str> {
-        None // Default: no soft delete
+    /// Returns `SoftDeleteConfig::Enabled { column }` if the entity uses soft deletes,
+    /// or `SoftDeleteConfig::Disabled` (default) for hard deletes.
+    fn soft_delete() -> SoftDeleteConfig {
+        SoftDeleteConfig::Disabled
     }
 }
 
@@ -81,5 +135,68 @@ mod tests {
 
         // This should compile with DjangoConnection instead of multiple bounds
         generic_with_django_connection::<DatabaseConnection>();
+    }
+
+    // ========================================================================
+    // SoftDeleteConfig Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_soft_delete_config_disabled() {
+        let config = SoftDeleteConfig::Disabled;
+        assert!(!config.is_enabled());
+        assert_eq!(config.column(), None);
+    }
+
+    #[test]
+    fn test_soft_delete_config_enabled() {
+        let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
+        assert!(config.is_enabled());
+        assert_eq!(config.column(), Some("deleted_at"));
+    }
+
+    #[test]
+    fn test_soft_delete_config_default() {
+        let config = SoftDeleteConfig::default();
+        assert_eq!(config, SoftDeleteConfig::Disabled);
+    }
+
+    #[test]
+    fn test_soft_delete_config_is_debug() {
+        let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("Enabled"));
+        assert!(debug_str.contains("deleted_at"));
+    }
+
+    #[test]
+    fn test_soft_delete_config_is_clone() {
+        let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
+        let cloned = config.clone();
+        assert_eq!(config, cloned);
+    }
+
+    #[test]
+    fn test_soft_delete_config_is_copy() {
+        let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
+        let copied = config;
+        let _also_copied = config; // Can use again because Copy
+        assert_eq!(copied, config);
+    }
+
+    #[test]
+    fn test_soft_delete_config_pattern_matching() {
+        let configs =
+            vec![SoftDeleteConfig::Disabled, SoftDeleteConfig::Enabled { column: "deleted_at" }];
+
+        for config in configs {
+            match config {
+                SoftDeleteConfig::Disabled => assert!(!config.is_enabled()),
+                SoftDeleteConfig::Enabled { column } => {
+                    assert!(config.is_enabled());
+                    assert_eq!(column, "deleted_at");
+                }
+            }
+        }
     }
 }

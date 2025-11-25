@@ -847,12 +847,12 @@ fn generate_django_entity_impl(
         }
     }
 
-    // Generate soft_delete_column implementation if needed
+    // Generate soft_delete implementation using enum
     let soft_delete_impl = if let Some(field) = soft_delete_field {
         let field_str = field.to_string();
         quote! {
-            fn soft_delete_column() -> Option<&'static str> {
-                Some(#field_str)
+            fn soft_delete() -> ::seaorm_django::traits::SoftDeleteConfig {
+                ::seaorm_django::traits::SoftDeleteConfig::Enabled { column: #field_str }
             }
         }
     } else {
