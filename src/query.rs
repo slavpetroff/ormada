@@ -252,6 +252,105 @@ pub enum SoftDeleteMode {
     OnlyDeleted,
 }
 
+/// Query building state for introspection
+///
+/// Tracks the current state of query construction, enabling
+/// validation and debugging of query building patterns.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// let qs = Book::objects(db);
+/// assert_eq!(qs.state(), QueryState::Fresh);
+///
+/// let qs = qs.filter(Book::Price.lt(50));
+/// assert_eq!(qs.state(), QueryState::Filtered);
+///
+/// let qs = qs.order_by_asc(Book::Title);
+/// assert_eq!(qs.state(), QueryState::Ordered);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum QueryState {
+    /// Initial state - no operations applied
+    #[default]
+    Fresh,
+    /// Has filter/exclude operations
+    Filtered,
+    /// Has ordering applied
+    Ordered,
+    /// Has pagination (limit/offset)
+    Paginated,
+    /// Has aggregations/annotations
+    Aggregated,
+    /// Query has been executed
+    Executed,
+}
+
+impl QueryState {
+    /// Check if query is in fresh state
+    pub const fn is_fresh(&self) -> bool {
+        matches!(self, Self::Fresh)
+    }
+
+    /// Check if query has filters
+    pub const fn is_filtered(&self) -> bool {
+        matches!(self, Self::Filtered | Self::Ordered | Self::Paginated | Self::Aggregated)
+    }
+
+    /// Check if query has ordering
+    pub const fn is_ordered(&self) -> bool {
+        matches!(self, Self::Ordered | Self::Paginated)
+    }
+
+    /// Check if query has pagination
+    pub const fn is_paginated(&self) -> bool {
+        matches!(self, Self::Paginated)
+    }
+
+    /// Check if query has aggregations
+    pub const fn is_aggregated(&self) -> bool {
+        matches!(self, Self::Aggregated)
+    }
+
+    /// Check if query has been executed
+    pub const fn is_executed(&self) -> bool {
+        matches!(self, Self::Executed)
+    }
+
+    /// Transition to filtered state
+    pub fn filter(&mut self) {
+        if matches!(self, Self::Fresh) {
+            *self = Self::Filtered;
+        }
+    }
+
+    /// Transition to ordered state
+    pub fn order(&mut self) {
+        if matches!(self, Self::Fresh | Self::Filtered) {
+            *self = Self::Ordered;
+        }
+    }
+
+    /// Transition to paginated state
+    pub fn paginate(&mut self) {
+        if !matches!(self, Self::Aggregated | Self::Executed) {
+            *self = Self::Paginated;
+        }
+    }
+
+    /// Transition to aggregated state
+    pub fn aggregate(&mut self) {
+        *self = Self::Aggregated;
+    }
+
+    /// Transition to executed state
+    pub fn execute(&mut self) {
+        *self = Self::Executed;
+    }
+}
+
 // ============================================================================
 // QueryOp Enum - Introspectable Query Operations
 // ============================================================================
@@ -502,6 +601,8 @@ pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
     pub(crate) soft_delete_mode: SoftDeleteMode,
     /// Query plan for introspection
     pub(crate) plan: QueryPlan,
+    /// Current query state for tracking build progress
+    pub(crate) query_state: QueryState,
     // Thread-safe cache for query results
     pub(crate) cache: RwLock<Option<Arc<Vec<E::Model>>>>,
 }
@@ -522,6 +623,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 select: E::find(),
                 soft_delete_mode: SoftDeleteMode::ExcludeDeleted,
                 plan: QueryPlan::new(),
+                query_state: QueryState::Fresh,
                 cache: RwLock::new(None),
             }),
         }
@@ -530,6 +632,17 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
     /// Create a new `QuerySet` with modified select and operation (internal helper)
     fn with_select_and_op(&self, select: Select<E>, op: QueryOp) -> Self {
         let mut plan = self.inner.plan.clone();
+        let mut state = self.inner.query_state;
+        
+        // Update state based on operation type
+        match &op {
+            QueryOp::Filter(_) | QueryOp::Exclude(_) => state.filter(),
+            QueryOp::OrderBy { .. } => state.order(),
+            QueryOp::Limit(_) | QueryOp::Offset(_) => state.paginate(),
+            QueryOp::Annotate { .. } => state.aggregate(),
+            _ => {}
+        }
+        
         plan.push(op);
         Self {
             inner: Arc::new(QuerySetInner {
@@ -537,6 +650,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 select,
                 soft_delete_mode: self.inner.soft_delete_mode,
                 plan,
+                query_state: state,
                 cache: RwLock::new(None), // New cache for modified query
             }),
         }
@@ -552,9 +666,28 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
                 select: self.inner.select.clone(),
                 soft_delete_mode: mode,
                 plan,
+                query_state: self.inner.query_state,
                 cache: RwLock::new(None),
             }),
         }
+    }
+
+    /// Get the current query state
+    ///
+    /// Returns the state of query construction, useful for debugging
+    /// and validation of query building patterns.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let qs = Book::objects(db);
+    /// assert_eq!(qs.state(), QueryState::Fresh);
+    ///
+    /// let qs = qs.filter(Book::Price.lt(50));
+    /// assert_eq!(qs.state(), QueryState::Filtered);
+    /// ```
+    pub fn state(&self) -> QueryState {
+        self.inner.query_state
     }
 
     /// Get the query plan for introspection
@@ -2553,12 +2686,16 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             plan.push(QueryOp::Annotate { alias: alias.to_string(), aggregation });
         }
 
+        let mut state = self.inner.query_state;
+        state.aggregate();
+        
         Self {
             inner: Arc::new(QuerySetInner {
                 db: self.inner.db,
                 select: new_select,
                 soft_delete_mode: self.inner.soft_delete_mode,
                 plan,
+                query_state: state,
                 cache: RwLock::new(None),
             }),
         }
@@ -2877,6 +3014,113 @@ impl From<Q> for Condition {
 ///     _ => {}
 /// }
 /// ```
+/// Filter operation type for typed, inspectable filter expressions
+///
+/// Each variant represents a specific comparison operation.
+/// This enables exhaustive pattern matching and clear error messages.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FilterOp {
+    /// Equality: column = value
+    Eq,
+    /// Not equal: column != value
+    Ne,
+    /// Less than: column < value
+    Lt,
+    /// Less than or equal: column <= value
+    Lte,
+    /// Greater than: column > value
+    Gt,
+    /// Greater than or equal: column >= value
+    Gte,
+    /// LIKE pattern match
+    Like,
+    /// NOT LIKE pattern match
+    NotLike,
+    /// IN list of values
+    In,
+    /// NOT IN list of values
+    NotIn,
+    /// IS NULL check
+    IsNull,
+    /// IS NOT NULL check
+    IsNotNull,
+    /// BETWEEN two values
+    Between,
+    /// String contains (LIKE %value%)
+    Contains,
+    /// String starts with (LIKE value%)
+    StartsWith,
+    /// String ends with (LIKE %value)
+    EndsWith,
+}
+
+impl FilterOp {
+    /// Get the SQL operator representation
+    pub const fn sql_operator(&self) -> &'static str {
+        match self {
+            Self::Eq => "=",
+            Self::Ne => "!=",
+            Self::Lt => "<",
+            Self::Lte => "<=",
+            Self::Gt => ">",
+            Self::Gte => ">=",
+            Self::Like | Self::Contains | Self::StartsWith | Self::EndsWith => "LIKE",
+            Self::NotLike => "NOT LIKE",
+            Self::In => "IN",
+            Self::NotIn => "NOT IN",
+            Self::IsNull => "IS NULL",
+            Self::IsNotNull => "IS NOT NULL",
+            Self::Between => "BETWEEN",
+        }
+    }
+
+    /// Check if this is a comparison operation
+    pub const fn is_comparison(&self) -> bool {
+        matches!(self, Self::Eq | Self::Ne | Self::Lt | Self::Lte | Self::Gt | Self::Gte)
+    }
+
+    /// Check if this is a string operation
+    pub const fn is_string_op(&self) -> bool {
+        matches!(self, Self::Like | Self::NotLike | Self::Contains | Self::StartsWith | Self::EndsWith)
+    }
+
+    /// Check if this is a null check
+    pub const fn is_null_check(&self) -> bool {
+        matches!(self, Self::IsNull | Self::IsNotNull)
+    }
+}
+
+/// Type-safe filter expression for building queries
+///
+/// This enum represents filter operations in a pattern-matchable, introspectable way.
+/// Supports typed operations with column/value information, logical combinations,
+/// and raw expressions for SeaORM compatibility.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// // Create typed filter
+/// let filter = FilterExpr::eq(Book::Price, 100);
+/// assert!(filter.is_typed());
+/// assert_eq!(filter.get_op(), Some(&FilterOp::Eq));
+///
+/// // Combine with AND/OR
+/// let combined = FilterExpr::And(vec![
+///     FilterExpr::eq(Book::Published, true),
+///     FilterExpr::lt(Book::Price, 50),
+/// ]);
+///
+/// // Pattern matching for introspection
+/// match &filter {
+///     FilterExpr::Typed { column, op, value_repr, .. } => {
+///         println!("{} {} {}", column, op.sql_operator(), value_repr);
+///     }
+///     FilterExpr::And(conditions) => println!("{} AND conditions", conditions.len()),
+///     _ => {}
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub enum FilterExpr {
     /// AND combination of multiple conditions
@@ -2885,6 +3129,17 @@ pub enum FilterExpr {
     Or(Vec<FilterExpr>),
     /// NOT (negation) of a condition
     Not(Box<FilterExpr>),
+    /// Typed filter operation with column name and operation type
+    Typed {
+        /// Column name being filtered
+        column: String,
+        /// The filter operation
+        op: FilterOp,
+        /// String representation of the value (for introspection)
+        value_repr: String,
+        /// The actual SeaORM expression
+        expr: SimpleExpr,
+    },
     /// Raw SimpleExpr for compatibility with SeaORM
     Raw(SimpleExpr),
 }
@@ -2910,44 +3165,60 @@ impl FilterExpr {
         Self::Raw(expr.into())
     }
 
+    /// Create a typed filter expression
+    fn typed<C: ColumnTrait>(column: C, op: FilterOp, value_repr: String, expr: SimpleExpr) -> Self {
+        Self::Typed {
+            column: format!("{:?}", column),
+            op,
+            value_repr,
+            expr,
+        }
+    }
+
     /// Create equality filter: column = value
-    pub fn eq<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
-        Self::Raw(column.eq(value).into())
+    pub fn eq<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+        let value_repr = format!("{:?}", value);
+        Self::typed(column, FilterOp::Eq, value_repr, column.eq(value).into())
     }
 
     /// Create not-equal filter: column != value
-    pub fn ne<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
-        Self::Raw(column.ne(value).into())
+    pub fn ne<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+        let value_repr = format!("{:?}", value);
+        Self::typed(column, FilterOp::Ne, value_repr, column.ne(value).into())
     }
 
     /// Create less-than filter: column < value
-    pub fn lt<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
-        Self::Raw(column.lt(value).into())
+    pub fn lt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+        let value_repr = format!("{:?}", value);
+        Self::typed(column, FilterOp::Lt, value_repr, column.lt(value).into())
     }
 
     /// Create less-than-or-equal filter: column <= value
-    pub fn lte<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
-        Self::Raw(column.lte(value).into())
+    pub fn lte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+        let value_repr = format!("{:?}", value);
+        Self::typed(column, FilterOp::Lte, value_repr, column.lte(value).into())
     }
 
     /// Create greater-than filter: column > value
-    pub fn gt<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
-        Self::Raw(column.gt(value).into())
+    pub fn gt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+        let value_repr = format!("{:?}", value);
+        Self::typed(column, FilterOp::Gt, value_repr, column.gt(value).into())
     }
 
     /// Create greater-than-or-equal filter: column >= value
-    pub fn gte<C: ColumnTrait, V: Into<sea_orm::Value>>(column: C, value: V) -> Self {
-        Self::Raw(column.gte(value).into())
+    pub fn gte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(column: C, value: V) -> Self {
+        let value_repr = format!("{:?}", value);
+        Self::typed(column, FilterOp::Gte, value_repr, column.gte(value).into())
     }
 
     /// Create IS NULL filter
     pub fn is_null<C: ColumnTrait>(column: C) -> Self {
-        Self::Raw(column.is_null().into())
+        Self::typed(column, FilterOp::IsNull, "NULL".to_string(), column.is_null().into())
     }
 
     /// Create IS NOT NULL filter
     pub fn is_not_null<C: ColumnTrait>(column: C) -> Self {
-        Self::Raw(column.is_not_null().into())
+        Self::typed(column, FilterOp::IsNotNull, "NOT NULL".to_string(), column.is_not_null().into())
     }
 
     /// Check if this is an AND expression
@@ -2963,6 +3234,40 @@ impl FilterExpr {
     /// Check if this is a NOT expression
     pub const fn is_not(&self) -> bool {
         matches!(self, Self::Not(_))
+    }
+
+    /// Check if this is a typed filter expression
+    pub const fn is_typed(&self) -> bool {
+        matches!(self, Self::Typed { .. })
+    }
+
+    /// Check if this is a raw expression
+    pub const fn is_raw(&self) -> bool {
+        matches!(self, Self::Raw(_))
+    }
+
+    /// Get the filter operation if this is a typed filter
+    pub fn get_op(&self) -> Option<&FilterOp> {
+        match self {
+            Self::Typed { op, .. } => Some(op),
+            _ => None,
+        }
+    }
+
+    /// Get the column name if this is a typed filter
+    pub fn get_column(&self) -> Option<&str> {
+        match self {
+            Self::Typed { column, .. } => Some(column),
+            _ => None,
+        }
+    }
+
+    /// Get the value representation if this is a typed filter
+    pub fn get_value_repr(&self) -> Option<&str> {
+        match self {
+            Self::Typed { value_repr, .. } => Some(value_repr),
+            _ => None,
+        }
     }
 
     /// Convert to SeaORM Condition for query execution
@@ -2983,6 +3288,7 @@ impl FilterExpr {
                 condition
             }
             Self::Not(inner) => inner.into_condition().not(),
+            Self::Typed { expr, .. } => Condition::all().add(expr),
             Self::Raw(expr) => Condition::all().add(expr),
         }
     }
@@ -3334,7 +3640,9 @@ mod tests {
                 FilterExpr::And(_) => assert!(filter.is_and()),
                 FilterExpr::Or(_) => assert!(filter.is_or()),
                 FilterExpr::Not(_) => assert!(filter.is_not()),
+                FilterExpr::Typed { .. } => assert!(filter.is_typed()),
                 FilterExpr::Raw(_) => {
+                    assert!(filter.is_raw());
                     assert!(!filter.is_and());
                     assert!(!filter.is_or());
                     assert!(!filter.is_not());
@@ -3603,5 +3911,255 @@ mod tests {
         let op = QueryOp::Exclude(FilterExpr::And(vec![]));
         assert!(op.is_exclude());
         assert!(!op.is_filter());
+    }
+
+    // ========================================================================
+    // FilterOp Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_op_sql_operators() {
+        assert_eq!(FilterOp::Eq.sql_operator(), "=");
+        assert_eq!(FilterOp::Ne.sql_operator(), "!=");
+        assert_eq!(FilterOp::Lt.sql_operator(), "<");
+        assert_eq!(FilterOp::Lte.sql_operator(), "<=");
+        assert_eq!(FilterOp::Gt.sql_operator(), ">");
+        assert_eq!(FilterOp::Gte.sql_operator(), ">=");
+        assert_eq!(FilterOp::Like.sql_operator(), "LIKE");
+        assert_eq!(FilterOp::NotLike.sql_operator(), "NOT LIKE");
+        assert_eq!(FilterOp::In.sql_operator(), "IN");
+        assert_eq!(FilterOp::NotIn.sql_operator(), "NOT IN");
+        assert_eq!(FilterOp::IsNull.sql_operator(), "IS NULL");
+        assert_eq!(FilterOp::IsNotNull.sql_operator(), "IS NOT NULL");
+        assert_eq!(FilterOp::Between.sql_operator(), "BETWEEN");
+        assert_eq!(FilterOp::Contains.sql_operator(), "LIKE");
+        assert_eq!(FilterOp::StartsWith.sql_operator(), "LIKE");
+        assert_eq!(FilterOp::EndsWith.sql_operator(), "LIKE");
+    }
+
+    #[test]
+    fn test_filter_op_is_comparison() {
+        assert!(FilterOp::Eq.is_comparison());
+        assert!(FilterOp::Ne.is_comparison());
+        assert!(FilterOp::Lt.is_comparison());
+        assert!(FilterOp::Lte.is_comparison());
+        assert!(FilterOp::Gt.is_comparison());
+        assert!(FilterOp::Gte.is_comparison());
+        assert!(!FilterOp::Like.is_comparison());
+        assert!(!FilterOp::IsNull.is_comparison());
+    }
+
+    #[test]
+    fn test_filter_op_is_string_op() {
+        assert!(FilterOp::Like.is_string_op());
+        assert!(FilterOp::NotLike.is_string_op());
+        assert!(FilterOp::Contains.is_string_op());
+        assert!(FilterOp::StartsWith.is_string_op());
+        assert!(FilterOp::EndsWith.is_string_op());
+        assert!(!FilterOp::Eq.is_string_op());
+        assert!(!FilterOp::IsNull.is_string_op());
+    }
+
+    #[test]
+    fn test_filter_op_is_null_check() {
+        assert!(FilterOp::IsNull.is_null_check());
+        assert!(FilterOp::IsNotNull.is_null_check());
+        assert!(!FilterOp::Eq.is_null_check());
+        assert!(!FilterOp::Like.is_null_check());
+    }
+
+    #[test]
+    fn test_filter_op_equality() {
+        assert_eq!(FilterOp::Eq, FilterOp::Eq);
+        assert_ne!(FilterOp::Eq, FilterOp::Ne);
+    }
+
+    // ========================================================================
+    // QueryState Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_query_state_default() {
+        let state = QueryState::default();
+        assert!(state.is_fresh());
+        assert!(!state.is_filtered());
+        assert!(!state.is_ordered());
+        assert!(!state.is_paginated());
+        assert!(!state.is_aggregated());
+        assert!(!state.is_executed());
+    }
+
+    #[test]
+    fn test_query_state_transitions() {
+        let mut state = QueryState::Fresh;
+
+        // Filter transition
+        state.filter();
+        assert!(state.is_filtered());
+        assert_eq!(state, QueryState::Filtered);
+
+        // Order transition
+        state = QueryState::Fresh;
+        state.filter();
+        state.order();
+        assert!(state.is_ordered());
+        assert_eq!(state, QueryState::Ordered);
+
+        // Paginate transition
+        state.paginate();
+        assert!(state.is_paginated());
+        assert_eq!(state, QueryState::Paginated);
+
+        // Aggregate transition
+        state = QueryState::Fresh;
+        state.aggregate();
+        assert!(state.is_aggregated());
+        assert_eq!(state, QueryState::Aggregated);
+
+        // Execute transition
+        state.execute();
+        assert!(state.is_executed());
+        assert_eq!(state, QueryState::Executed);
+    }
+
+    #[test]
+    fn test_query_state_pattern_matching() {
+        let states = [
+            QueryState::Fresh,
+            QueryState::Filtered,
+            QueryState::Ordered,
+            QueryState::Paginated,
+            QueryState::Aggregated,
+            QueryState::Executed,
+        ];
+
+        for state in states {
+            match state {
+                QueryState::Fresh => assert!(state.is_fresh()),
+                QueryState::Filtered => assert!(state.is_filtered()),
+                QueryState::Ordered => assert!(state.is_ordered()),
+                QueryState::Paginated => assert!(state.is_paginated()),
+                QueryState::Aggregated => assert!(state.is_aggregated()),
+                QueryState::Executed => assert!(state.is_executed()),
+            }
+        }
+    }
+
+    #[test]
+    fn test_query_state_clone_copy() {
+        let state = QueryState::Filtered;
+        let cloned = state.clone();
+        let copied = state;
+
+        assert_eq!(state, cloned);
+        assert_eq!(state, copied);
+    }
+
+    // ========================================================================
+    // FilterExpr Typed Variant Tests
+    // ========================================================================
+
+    #[test]
+    fn test_filter_expr_typed_is_typed() {
+        use sea_orm::sea_query::Expr;
+        let filter = FilterExpr::Typed {
+            column: "price".to_string(),
+            op: FilterOp::Eq,
+            value_repr: "100".to_string(),
+            expr: Expr::value(100).into(),
+        };
+        assert!(filter.is_typed());
+        assert!(!filter.is_raw());
+        assert!(!filter.is_and());
+        assert!(!filter.is_or());
+        assert!(!filter.is_not());
+    }
+
+    #[test]
+    fn test_filter_expr_get_op() {
+        use sea_orm::sea_query::Expr;
+        let filter = FilterExpr::Typed {
+            column: "price".to_string(),
+            op: FilterOp::Lt,
+            value_repr: "50".to_string(),
+            expr: Expr::value(50).into(),
+        };
+        assert_eq!(filter.get_op(), Some(&FilterOp::Lt));
+
+        let raw = FilterExpr::Raw(Expr::value(true).into());
+        assert_eq!(raw.get_op(), None);
+    }
+
+    #[test]
+    fn test_filter_expr_get_column() {
+        use sea_orm::sea_query::Expr;
+        let filter = FilterExpr::Typed {
+            column: "author_id".to_string(),
+            op: FilterOp::Eq,
+            value_repr: "1".to_string(),
+            expr: Expr::value(1).into(),
+        };
+        assert_eq!(filter.get_column(), Some("author_id"));
+
+        let and = FilterExpr::And(vec![]);
+        assert_eq!(and.get_column(), None);
+    }
+
+    #[test]
+    fn test_filter_expr_get_value_repr() {
+        use sea_orm::sea_query::Expr;
+        let filter = FilterExpr::Typed {
+            column: "name".to_string(),
+            op: FilterOp::Contains,
+            value_repr: "test".to_string(),
+            expr: Expr::value("test").into(),
+        };
+        assert_eq!(filter.get_value_repr(), Some("test"));
+
+        let or = FilterExpr::Or(vec![]);
+        assert_eq!(or.get_value_repr(), None);
+    }
+
+    #[test]
+    fn test_filter_expr_typed_into_condition() {
+        use sea_orm::sea_query::Expr;
+        let filter = FilterExpr::Typed {
+            column: "status".to_string(),
+            op: FilterOp::Eq,
+            value_repr: "active".to_string(),
+            expr: Expr::value("active").into(),
+        };
+        // Should not panic and should create valid condition
+        let _condition: Condition = filter.into();
+    }
+
+    #[test]
+    fn test_filter_expr_pattern_matching_with_typed() {
+        use sea_orm::sea_query::Expr;
+        let filters = vec![
+            FilterExpr::And(vec![]),
+            FilterExpr::Or(vec![]),
+            FilterExpr::Not(Box::new(FilterExpr::And(vec![]))),
+            FilterExpr::Typed {
+                column: "id".to_string(),
+                op: FilterOp::Gt,
+                value_repr: "10".to_string(),
+                expr: Expr::value(10).into(),
+            },
+            FilterExpr::Raw(Expr::value(true).into()),
+        ];
+
+        for filter in filters {
+            match &filter {
+                FilterExpr::And(_) => assert!(filter.is_and()),
+                FilterExpr::Or(_) => assert!(filter.is_or()),
+                FilterExpr::Not(_) => assert!(filter.is_not()),
+                FilterExpr::Typed { op, .. } => {
+                    assert!(filter.is_typed());
+                    assert_eq!(filter.get_op(), Some(op));
+                }
+                FilterExpr::Raw(_) => assert!(filter.is_raw()),
+            }
+        }
     }
 }

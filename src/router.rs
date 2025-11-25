@@ -58,6 +58,43 @@ pub enum RoutingStrategy {
     RoundRobin,
 }
 
+/// Transaction state for the router
+///
+/// Explicit enum representation of transaction state, making illegal states
+/// unrepresentable and enabling exhaustive pattern matching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TransactionState {
+    /// No active transaction
+    #[default]
+    Idle,
+    /// Transaction is active - all operations use primary
+    Active,
+}
+
+impl TransactionState {
+    /// Check if currently in an active transaction
+    #[inline]
+    pub const fn is_active(&self) -> bool {
+        matches!(self, Self::Active)
+    }
+
+    /// Check if idle (no active transaction)
+    #[inline]
+    pub const fn is_idle(&self) -> bool {
+        matches!(self, Self::Idle)
+    }
+
+    /// Transition to active state
+    pub fn begin(&mut self) {
+        *self = Self::Active;
+    }
+
+    /// Transition to idle state
+    pub fn end(&mut self) {
+        *self = Self::Idle;
+    }
+}
+
 /// Context tracking for read-your-writes consistency
 ///
 /// Tracks whether writes have occurred in the current context.
@@ -121,8 +158,8 @@ pub struct DatabaseRouter {
     /// Consistency context for read-your-writes
     context: ConsistencyContext,
 
-    /// Whether we're in a transaction (forces primary usage)
-    in_transaction: Arc<RwLock<bool>>,
+    /// Transaction state (explicit enum for clarity)
+    transaction_state: Arc<RwLock<TransactionState>>,
 }
 
 impl DatabaseRouter {
@@ -135,7 +172,7 @@ impl DatabaseRouter {
             replicas: Vec::new(),
             replica_index: Arc::new(AtomicUsize::new(0)),
             context: ConsistencyContext::new(),
-            in_transaction: Arc::new(RwLock::new(false)),
+            transaction_state: Arc::new(RwLock::new(TransactionState::Idle)),
         }
     }
 
@@ -152,7 +189,7 @@ impl DatabaseRouter {
             replicas,
             replica_index: Arc::new(AtomicUsize::new(0)),
             context: ConsistencyContext::new(),
-            in_transaction: Arc::new(RwLock::new(false)),
+            transaction_state: Arc::new(RwLock::new(TransactionState::Idle)),
         }
     }
 
@@ -166,7 +203,7 @@ impl DatabaseRouter {
     /// Otherwise returns a replica using round-robin.
     pub async fn read_connection(&self) -> &DatabaseConnection {
         // Always use primary if in transaction
-        if *self.in_transaction.read().await {
+        if self.transaction_state.read().await.is_active() {
             return &self.primary;
         }
 
@@ -202,17 +239,22 @@ impl DatabaseRouter {
 
     /// Mark that we're entering a transaction
     pub async fn begin_transaction(&self) {
-        *self.in_transaction.write().await = true;
+        self.transaction_state.write().await.begin();
     }
 
     /// Mark that we're leaving a transaction
     pub async fn end_transaction(&self) {
-        *self.in_transaction.write().await = false;
+        self.transaction_state.write().await.end();
     }
 
     /// Check if we're currently in a transaction
     pub async fn is_in_transaction(&self) -> bool {
-        *self.in_transaction.read().await
+        self.transaction_state.read().await.is_active()
+    }
+
+    /// Get the current transaction state
+    pub async fn transaction_state(&self) -> TransactionState {
+        *self.transaction_state.read().await
     }
 
     /// Get the consistency context
@@ -437,5 +479,91 @@ mod tests {
         // End transaction
         router.end_transaction().await;
         assert!(!router.is_in_transaction().await);
+    }
+
+    // ========================================================================
+    // TransactionState Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_transaction_state_default() {
+        let state = TransactionState::default();
+        assert!(state.is_idle());
+        assert!(!state.is_active());
+    }
+
+    #[test]
+    fn test_transaction_state_transitions() {
+        let mut state = TransactionState::Idle;
+
+        // Begin transaction
+        state.begin();
+        assert!(state.is_active());
+        assert!(!state.is_idle());
+
+        // End transaction
+        state.end();
+        assert!(state.is_idle());
+        assert!(!state.is_active());
+    }
+
+    #[test]
+    fn test_transaction_state_pattern_matching() {
+        let idle = TransactionState::Idle;
+        let active = TransactionState::Active;
+
+        // Exhaustive pattern matching
+        match idle {
+            TransactionState::Idle => assert!(true),
+            TransactionState::Active => panic!("Should be idle"),
+        }
+
+        match active {
+            TransactionState::Active => assert!(true),
+            TransactionState::Idle => panic!("Should be active"),
+        }
+    }
+
+    #[test]
+    fn test_transaction_state_equality() {
+        assert_eq!(TransactionState::Idle, TransactionState::Idle);
+        assert_eq!(TransactionState::Active, TransactionState::Active);
+        assert_ne!(TransactionState::Idle, TransactionState::Active);
+    }
+
+    #[test]
+    fn test_transaction_state_clone_copy() {
+        let state = TransactionState::Active;
+        let cloned = state.clone();
+        let copied = state; // Copy
+
+        assert_eq!(state, cloned);
+        assert_eq!(state, copied);
+    }
+
+    #[test]
+    fn test_transaction_state_debug() {
+        let idle = TransactionState::Idle;
+        let active = TransactionState::Active;
+
+        assert!(format!("{:?}", idle).contains("Idle"));
+        assert!(format!("{:?}", active).contains("Active"));
+    }
+
+    #[tokio::test]
+    async fn test_router_transaction_state_method() {
+        let primary = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        let router = DatabaseRouter::new_single(primary);
+
+        // Initially idle
+        assert_eq!(router.transaction_state().await, TransactionState::Idle);
+
+        // Begin transaction
+        router.begin_transaction().await;
+        assert_eq!(router.transaction_state().await, TransactionState::Active);
+
+        // End transaction
+        router.end_transaction().await;
+        assert_eq!(router.transaction_state().await, TransactionState::Idle);
     }
 }
