@@ -257,7 +257,6 @@ pub mod prelude {
     pub use crate::aggregations::AggregateExt;
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
-    pub use async_trait::async_trait;
     pub use crate::hooks::LifecycleHooks;
     pub use crate::query::{Aggregation, ColumnExt, QueryExt, QuerySet, Q};
     pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
@@ -265,6 +264,7 @@ pub mod prelude {
     pub use crate::traits::{DjangoConnection, DjangoEntity, WithRelationsTrait};
     pub use crate::transaction::AtomicExt;
     pub use crate::types::OnDelete;
+    pub use async_trait::async_trait;
 
     // Macros
     pub use crate::{hooks, relations, tx};

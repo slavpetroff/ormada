@@ -408,7 +408,11 @@ async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
             .await?;
 
         // Force error to test rollback
-        Err::<(), DjangoOrmError>(DjangoOrmError::validation("test", "rollback", "Intentional error"))
+        Err::<(), DjangoOrmError>(DjangoOrmError::validation(
+            "test",
+            "rollback",
+            "Intentional error",
+        ))
     })
     .await;
 

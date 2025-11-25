@@ -170,7 +170,6 @@ pub enum DjangoOrmError {
         /// Number of retry attempts made
         attempts: u8,
     },
-
 }
 
 impl fmt::Display for DjangoOrmError {
@@ -203,7 +202,6 @@ impl From<sea_orm::DbErr> for DjangoOrmError {
         Self::Database(err)
     }
 }
-
 
 impl DjangoOrmError {
     /// Create a `NotFound` error

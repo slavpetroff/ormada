@@ -640,4 +640,3 @@ async fn test_upsert_on_conflict_columns_api(#[future] db: DatabaseRouter) {
 
     assert_eq!(count, 1);
 }
-

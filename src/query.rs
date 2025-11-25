@@ -1856,9 +1856,15 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C> {
             Ok(stream
                 .map(|result| {
                     result.and_then(|obj| {
-                        obj.as_object()
-                            .and_then(|map| map.values().next().cloned())
-                            .ok_or_else(|| DjangoOrmError::validation("QuerySet", "values_list", "Invalid value format"))
+                        obj.as_object().and_then(|map| map.values().next().cloned()).ok_or_else(
+                            || {
+                                DjangoOrmError::validation(
+                                    "QuerySet",
+                                    "values_list",
+                                    "Invalid value format",
+                                )
+                            },
+                        )
                     })
                 })
                 .boxed())
