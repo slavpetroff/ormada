@@ -9,17 +9,19 @@ keywords = ["seaorm", "orm", "database", "django", "query"]
 categories = ["database"]
 
 [dependencies]
-sea-orm = { workspace = true }
-chrono = { workspace = true }
+# Core ORM - always required
+sea-orm = { version = "~2.0.0-rc.18", features = ["runtime-tokio-native-tls", "sqlx-postgres", "macros"] }
+chrono = { version = "0.4", features = ["serde"] }
 once_cell = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures = "0.3"
 tokio = { version = "1", features = ["sync"] }
 async-trait = "0.1"
+rustc-hash = "2.1.1"
 
 # Optional dependencies
 seaorm-django-derive = { path = "./derive", optional = true }
-rustc-hash = "2.1.1"
 
 [features]
 default = ["derive"]

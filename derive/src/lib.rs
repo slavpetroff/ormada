@@ -295,6 +295,12 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// This macro transforms a simple struct definition into a full `SeaORM` entity
 /// with all the necessary derives and boilerplate.
 ///
+/// # Model Attributes
+///
+/// - `table = "table_name"` - **(required)** Database table name
+/// - `ordering = "field"` - Default ordering for queries
+/// - `hooks = true` - Enable custom lifecycle hooks (see below)
+///
 /// # Usage
 ///
 /// ```rust,ignore
@@ -320,12 +326,30 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
+/// # Lifecycle Hooks
+///
+/// By default, an empty `LifecycleHooks` implementation is auto-generated.
+/// To provide custom hooks, use `hooks = true`:
+///
+/// ```rust,ignore
+/// #[django_model(table = "books", hooks = true)]
+/// struct Book { /* fields */ }
+///
+/// #[async_trait]
+/// impl LifecycleHooks for book::Model {
+///     async fn before_save(&mut self) -> Result<(), DjangoOrmError> {
+///         // Custom logic before save
+///         Ok(())
+///     }
+/// }
+/// ```
+///
 /// # Field Attributes
 ///
 /// - `#[primary_key]` - Mark field as primary key
 /// - `#[primary_key(auto_increment = false)]` - Control auto-increment
-/// - `#[foreign_key(Entity)]` - Define foreign key relationship
-/// - `#[foreign_key(Entity, on_delete = Cascade)]` - FK with ON DELETE behavior
+/// - `#[foreign_key(Model)]` - Define foreign key relationship (use Model type, not Entity)
+/// - `#[foreign_key(Model, on_delete = Cascade)]` - FK with ON DELETE behavior
 /// - `#[index]` / `#[index(name = "idx_name")]` - Create index
 /// - `#[unique]` / `#[unique(name = "uniq_name")]` - Unique constraint
 /// - `#[max_length(n)]` - String max length validation
@@ -333,6 +357,7 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// - `#[range(min = n, max = m)]` - Numeric range validation
 /// - `#[auto_now]` - Auto-update timestamp on save
 /// - `#[auto_now_add]` - Auto-set timestamp on creation
+/// - `#[soft_delete]` - Mark field for soft delete (must be `Option<DateTimeWithTimeZone>`)
 /// - `#[skip_serializing]` - Skip field when serializing
 /// - `#[skip_deserializing]` - Skip field when deserializing
 #[proc_macro_attribute]

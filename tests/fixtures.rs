@@ -36,9 +36,7 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-
-        #[async_trait]
-        impl LifecycleHooks for Model {}
+        // LifecycleHooks is auto-implemented by #[django_model] - no manual impl needed!
     }
 
     pub mod book {
@@ -64,9 +62,7 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-
-        #[async_trait]
-        impl LifecycleHooks for Model {}
+        // LifecycleHooks is auto-implemented by #[django_model] - no manual impl needed!
     }
 }
 
@@ -108,7 +104,6 @@ pub async fn create_sample_authors(db: &DatabaseRouter) -> Vec<Author> {
 /// Use this when you want to create your own tables.
 #[fixture]
 pub async fn db_empty() -> DatabaseRouter {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:")
         .await
         .expect("Failed to create in-memory database");

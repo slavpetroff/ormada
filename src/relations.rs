@@ -11,9 +11,12 @@
 //! This is achieved via the `#[derive(DjangoModel)]` macro which reads `SeaORM`'s
 //! Relation definitions and generates the extended struct at compile time.
 
+use crate::db::ConnectionTrait;
 use crate::error::DjangoOrmError;
+use crate::fields::{ColumnTrait, Condition};
+use crate::models::{EntityTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 use rustc_hash::FxHashMap;
-use sea_orm::{ConnectionTrait, EntityTrait, Select};
+use sea_orm::sea_query::{Asterisk, Expr, SimpleExpr};
 
 // /// Note: RelationGraph has been removed in favor of compile-time typed relations
 // See LoadRelations trait and HasRelation trait for the new zero-cost approach
@@ -55,18 +58,18 @@ macro_rules! relations {
 }
 
 /// Typed relation specification - zero runtime cost
-pub struct RelationSpec<E: sea_orm::EntityTrait> {
+pub struct RelationSpec<E: EntityTrait> {
     _marker: std::marker::PhantomData<E>,
 }
 
-impl<E: sea_orm::EntityTrait> RelationSpec<E> {
+impl<E: EntityTrait> RelationSpec<E> {
     /// Create a new relation specification (zero-cost, compile-time only)
     pub const fn new() -> Self {
         Self { _marker: std::marker::PhantomData }
     }
 }
 
-impl<E: sea_orm::EntityTrait> Default for RelationSpec<E> {
+impl<E: EntityTrait> Default for RelationSpec<E> {
     fn default() -> Self {
         Self::new()
     }
@@ -81,7 +84,8 @@ impl<E: sea_orm::EntityTrait> Default for RelationSpec<E> {
 /// This is automatically implemented by the #[django_model] macro
 #[doc(hidden)]
 pub trait HasEntityType {
-    type __Entity: sea_orm::EntityTrait;
+    /// The SeaORM Entity type for this Model
+    type __Entity: EntityTrait;
 }
 
 /// Trait for entities that can load a specific relation
@@ -370,11 +374,8 @@ where
     ///     .await?;
     /// ```
     pub async fn count(self) -> Result<u64, DjangoOrmError> {
-        use sea_orm::QuerySelect;
-        let count_select = self.select.select_only().column_as(
-            sea_orm::sea_query::Expr::col(sea_orm::sea_query::Asterisk).count(),
-            "count",
-        );
+        let count_select =
+            self.select.select_only().column_as(Expr::col(Asterisk).count(), "count");
 
         let result = count_select.into_tuple::<i64>().one(self.db).await?;
         Ok(result.unwrap_or(0) as u64)
@@ -396,36 +397,31 @@ where
     ///     .await?;
     /// ```
     pub async fn exists(self) -> Result<bool, DjangoOrmError> {
-        use sea_orm::QuerySelect;
         let result = self.select.limit(1).one(self.db).await?;
         Ok(result.is_some())
     }
 
     /// Apply limit to the queryset before loading relations
     pub fn limit(mut self, limit: u64) -> Self {
-        use sea_orm::QuerySelect;
         self.select = self.select.limit(limit);
         self
     }
 
     /// Apply offset to the queryset before loading relations
     pub fn offset(mut self, offset: u64) -> Self {
-        use sea_orm::QuerySelect;
         self.select = self.select.offset(offset);
         self
     }
 
     /// Apply filter to the queryset before loading relations
-    pub fn filter(mut self, condition: impl Into<sea_orm::sea_query::SimpleExpr>) -> Self {
-        use sea_orm::QueryFilter;
+    pub fn filter(mut self, condition: impl Into<SimpleExpr>) -> Self {
         self.select = self.select.filter(condition.into());
         self
     }
 
     /// Exclude records matching the condition
-    pub fn exclude(mut self, condition: impl Into<sea_orm::Condition>) -> Self {
-        use sea_orm::QueryFilter;
-        let cond: sea_orm::Condition = condition.into();
+    pub fn exclude(mut self, condition: impl Into<Condition>) -> Self {
+        let cond: Condition = condition.into();
         self.select = self.select.filter(cond.not());
         self
     }
@@ -433,9 +429,8 @@ where
     /// Order by ascending before loading relations
     pub fn order_by_asc<Col>(mut self, column: Col) -> Self
     where
-        Col: sea_orm::ColumnTrait,
+        Col: ColumnTrait,
     {
-        use sea_orm::QueryOrder;
         self.select = self.select.order_by_asc(column);
         self
     }
@@ -443,16 +438,14 @@ where
     /// Order by descending before loading relations
     pub fn order_by_desc<Col>(mut self, column: Col) -> Self
     where
-        Col: sea_orm::ColumnTrait,
+        Col: ColumnTrait,
     {
-        use sea_orm::QueryOrder;
         self.select = self.select.order_by_desc(column);
         self
     }
 
     /// Apply distinct to the queryset
     pub fn distinct(mut self) -> Self {
-        use sea_orm::QuerySelect;
         self.select = self.select.distinct();
         self
     }

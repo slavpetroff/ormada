@@ -13,7 +13,6 @@ use seaorm_django::prelude::*;
 
 #[tokio::test]
 async fn test_cached_connection_basic() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
 
     let cached = db.with_query_cache();
@@ -28,7 +27,6 @@ async fn test_cached_connection_basic() {
 
 #[tokio::test]
 async fn test_cache_stats_empty() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let cached = db.with_query_cache();
 
@@ -39,7 +37,6 @@ async fn test_cache_stats_empty() {
 
 #[tokio::test]
 async fn test_cache_clear() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let cached = db.with_query_cache();
 
@@ -52,7 +49,6 @@ async fn test_cache_clear() {
 
 #[tokio::test]
 async fn test_cached_query_hit_and_miss() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let cached = CachedConnection::new(db);
 
@@ -80,7 +76,6 @@ async fn test_cached_query_hit_and_miss() {
 
 #[tokio::test]
 async fn test_cached_query_different_keys() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let cached = CachedConnection::new(db);
 
@@ -98,7 +93,6 @@ async fn test_cached_query_different_keys() {
 
 #[tokio::test]
 async fn test_clear_cache_after_use() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let cached = CachedConnection::new(db);
 
@@ -118,7 +112,6 @@ async fn test_clear_cache_after_use() {
 
 #[tokio::test]
 async fn test_connection_cache_ext_owned() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
 
     // Test with_query_cache on owned DatabaseConnection
@@ -129,7 +122,6 @@ async fn test_connection_cache_ext_owned() {
 
 #[tokio::test]
 async fn test_connection_cache_ext_ref() {
-    use sea_orm::Database;
     let db = Database::connect("sqlite::memory:").await.unwrap();
 
     // Test with_query_cache on &DatabaseConnection

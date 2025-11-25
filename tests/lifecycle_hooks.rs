@@ -22,7 +22,8 @@ use std::sync::Mutex;
 pub mod tracked_author {
     use super::*;
 
-    #[django_model(table = "tracked_authors")]
+    // hooks = true means we'll provide our own LifecycleHooks implementation
+    #[django_model(table = "tracked_authors", hooks = true)]
     pub struct TrackedAuthor {
         #[primary_key]
         pub id: i32,
@@ -50,8 +51,6 @@ pub use tracked_author::TrackedAuthor;
 
 #[fixture]
 async fn db() -> DatabaseRouter {
-    use sea_orm::Database;
-
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let router = DatabaseRouter::new_single(db);
 
@@ -95,7 +94,8 @@ async fn test_delete_calls_before_delete_hook(#[future] db: DatabaseRouter) {
 pub mod blocking_author {
     use super::*;
 
-    #[django_model(table = "blocking_authors")]
+    // hooks = true means we'll provide our own LifecycleHooks implementation
+    #[django_model(table = "blocking_authors", hooks = true)]
     pub struct BlockingAuthor {
         #[primary_key]
         pub id: i32,
@@ -116,8 +116,6 @@ pub use blocking_author::BlockingAuthor;
 
 #[tokio::test]
 async fn test_delete_hook_prevents_deletion_on_error() {
-    use sea_orm::Database;
-
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let db_router = DatabaseRouter::new_single(db);
 
@@ -152,7 +150,8 @@ async fn test_delete_hook_prevents_deletion_on_error() {
 pub mod full_hooks_author {
     use super::*;
 
-    #[django_model(table = "full_hooks_authors")]
+    // hooks = true means we'll provide our own LifecycleHooks implementation
+    #[django_model(table = "full_hooks_authors", hooks = true)]
     pub struct FullHooksAuthor {
         #[primary_key]
         pub id: i32,
@@ -242,8 +241,6 @@ pub use full_hooks_author::FullHooksAuthor;
 
 #[fixture]
 async fn db_full_hooks() -> DatabaseRouter {
-    use sea_orm::Database;
-
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let router = DatabaseRouter::new_single(db);
 
@@ -359,6 +356,7 @@ async fn test_full_hooks_delete_calls_before_delete(#[future] db_full_hooks: Dat
 // ============================================================================
 
 // Model that uses ALL default hook implementations
+// No hooks = true needed, the macro auto-generates default empty impl
 pub mod default_hooks_author {
     use super::*;
 
@@ -372,18 +370,13 @@ pub mod default_hooks_author {
         #[auto_now]
         pub updated_at: DateTimeWithTimeZone,
     }
-
-    // Use completely default implementation
-    #[async_trait]
-    impl LifecycleHooks for Model {}
+    // LifecycleHooks is auto-generated with default empty impl
 }
 
 pub use default_hooks_author::DefaultHooksAuthor;
 
 #[fixture]
 async fn db_default_hooks() -> DatabaseRouter {
-    use sea_orm::Database;
-
     let db = Database::connect("sqlite::memory:").await.unwrap();
     let router = DatabaseRouter::new_single(db);
 

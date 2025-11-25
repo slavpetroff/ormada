@@ -61,14 +61,17 @@
 //!     .await?;
 //! ```
 
+use crate::db::{ConnectionTrait, DbErr, TransactionTrait};
 use crate::error::DjangoOrmError;
+use crate::fields::{ColumnTrait, Condition, Order, PrimaryKeyTrait, Value};
 use crate::hooks::LifecycleHooks;
-use crate::upsert::UpsertBuilder;
-use sea_orm::sea_query::{Expr, Func, SimpleExpr};
-use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, DbErr, EntityTrait, Order, PrimaryKeyTrait,
-    QueryFilter, QueryOrder, QuerySelect, Select,
+use crate::models::{
+    ActiveModelBehavior, ActiveModelTrait, EntityTrait, FromQueryResult, IntoActiveModel,
+    ModelTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Select,
 };
+use crate::upsert::UpsertBuilder;
+use sea_orm::sea_query::{BinOper, ColumnRef, Expr, Func, SimpleExpr};
+use sea_orm::{Iterable, PrimaryKeyToColumn, TransactionSession};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -99,100 +102,32 @@ fn is_unique_violation(err: &DbErr) -> bool {
 }
 
 // ============================================================================
-// Column Extension Trait (Zero Duplication!)
+// Column Extension Trait (Only Django-specific additions)
 // ============================================================================
 
-/// Extension trait for ergonomic column operations
+/// Extension trait for Django-specific column operations
 ///
-/// This trait adds Django-like methods to ANY `SeaORM` Column enum.
-/// Works directly on `SeaORM`'s generated Column enum with zero duplication.
+/// This trait adds Django-like aliases to SeaORM's `ColumnTrait`.
+/// For standard operations like `.eq()`, `.gt()`, etc., use `ColumnTrait` directly.
+///
+/// **Note:** `ColumnTrait` is re-exported in our prelude and provides all standard
+/// column operations: `.eq()`, `.ne()`, `.gt()`, `.gte()`, `.lt()`, `.lte()`,
+/// `.contains()`, `.starts_with()`, `.ends_with()`, `.is_null()`, `.is_not_null()`,
+/// `.is_in()`, etc.
+///
+/// This trait only adds Django-specific aliases not present in SeaORM.
 pub trait ColumnExt: ColumnTrait {
-    // ===== String Operations =====
-
-    /// Check if column contains a substring (LIKE %value%)
-    fn contains(&self, value: &str) -> SimpleExpr {
-        ColumnTrait::contains(self, value)
-    }
-
-    /// Check if column starts with a prefix (LIKE value%)
-    fn starts_with(&self, value: &str) -> SimpleExpr {
-        ColumnTrait::starts_with(self, value)
-    }
-
-    /// Check if column ends with a suffix (LIKE %value)
-    fn ends_with(&self, value: &str) -> SimpleExpr {
-        ColumnTrait::ends_with(self, value)
-    }
-
-    // ===== Generic Comparisons =====
-
-    /// Equal to value
-    fn eq<V>(&self, value: V) -> SimpleExpr
-    where
-        V: Into<sea_orm::Value>,
-    {
-        ColumnTrait::eq(self, value)
-    }
-
-    /// Not equal to value
-    fn ne<V>(&self, value: V) -> SimpleExpr
-    where
-        V: Into<sea_orm::Value>,
-    {
-        ColumnTrait::ne(self, value)
-    }
-
-    /// Greater than
-    fn gt<V>(&self, value: V) -> SimpleExpr
-    where
-        V: Into<sea_orm::Value>,
-    {
-        ColumnTrait::gt(self, value)
-    }
-
-    /// Greater than or equal
-    fn gte<V>(&self, value: V) -> SimpleExpr
-    where
-        V: Into<sea_orm::Value>,
-    {
-        ColumnTrait::gte(self, value)
-    }
-
-    /// Less than
-    fn lt<V>(&self, value: V) -> SimpleExpr
-    where
-        V: Into<sea_orm::Value>,
-    {
-        ColumnTrait::lt(self, value)
-    }
-
-    /// Less than or equal
-    fn lte<V>(&self, value: V) -> SimpleExpr
-    where
-        V: Into<sea_orm::Value>,
-    {
-        ColumnTrait::lte(self, value)
-    }
-
-    /// Value is in list
+    /// Alias for `is_in` - Django's `field__in=[...]` syntax
+    ///
+    /// ```rust,ignore
+    /// Book::CategoryId.in_values([1, 2, 3])
+    /// ```
     fn in_values<V, I>(&self, values: I) -> SimpleExpr
     where
-        V: Into<sea_orm::Value>,
+        V: Into<Value>,
         I: IntoIterator<Item = V>,
     {
         ColumnTrait::is_in(self, values)
-    }
-
-    // ===== NULL checks =====
-
-    /// Check if column is NULL
-    fn is_null(&self) -> SimpleExpr {
-        ColumnTrait::is_null(self)
-    }
-
-    /// Check if column is NOT NULL
-    fn is_not_null(&self) -> SimpleExpr {
-        ColumnTrait::is_not_null(self)
     }
 }
 
@@ -465,7 +400,7 @@ pub enum QueryOp {
     /// Order by column with direction
     OrderBy {
         /// Column reference for ordering
-        column: sea_orm::sea_query::ColumnRef,
+        column: ColumnRef,
         /// Sort direction
         direction: OrderDirection,
     },
@@ -476,7 +411,7 @@ pub enum QueryOp {
     /// DISTINCT clause
     Distinct,
     /// GROUP BY clause
-    GroupBy(sea_orm::sea_query::ColumnRef),
+    GroupBy(ColumnRef),
     /// Soft delete mode
     SoftDelete(SoftDeleteMode),
     /// Annotation (aggregate expression with alias)
@@ -817,8 +752,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
                         // Filter WHERE deleted_at IS NULL
                         let condition = SimpleExpr::Binary(
                             Box::new(Expr::col(Alias::new(column))),
-                            sea_orm::sea_query::BinOper::Is,
-                            Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
+                            BinOper::Is,
+                            Box::new(SimpleExpr::Value(Value::String(None))),
                         );
                         select = select.filter(condition);
                     }
@@ -826,8 +761,8 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
                         // Filter WHERE deleted_at IS NOT NULL
                         let condition = SimpleExpr::Binary(
                             Box::new(Expr::col(Alias::new(column))),
-                            sea_orm::sea_query::BinOper::IsNot,
-                            Box::new(SimpleExpr::Value(sea_orm::Value::String(None))),
+                            BinOper::IsNot,
+                            Box::new(SimpleExpr::Value(Value::String(None))),
                         );
                         select = select.filter(condition);
                     }
@@ -1531,7 +1466,7 @@ where
     where
         F: Fn(&mut E::Model) + Send + Sync,
         E: crate::traits::DjangoEntity,
-        C: sea_orm::TransactionTrait,
+        C: TransactionTrait,
     {
         use sea_orm::sea_query::LockType;
         use sea_orm::{QuerySelect, TransactionSession};
@@ -1752,11 +1687,9 @@ where
     pub async fn create(self, mut model: E::Model) -> Result<E::Model, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
-        E::Model: sea_orm::IntoActiveModel<E::ActiveModel> + crate::hooks::LifecycleHooks,
-        E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + Send,
+        E::Model: IntoActiveModel<E::ActiveModel> + crate::hooks::LifecycleHooks,
+        E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {
-        use sea_orm::ActiveModelTrait;
-
         // Call before_save hook (common to both create and update)
         model.before_save().await?;
 
@@ -1824,8 +1757,8 @@ where
     pub async fn bulk_create(self, models: Vec<E::Model>) -> Result<u64, DjangoOrmError>
     where
         E: crate::traits::DjangoEntity,
-        E::Model: sea_orm::IntoActiveModel<E::ActiveModel>,
-        E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + Send,
+        E::Model: IntoActiveModel<E::ActiveModel>,
+        E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {
         if models.is_empty() {
             return Ok(0);
@@ -1936,7 +1869,7 @@ where
     /// - Check foreign key constraints (may fail if records are referenced)
     pub async fn delete(self) -> Result<u64, DjangoOrmError>
     where
-        E::Model: sea_orm::ModelTrait,
+        E::Model: ModelTrait,
     {
         use sea_orm::{
             ColumnTrait, Condition, Iterable, ModelTrait, PrimaryKeyToColumn, QueryFilter,
@@ -2048,9 +1981,9 @@ where
     where
         E: crate::traits::DjangoEntity,
         F: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
-        E::Model: sea_orm::IntoActiveModel<E::ActiveModel>,
-        E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + sea_orm::ActiveModelBehavior + Send,
-        C: sea_orm::TransactionTrait,
+        E::Model: IntoActiveModel<E::ActiveModel>,
+        E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
+        C: TransactionTrait,
     {
         use sea_orm::{ActiveModelTrait, TransactionSession};
 
@@ -2149,9 +2082,9 @@ where
         E: crate::traits::DjangoEntity,
         U: Fn(&mut E::Model), // Changed: Fn instead of FnOnce to allow retries
         Creator: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
-        E::Model: sea_orm::IntoActiveModel<E::ActiveModel>,
-        E::ActiveModel: sea_orm::ActiveModelTrait<Entity = E> + sea_orm::ActiveModelBehavior + Send,
-        C: sea_orm::TransactionTrait,
+        E::Model: IntoActiveModel<E::ActiveModel>,
+        E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
+        C: TransactionTrait,
     {
         use sea_orm::{ActiveModelTrait, TransactionSession};
 
@@ -2609,9 +2542,9 @@ where
 
         // Construct EXPLAIN query based on database backend
         let explain_sql = match backend {
-            sea_orm::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
-            sea_orm::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
-            sea_orm::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
             _ => format!("EXPLAIN {sql}"), // Fallback for any future database backends
         };
 
@@ -2675,12 +2608,12 @@ where
 
         // Construct EXPLAIN ANALYZE query based on database backend
         let explain_sql = match backend {
-            sea_orm::DatabaseBackend::Sqlite => {
+            crate::db::DatabaseBackend::Sqlite => {
                 // SQLite doesn't support EXPLAIN ANALYZE, fallback to EXPLAIN QUERY PLAN
                 format!("EXPLAIN QUERY PLAN {sql}")
             }
-            sea_orm::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
-            sea_orm::DatabaseBackend::MySql => {
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
+            crate::db::DatabaseBackend::MySql => {
                 // MySQL 8.0.18+ supports EXPLAIN ANALYZE
                 format!("EXPLAIN ANALYZE {sql}")
             }
@@ -2718,7 +2651,7 @@ where
     /// ```
     pub async fn project<T>(&self) -> Result<Vec<T>, DjangoOrmError>
     where
-        T: sea_orm::FromQueryResult + Send,
+        T: FromQueryResult + Send,
     {
         // Simply use into_model without select_only()
         // SeaORM's FromQueryResult will map the available columns to T's fields
@@ -2878,15 +2811,15 @@ pub enum Aggregation {
     /// COUNT(*) - Count all rows
     CountAll,
     /// COUNT(column) - Count non-NULL values
-    Count(sea_orm::sea_query::ColumnRef),
+    Count(ColumnRef),
     /// SUM(column) - Sum of numeric values
-    Sum(sea_orm::sea_query::ColumnRef),
+    Sum(ColumnRef),
     /// AVG(column) - Average of numeric values
-    Avg(sea_orm::sea_query::ColumnRef),
+    Avg(ColumnRef),
     /// MAX(column) - Maximum value
-    Max(sea_orm::sea_query::ColumnRef),
+    Max(ColumnRef),
     /// MIN(column) - Minimum value
-    Min(sea_orm::sea_query::ColumnRef),
+    Min(ColumnRef),
 }
 
 impl Aggregation {
@@ -3333,55 +3266,37 @@ impl FilterExpr {
     }
 
     /// Create equality filter: column = value
-    pub fn eq<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
-        column: C,
-        value: V,
-    ) -> Self {
+    pub fn eq<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Eq, value_repr, column.eq(value).into())
     }
 
     /// Create not-equal filter: column != value
-    pub fn ne<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
-        column: C,
-        value: V,
-    ) -> Self {
+    pub fn ne<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Ne, value_repr, column.ne(value).into())
     }
 
     /// Create less-than filter: column < value
-    pub fn lt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
-        column: C,
-        value: V,
-    ) -> Self {
+    pub fn lt<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Lt, value_repr, column.lt(value).into())
     }
 
     /// Create less-than-or-equal filter: column <= value
-    pub fn lte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
-        column: C,
-        value: V,
-    ) -> Self {
+    pub fn lte<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Lte, value_repr, column.lte(value).into())
     }
 
     /// Create greater-than filter: column > value
-    pub fn gt<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
-        column: C,
-        value: V,
-    ) -> Self {
+    pub fn gt<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Gt, value_repr, column.gt(value).into())
     }
 
     /// Create greater-than-or-equal filter: column >= value
-    pub fn gte<C: ColumnTrait, V: Into<sea_orm::Value> + std::fmt::Debug>(
-        column: C,
-        value: V,
-    ) -> Self {
+    pub fn gte<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
         let value_repr = format!("{:?}", value);
         Self::typed(column, FilterOp::Gte, value_repr, column.gte(value).into())
     }
@@ -3940,7 +3855,7 @@ mod tests {
 
         // Use Asterisk ColumnRef (None = no table prefix)
         plan.push(QueryOp::OrderBy {
-            column: sea_orm::sea_query::ColumnRef::Asterisk(None),
+            column: ColumnRef::Asterisk(None),
             direction: OrderDirection::Asc,
         });
         assert!(plan.has_ordering());
@@ -4063,7 +3978,7 @@ mod tests {
     #[test]
     fn test_query_op_order_by_variant() {
         let op = QueryOp::OrderBy {
-            column: sea_orm::sea_query::ColumnRef::Asterisk(None),
+            column: ColumnRef::Asterisk(None),
             direction: OrderDirection::Desc,
         };
 
@@ -4078,7 +3993,7 @@ mod tests {
 
     #[test]
     fn test_query_op_group_by_variant() {
-        let op = QueryOp::GroupBy(sea_orm::sea_query::ColumnRef::Asterisk(None));
+        let op = QueryOp::GroupBy(ColumnRef::Asterisk(None));
 
         match op {
             QueryOp::GroupBy(_) => {}

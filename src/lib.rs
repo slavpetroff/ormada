@@ -233,26 +233,108 @@
 #![allow(async_fn_in_trait)]
 #![doc(html_root_url = "https://docs.rs/seaorm-django/0.1.0")]
 
+// =============================================================================
+// Django-like Module Structure
+// =============================================================================
+// These modules mirror Django's package structure for familiarity:
+// - db: Database connections, transactions (like django.db)
+// - fields: Column types, value types (like django.db.models.fields)
+// - models: Entity/model traits (like django.db.models)
+
+/// Database connection and transaction types (`django.db` equivalent)
+pub mod db;
+
+/// Field and column types (`django.db.models.fields` equivalent)
+pub mod fields;
+
+/// Model and entity types (`django.db.models` equivalent)
+pub mod models;
+
+// =============================================================================
+// ORM Feature Modules
+// =============================================================================
+
+/// Aggregation functions (COUNT, SUM, AVG, etc.)
 pub mod aggregations;
+
+/// Batch/bulk operations for high-performance inserts
 pub mod batching;
+
+/// Query result caching
 pub mod cache;
+
+/// Error types for the ORM
 pub mod error;
+
+/// Lifecycle hooks (before_save, after_create, etc.)
 pub mod hooks;
+
+/// QuerySet API - Django-style query building
 pub mod query;
+
+/// Relation handling and eager loading
 pub mod relations;
+
+/// Database router for primary/replica routing
 pub mod router;
+
+/// Core traits for models and connections
 pub mod traits;
+
+/// Transaction macros and utilities
 pub mod transaction;
+
+/// Type definitions (OnDelete, etc.)
 pub mod types;
+
+/// Upsert operations (get_or_create, update_or_create)
 pub mod upsert;
+
+// =============================================================================
+// Internal Module (Hidden from users)
+// =============================================================================
+
+/// Internal re-exports for macro-generated code - DO NOT USE DIRECTLY
+#[doc(hidden)]
+pub mod internal;
+
+/// Alias for internal module used by macro-generated code
+#[doc(hidden)]
+pub use internal as __internal;
 
 /// Convenience re-exports for common usage
 ///
 /// Import everything you need with: `use seaorm_django::prelude::*;`
 pub mod prelude {
     //! Commonly used imports for seaorm-django
+    //!
+    //! This prelude provides all the types you need to work with the ORM.
+    //! Users should ONLY need to import from here - no direct `sea_orm` imports needed.
 
-    // Django-style ORM extensions
+    // =========================================================================
+    // Database (django.db equivalent)
+    // =========================================================================
+    pub use crate::db::{
+        Database, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr, IsolationLevel,
+        Schema, Statement,
+    };
+
+    // =========================================================================
+    // Fields (django.db.models.fields equivalent)
+    // =========================================================================
+    pub use crate::fields::{
+        ActiveValue, ColumnTrait, Condition, DateTimeWithTimeZone, ExprTrait, NotSet, Order, Set,
+        Unchanged, Value,
+    };
+
+    // =========================================================================
+    // Models (django.db.models equivalent)
+    // =========================================================================
+    pub use crate::models::{EntityTrait, FromQueryResult, ModelTrait};
+
+    // =========================================================================
+    // ORM API
+    // =========================================================================
     pub use crate::aggregations::{AggregateExt, AggregateValue};
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
@@ -270,66 +352,25 @@ pub mod prelude {
     pub use crate::types::OnDelete;
     pub use async_trait::async_trait;
 
+    // =========================================================================
     // Macros
+    // =========================================================================
     pub use crate::{hooks, relations, tx};
 
     // Derive macros
     #[cfg(feature = "derive")]
     pub use seaorm_django_derive::{atomic, django_model, django_projection, DjangoModel};
 
-    // Fast hash map for better performance
+    // =========================================================================
+    // Utilities
+    // =========================================================================
+    pub use chrono::{DateTime, FixedOffset, Utc};
     pub use rustc_hash::FxHashMap;
 
-    // SeaORM core types (explicit re-exports for clarity)
-    pub use sea_orm::{
-        ActiveModelTrait,
-        // Value types
-        ActiveValue,
-        // Query builders
-        Condition,
-        // Database connection
-        Database,
-        DatabaseConnection,
-        DatabaseTransaction,
-
-        // Error type
-        DbErr,
-
-        // Entity and model traits
-        EntityTrait,
-        // Expression trait for .or(), .and() on expressions
-        ExprTrait,
-        // Transaction isolation
-        IsolationLevel,
-        JoinType,
-        ModelTrait,
-        NotSet,
-        Order,
-        PrimaryKeyTrait,
-
-        QueryFilter,
-        QueryOrder,
-        QuerySelect,
-        QueryTrait,
-
-        RelationTrait,
-
-        Set,
-        TransactionTrait,
-        Unchanged,
-
-        Value,
-    };
-
-    // Re-export SeaORM module for advanced usage
-    pub use sea_orm;
-
-    // Datetime handling
-    pub use chrono::{DateTime, FixedOffset, Utc};
-
-    /// Type alias for datetime with timezone (`DateTime`<FixedOffset>)
-    /// This matches `SeaORM`'s `DateTimeWithTimeZone` type
-    pub type DateTimeWithTimeZone = DateTime<FixedOffset>;
+    // =========================================================================
+    // Additional Database Types (for advanced use)
+    // =========================================================================
+    pub use crate::db::{AccessMode, ConnectionTrait, QueryResult, TransactionTrait};
 }
 
 #[cfg(test)]

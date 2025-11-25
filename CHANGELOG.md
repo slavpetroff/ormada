@@ -1,5 +1,85 @@
 # seaorm-django Changelog
 
+## v0.3.0 - Typestate, Improved Ergonomics & Encapsulation
+
+### 🎉 New Features
+
+#### QuerySet Typestate Pattern
+- **Compile-time query validation** - Invalid query chains now fail at compile time
+- **State markers**: `Fresh`, `Filtered`, `Ordered`, `Paginated`, `Aggregated`
+- **Capability traits**: `CanFilter`, `CanOrder`, `CanPaginate`, `CanExecute`
+- **Type-safe transitions**: `filter()` returns `QuerySet<Filtered>`, etc.
+
+```rust
+// ✅ Valid - Fresh → Filtered → Ordered → Paginated
+let books = Book::objects(db)
+    .filter(Book::Published.eq(true))  // → Filtered
+    .order_by_asc(Book::Title)         // → Ordered
+    .limit(10)                         // → Paginated
+    .all().await?;
+
+// ❌ Won't compile - can't filter after ordering (Ordered doesn't impl CanFilter)
+// let books = Book::objects(db).order_by_asc(Book::Title).filter(...);
+```
+
+#### Enhanced FilterExpr & FilterOp Enums
+- **`FilterOp` enum** - Typed filter operations (Eq, Ne, Lt, Lte, Gt, Gte, Like, In, IsNull, etc.)
+- **`FilterExpr::Typed`** - Introspectable filter expressions with column name, operation, and value
+- Pattern-matchable for debugging and logging query plans
+
+#### Transaction State Tracking
+- **`TransactionState` enum** - Replaced boolean flag with `Idle`/`Active` states
+- Clearer transaction management in `DatabaseRouter`
+
+### 🔧 Breaking Changes
+
+#### Lifecycle Hooks Now Optional
+- **Default**: Empty `LifecycleHooks` is auto-generated (no user code needed)
+- **Custom hooks**: Use `hooks = true` attribute
+
+```rust
+// Before (required boilerplate):
+#[django_model(table = "books")]
+struct Book { ... }
+#[async_trait]
+impl LifecycleHooks for Model {}  // ❌ Required even if empty
+
+// After (just works):
+#[django_model(table = "books")]
+struct Book { ... }
+// ✅ LifecycleHooks auto-generated!
+
+// For custom hooks:
+#[django_model(table = "books", hooks = true)]
+struct Book { ... }
+#[async_trait]
+impl LifecycleHooks for book::Model {
+    async fn before_save(&mut self) -> Result<(), DjangoOrmError> { ... }
+}
+```
+
+#### Encapsulated SeaORM Imports
+- **Minimal exports**: Only essential SeaORM types exposed in prelude
+- **Hidden internals**: `ActiveModelTrait`, `EntityTrait`, `QueryFilter`, etc. no longer exported
+- **Advanced access**: Full `sea_orm` module still available for power users
+
+**Kept in prelude:**
+- `Database`, `DatabaseConnection`, `DatabaseTransaction`
+- `DbErr`, `IsolationLevel`, `Condition`
+- `ConnectionTrait`, `TransactionTrait`, `ExprTrait`
+
+### 📚 Documentation
+- Updated `#[django_model]` macro documentation with all attributes
+- Added lifecycle hooks documentation with examples
+- Clarified SeaORM encapsulation philosophy
+
+### 🧪 Test Coverage
+- **84.52% coverage** maintained
+- New typestate marker tests
+- Updated lifecycle hooks tests
+
+---
+
 ## v0.2.0 - Extended QuerySet API
 
 ### 🎉 New Features
