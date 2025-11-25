@@ -58,6 +58,157 @@ use crate::query::QuerySet;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QuerySelect};
 use std::collections::HashMap;
 
+// ============================================================================
+// AggregateValue Enum - Type-safe aggregation results
+// ============================================================================
+
+/// Type-safe aggregation result value
+///
+/// This enum represents the result of an aggregation operation with full type information.
+/// Use pattern matching to extract values and handle different aggregation types.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use seaorm_django::prelude::*;
+///
+/// let value = AggregateValue::Sum {
+///     column: "price".into(),
+///     value: Some(1500.0),
+/// };
+///
+/// match value {
+///     AggregateValue::Count(n) => println!("Count: {}", n),
+///     AggregateValue::Sum { column, value } => {
+///         println!("Sum of {}: {:?}", column, value);
+///     }
+///     AggregateValue::Avg { column, value } => {
+///         println!("Avg of {}: {:?}", column, value);
+///     }
+///     AggregateValue::Max { column, value } => {
+///         println!("Max of {}: {:?}", column, value);
+///     }
+///     AggregateValue::Min { column, value } => {
+///         println!("Min of {}: {:?}", column, value);
+///     }
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub enum AggregateValue {
+    /// COUNT result
+    Count(u64),
+    /// SUM result with column name and optional value (None if no rows)
+    Sum {
+        /// Column name that was summed
+        column: String,
+        /// Sum value (None if no matching rows)
+        value: Option<f64>,
+    },
+    /// AVG result with column name and optional value (None if no rows)
+    Avg {
+        /// Column name that was averaged
+        column: String,
+        /// Average value (None if no matching rows)
+        value: Option<f64>,
+    },
+    /// MAX result with column name and optional value (None if no rows)
+    Max {
+        /// Column name for max
+        column: String,
+        /// Maximum value (None if no matching rows)
+        value: Option<f64>,
+    },
+    /// MIN result with column name and optional value (None if no rows)
+    Min {
+        /// Column name for min
+        column: String,
+        /// Minimum value (None if no matching rows)
+        value: Option<f64>,
+    },
+}
+
+impl AggregateValue {
+    /// Create a Count result
+    pub fn count(value: u64) -> Self {
+        Self::Count(value)
+    }
+
+    /// Create a Sum result
+    pub fn sum(column: impl Into<String>, value: Option<f64>) -> Self {
+        Self::Sum { column: column.into(), value }
+    }
+
+    /// Create an Avg result
+    pub fn avg(column: impl Into<String>, value: Option<f64>) -> Self {
+        Self::Avg { column: column.into(), value }
+    }
+
+    /// Create a Max result
+    pub fn max(column: impl Into<String>, value: Option<f64>) -> Self {
+        Self::Max { column: column.into(), value }
+    }
+
+    /// Create a Min result
+    pub fn min(column: impl Into<String>, value: Option<f64>) -> Self {
+        Self::Min { column: column.into(), value }
+    }
+
+    /// Check if this is a Count value
+    pub const fn is_count(&self) -> bool {
+        matches!(self, Self::Count(_))
+    }
+
+    /// Check if this is a Sum value
+    pub const fn is_sum(&self) -> bool {
+        matches!(self, Self::Sum { .. })
+    }
+
+    /// Check if this is an Avg value
+    pub const fn is_avg(&self) -> bool {
+        matches!(self, Self::Avg { .. })
+    }
+
+    /// Check if this is a Max value
+    pub const fn is_max(&self) -> bool {
+        matches!(self, Self::Max { .. })
+    }
+
+    /// Check if this is a Min value
+    pub const fn is_min(&self) -> bool {
+        matches!(self, Self::Min { .. })
+    }
+
+    /// Get the numeric value if present (returns None for Count, use as_count() instead)
+    pub fn value(&self) -> Option<f64> {
+        match self {
+            Self::Count(n) => Some(*n as f64),
+            Self::Sum { value, .. } => *value,
+            Self::Avg { value, .. } => *value,
+            Self::Max { value, .. } => *value,
+            Self::Min { value, .. } => *value,
+        }
+    }
+
+    /// Get the count value if this is a Count
+    pub fn as_count(&self) -> Option<u64> {
+        match self {
+            Self::Count(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// Get the column name if this is a column-based aggregation
+    pub fn column(&self) -> Option<&str> {
+        match self {
+            Self::Count(_) => None,
+            Self::Sum { column, .. } => Some(column),
+            Self::Avg { column, .. } => Some(column),
+            Self::Max { column, .. } => Some(column),
+            Self::Min { column, .. } => Some(column),
+        }
+    }
+}
+
 /// Extension trait for aggregation operations on `QuerySet`
 pub trait AggregateExt<E: EntityTrait> {
     /// Count records (Django's .`count()`)
@@ -353,5 +504,114 @@ mod tests {
         assert!(result.averages.is_empty());
         assert!(result.maxes.is_empty());
         assert!(result.mins.is_empty());
+    }
+
+    // ========================================================================
+    // AggregateValue Enum Tests
+    // ========================================================================
+
+    #[test]
+    fn test_aggregate_value_count() {
+        let value = AggregateValue::count(42);
+        assert!(value.is_count());
+        assert!(!value.is_sum());
+        assert_eq!(value.as_count(), Some(42));
+        assert_eq!(value.value(), Some(42.0));
+        assert_eq!(value.column(), None);
+    }
+
+    #[test]
+    fn test_aggregate_value_sum() {
+        let value = AggregateValue::sum("price", Some(1500.0));
+        assert!(value.is_sum());
+        assert!(!value.is_count());
+        assert_eq!(value.value(), Some(1500.0));
+        assert_eq!(value.column(), Some("price"));
+    }
+
+    #[test]
+    fn test_aggregate_value_avg() {
+        let value = AggregateValue::avg("price", Some(50.5));
+        assert!(value.is_avg());
+        assert_eq!(value.value(), Some(50.5));
+        assert_eq!(value.column(), Some("price"));
+    }
+
+    #[test]
+    fn test_aggregate_value_max() {
+        let value = AggregateValue::max("price", Some(999.99));
+        assert!(value.is_max());
+        assert_eq!(value.value(), Some(999.99));
+        assert_eq!(value.column(), Some("price"));
+    }
+
+    #[test]
+    fn test_aggregate_value_min() {
+        let value = AggregateValue::min("price", Some(0.99));
+        assert!(value.is_min());
+        assert_eq!(value.value(), Some(0.99));
+        assert_eq!(value.column(), Some("price"));
+    }
+
+    #[test]
+    fn test_aggregate_value_none() {
+        let value = AggregateValue::sum("price", None);
+        assert_eq!(value.value(), None);
+        assert_eq!(value.column(), Some("price"));
+    }
+
+    #[test]
+    fn test_aggregate_value_is_debug() {
+        let value = AggregateValue::sum("price", Some(100.0));
+        let debug_str = format!("{:?}", value);
+        assert!(debug_str.contains("Sum"));
+        assert!(debug_str.contains("price"));
+    }
+
+    #[test]
+    fn test_aggregate_value_is_clone() {
+        let value = AggregateValue::count(10);
+        let cloned = value.clone();
+        assert_eq!(value, cloned);
+    }
+
+    #[test]
+    fn test_aggregate_value_pattern_matching() {
+        let values = vec![
+            AggregateValue::count(5),
+            AggregateValue::sum("a", Some(10.0)),
+            AggregateValue::avg("b", Some(2.0)),
+            AggregateValue::max("c", Some(100.0)),
+            AggregateValue::min("d", Some(1.0)),
+        ];
+
+        for value in values {
+            match &value {
+                AggregateValue::Count(n) => {
+                    assert!(value.is_count());
+                    assert_eq!(*n, 5);
+                }
+                AggregateValue::Sum { column, value: v } => {
+                    assert!(value.is_sum());
+                    assert_eq!(column, "a");
+                    assert_eq!(*v, Some(10.0));
+                }
+                AggregateValue::Avg { column, value: v } => {
+                    assert!(value.is_avg());
+                    assert_eq!(column, "b");
+                    assert_eq!(*v, Some(2.0));
+                }
+                AggregateValue::Max { column, value: v } => {
+                    assert!(value.is_max());
+                    assert_eq!(column, "c");
+                    assert_eq!(*v, Some(100.0));
+                }
+                AggregateValue::Min { column, value: v } => {
+                    assert!(value.is_min());
+                    assert_eq!(column, "d");
+                    assert_eq!(*v, Some(1.0));
+                }
+            }
+        }
     }
 }

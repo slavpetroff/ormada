@@ -254,7 +254,7 @@ pub mod prelude {
     //! Commonly used imports for seaorm-django
 
     // Django-style ORM extensions
-    pub use crate::aggregations::AggregateExt;
+    pub use crate::aggregations::{AggregateExt, AggregateValue};
     pub use crate::batching;
     pub use crate::error::DjangoOrmError;
     pub use crate::hooks::LifecycleHooks;
