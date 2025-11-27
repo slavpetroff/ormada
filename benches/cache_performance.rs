@@ -84,9 +84,9 @@ async fn setup_db() -> DatabaseConnection {
         let batch_end = (batch_start + BATCH_SIZE).min(TOTAL_RECORDS);
         let models: Vec<_> = (batch_start..batch_end)
             .map(|i| benchmark_item::Model {
-                id: 0,
                 value: i % 1000,
                 data: format!("Item {}", i),
+                ..Default::default()
             })
             .collect();
 

@@ -459,12 +459,9 @@ async fn test_pagination_various_sizes(#[future] db: DatabaseRouter, #[case] cou
     for i in 0..count {
         Author::objects(&db)
             .create(Author {
-                id: 0,
                 name: format!("Author {}", i + 1),
                 email: format!("author{}@example.com", i + 1),
                 age: 25 + (i as i32),
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
                 ..Default::default()
             })
             .await

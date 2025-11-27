@@ -50,22 +50,18 @@ async fn test_soft_delete_excludes_deleted_by_default(#[future] db_soft: Databas
     // Create articles
     let article1 = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Active Article".to_string(),
             content: "This is active".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
 
     let _article2 = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Another Active".to_string(),
             content: "Also active".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -86,22 +82,18 @@ async fn test_with_deleted_includes_all(#[future] db_soft: DatabaseRouter) {
     // Create articles
     let article1 = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Will Delete".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
 
     SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Keep Active".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -121,33 +113,27 @@ async fn test_only_deleted_returns_deleted_only(#[future] db_soft: DatabaseRoute
     // Create articles
     let article1 = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "To Delete 1".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
 
     let article2 = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "To Delete 2".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
 
     SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Keep Active".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -168,11 +154,9 @@ async fn test_only_deleted_returns_deleted_only(#[future] db_soft: DatabaseRoute
 async fn test_restore_soft_deleted_record(#[future] db_soft: DatabaseRouter) {
     let article = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Will Restore".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -196,11 +180,9 @@ async fn test_restore_soft_deleted_record(#[future] db_soft: DatabaseRouter) {
 async fn test_force_delete_permanently_removes(#[future] db_soft: DatabaseRouter) {
     let article = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Force Delete Me".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -221,22 +203,18 @@ async fn test_force_delete_permanently_removes(#[future] db_soft: DatabaseRouter
 async fn test_soft_delete_count_excludes_deleted(#[future] db_soft: DatabaseRouter) {
     let article = SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Count Test".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();
 
     SoftArticle::objects(&db_soft)
         .create(SoftArticle {
-            id: 0,
             title: "Count Test 2".to_string(),
             content: "Content".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            deleted_at: None,
+            ..Default::default()
         })
         .await
         .unwrap();

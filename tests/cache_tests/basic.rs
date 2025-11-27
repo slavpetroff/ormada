@@ -35,9 +35,9 @@ async fn test_query_caching_basic() {
     // Seed data
     let items: Vec<_> = (0..100)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 
@@ -68,9 +68,9 @@ async fn test_separate_caches_for_different_queries() {
     // Seed data
     let items: Vec<_> = (0..100)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 
@@ -106,9 +106,9 @@ async fn test_cache_with_first_method() {
     // Seed data
     let items: Vec<_> = (0..10)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 
@@ -133,9 +133,9 @@ async fn test_concurrent_cache_access() {
     // Seed data
     let items: Vec<_> = (0..100)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 
@@ -184,9 +184,9 @@ async fn test_modified_query_creates_new_cache() {
     // Seed data
     let items: Vec<_> = (0..100)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 
@@ -221,9 +221,9 @@ async fn test_cache_with_count() {
     // Seed data
     let items: Vec<_> = (0..100)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 
@@ -249,9 +249,9 @@ async fn test_cache_with_exists() {
     // Seed one item
     CacheTestItem::objects(&db)
         .create(CacheTestItem {
-            id: 0,
             value: 42,
             data: "Test".to_string(),
+            ..Default::default()
         })
         .await
         .expect("Failed to create");
@@ -276,9 +276,9 @@ async fn test_queryset_clone_shares_cache() {
     // Seed data
     let items: Vec<_> = (0..10)
         .map(|i| CacheTestItem {
-            id: 0,
             value: i,
             data: format!("Item {}", i),
+            ..Default::default()
         })
         .collect();
 

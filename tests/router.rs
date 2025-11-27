@@ -98,12 +98,10 @@ async fn test_router_query_operations(#[future] router_with_schema: DatabaseRout
     // Create author (write operation)
     let author = Author::objects(&router)
         .create(Author {
-            id: 0,
             name: "Test Author".to_string(),
             email: "test@example.com".to_string(),
             age: 30,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -152,12 +150,10 @@ async fn test_router_read_after_write_uses_primary() {
     // Write operation
     let author = Author::objects(&router)
         .create(Author {
-            id: 0,
             name: "Write Test".to_string(),
             email: "write@test.com".to_string(),
             age: 25,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -231,24 +227,20 @@ async fn test_router_query_all_via_orm() {
     // Create data using ORM
     Author::objects(&router)
         .create(Author {
-            id: 0,
             name: "Test 1".to_string(),
             email: "test1@example.com".to_string(),
             age: 25,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
 
     Author::objects(&router)
         .create(Author {
-            id: 0,
             name: "Test 2".to_string(),
             email: "test2@example.com".to_string(),
             age: 30,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -387,12 +379,10 @@ async fn test_router_ref_execute() {
     // Create via reference
     let author = Author::objects(router_ref)
         .create(Author {
-            id: 0,
             name: "Ref Test".to_string(),
             email: "ref@test.com".to_string(),
             age: 25,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -469,12 +459,10 @@ async fn test_router_tx_macro() {
     let author = ormada::tx!(router, |txn| async move {
         Author::objects(txn)
             .create(Author {
-                id: 0,
                 name: "TX Macro Test".to_string(),
                 email: "tx@test.com".to_string(),
                 age: 30,
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await
     })
@@ -500,12 +488,10 @@ async fn test_router_nested_tx_macro() {
     let (author, book) = ormada::tx!(router, |txn| async move {
         let author = Author::objects(txn)
             .create(Author {
-                id: 0,
                 name: "Nested TX Author".to_string(),
                 email: "nested@test.com".to_string(),
                 age: 35,
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await?;
 
@@ -513,14 +499,11 @@ async fn test_router_nested_tx_macro() {
         let book = ormada::tx!(txn, |inner| async move {
             Book::objects(inner)
                 .create(Book {
-                    id: 0,
                     author_id: author.id,
-                    author: Default::default(),
                     title: "Nested TX Book".to_string(),
                     price: 1999,
                     published: true,
-                    created_at: chrono::Utc::now().fixed_offset(),
-                    updated_at: chrono::Utc::now().fixed_offset(),
+                    ..Default::default()
                 })
                 .await
         })
@@ -546,12 +529,10 @@ async fn test_router_multiple_queries() {
     for i in 0..5 {
         Author::objects(&router)
             .create(Author {
-                id: 0,
                 name: format!("Author {i}"),
                 email: format!("author{i}@test.com"),
                 age: 20 + i,
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await
             .unwrap();

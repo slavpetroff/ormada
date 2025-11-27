@@ -87,12 +87,10 @@ pub async fn create_sample_authors(db: &DatabaseRouter) -> Vec<Author> {
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35)] {
         let author = Author::objects(db)
             .create(Author {
-                id: 0,
                 name: name.to_string(),
                 email: format!("{}@example.com", name.to_lowercase()),
                 age,
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await
             .expect("Failed to create author");
@@ -149,12 +147,10 @@ pub async fn db() -> DatabaseRouter {
 pub async fn author(#[future] db: DatabaseRouter) -> Author {
     Author::objects(&db)
         .create(Author {
-            id: 0,
             name: "Test Author".to_string(),
             email: "test@example.com".to_string(),
             age: 30,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .expect("Failed to create author")
@@ -169,12 +165,10 @@ pub async fn author_named(
 ) -> Author {
     Author::objects(&db)
         .create(Author {
-            id: 0,
             name: name.to_string(),
             email: format!("{}@example.com", name.to_lowercase().replace(' ', ".")),
             age: 30,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .expect("Failed to create author")
@@ -219,12 +213,10 @@ pub async fn db_with_sample_authors(#[future] db: DatabaseRouter) -> (DatabaseRo
 pub async fn db_with_author(#[future] db: DatabaseRouter) -> (DatabaseRouter, Author) {
     let author = Author::objects(&db)
         .create(Author {
-            id: 0,
             name: "Test Author".to_string(),
             email: "test@example.com".to_string(),
             age: 30,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .expect("Failed to create author");
@@ -246,12 +238,10 @@ pub async fn db_with_authors_with_books(
     for i in 0..author_count {
         let author = Author::objects(&db)
             .create(Author {
-                id: 0,
                 name: format!("Author {}", i + 1),
                 email: format!("author{}@example.com", i + 1),
                 age: 30 + (i as i32 * 5),
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await
             .expect("Failed to create author");
@@ -286,12 +276,10 @@ pub async fn db_with_author_with_books(
 ) -> (DatabaseRouter, (Author, Vec<Book>)) {
     let author = Author::objects(&db)
         .create(Author {
-            id: 0,
             name: "Author with Books".to_string(),
             email: "author.books@example.com".to_string(),
             age: 35,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .expect("Failed to create author");
@@ -322,12 +310,10 @@ pub async fn authors_n(#[future] db: DatabaseRouter, #[default(5)] count: usize)
     for i in 0..count {
         let author = Author::objects(&db)
             .create(Author {
-                id: 0,
                 name: format!("Author {}", i + 1),
                 email: format!("author{}@example.com", i + 1),
                 age: 25 + (i as i32 * 5),
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await
             .expect("Failed to create author");
@@ -390,12 +376,10 @@ pub async fn author_with_books(
 ) -> (Author, Vec<Book>) {
     let author = Author::objects(&db)
         .create(Author {
-            id: 0,
             name: "Author with Books".to_string(),
             email: "author.books@example.com".to_string(),
             age: 35,
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .expect("Failed to create author");
@@ -431,12 +415,10 @@ pub async fn authors_with_books(
     for i in 0..author_count {
         let author = Author::objects(&db)
             .create(Author {
-                id: 0,
                 name: format!("Author {}", i + 1),
                 email: format!("author{}@example.com", i + 1),
                 age: 30 + (i as i32 * 5),
-                created_at: chrono::Utc::now().fixed_offset(),
-                updated_at: chrono::Utc::now().fixed_offset(),
+                ..Default::default()
             })
             .await
             .expect("Failed to create author");

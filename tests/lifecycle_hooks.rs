@@ -70,11 +70,9 @@ async fn test_delete_calls_before_delete_hook(#[future] db: DatabaseRouter) {
     // Create an author
     let author = TrackedAuthor::objects(&db)
         .create(TrackedAuthor {
-            id: 0,
             name: "Hook Test".to_string(),
             email: "hook@test.com".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -124,9 +122,8 @@ async fn test_delete_hook_prevents_deletion_on_error() {
 
     let author = BlockingAuthor::objects(&db_router)
         .create(BlockingAuthor {
-            id: 0,
             name: "Test".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -257,10 +254,8 @@ async fn test_create_with_hooks_succeeds(#[future] db_full_hooks: DatabaseRouter
     // Test that create works with hooks implemented
     let author = FullHooksAuthor::objects(&db_full_hooks)
         .create(FullHooksAuthor {
-            id: 0,
             name: "Hook Test Author".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -284,10 +279,8 @@ async fn test_hooks_are_called_during_create(#[future] db_full_hooks: DatabaseRo
 
     let _author = FullHooksAuthor::objects(&db_full_hooks)
         .create(FullHooksAuthor {
-            id: 0,
             name: "Test".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -306,10 +299,8 @@ async fn test_save_on_existing_model_succeeds(#[future] db_full_hooks: DatabaseR
     // First create
     let author = FullHooksAuthor::objects(&db_full_hooks)
         .create(FullHooksAuthor {
-            id: 0,
             name: "Test".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -333,10 +324,8 @@ async fn test_save_on_existing_model_succeeds(#[future] db_full_hooks: DatabaseR
 async fn test_full_hooks_delete_calls_before_delete(#[future] db_full_hooks: DatabaseRouter) {
     let author = FullHooksAuthor::objects(&db_full_hooks)
         .create(FullHooksAuthor {
-            id: 0,
             name: "To Delete".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -393,10 +382,8 @@ async fn test_default_hooks_create_succeeds(#[future] db_default_hooks: Database
     // Default hooks should return Ok(()) and allow operation to proceed
     let author = DefaultHooksAuthor::objects(&db_default_hooks)
         .create(DefaultHooksAuthor {
-            id: 0,
             name: "Default Hooks Test".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await;
 
@@ -410,10 +397,8 @@ async fn test_default_hooks_create_succeeds(#[future] db_default_hooks: Database
 async fn test_default_hooks_update_succeeds(#[future] db_default_hooks: DatabaseRouter) {
     let author = DefaultHooksAuthor::objects(&db_default_hooks)
         .create(DefaultHooksAuthor {
-            id: 0,
             name: "Original".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -431,10 +416,8 @@ async fn test_default_hooks_update_succeeds(#[future] db_default_hooks: Database
 async fn test_default_hooks_delete_succeeds(#[future] db_default_hooks: DatabaseRouter) {
     let author = DefaultHooksAuthor::objects(&db_default_hooks)
         .create(DefaultHooksAuthor {
-            id: 0,
             name: "To Delete".to_string(),
-            created_at: chrono::Utc::now().fixed_offset(),
-            updated_at: chrono::Utc::now().fixed_offset(),
+            ..Default::default()
         })
         .await
         .unwrap();

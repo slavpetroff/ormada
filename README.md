@@ -67,12 +67,10 @@ async fn main() -> Result<(), OrmadaError> {
     // Create a book
     let book = Book::objects(&router)
         .create(Book {
-            id: 0,  // Auto-generated
             title: "The Rust Book".to_string(),
             price: 2999,
             published: true,
-            created_at: Utc::now().fixed_offset(),
-            updated_at: Utc::now().fixed_offset(),
+            ..Default::default()    
         })
         .await?;
     
