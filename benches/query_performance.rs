@@ -10,7 +10,7 @@ use std::hint::black_box;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ormada::prelude::*;
-use sea_orm::{Database, DatabaseConnection};
+use ormada::router::DatabaseRouter;
 
 // Test entity for benchmarks - using ORM's ormada_model macro
 
@@ -28,39 +28,32 @@ pub struct BenchmarkItem {
 
 // Use the generated module directly
 
-async fn setup_db() -> DatabaseConnection {
-    use sea_orm::{ConnectionTrait, DbBackend, Schema};
-
+async fn setup_db() -> DatabaseRouter {
     let db = Database::connect("sqlite::memory:")
         .await
         .expect("Failed to connect to database");
+    let router = DatabaseRouter::new_single(db);
 
-    // Create table using SeaORM's schema builder
-    // (This is infrastructure setup, not business logic - acceptable to use SeaORM directly)
-    let schema = Schema::new(DbBackend::Sqlite);
-    let stmt = schema.create_table_from_entity(Entity);
+    // Create table using ormada's generated method
+    BenchmarkItem::create_table(&router).await.expect("Failed to create table");
 
-    db.execute(&stmt).await.expect("Failed to create table");
-
-    db
+    router
 }
 
-async fn seed_data(db: &DatabaseConnection, count: usize) {
-    use ormada::query::QueryExt;
-
+async fn seed_data(db: &DatabaseRouter, count: usize) {
     // Bulk insert test data using ORM's bulk_create API
     let items: Vec<Model> = (0..count)
         .map(|i| Model {
-            id: i as i32,
-            name: format!("Item {}", i),
+            name: format!("Item {i}"),
             value: i as i32 % 1000,
             category: format!("Category {}", i % 10),
+            ..Default::default()
         })
         .collect();
 
-    // Use ORM's bulk_create in chunks (per ormada-orm.md rule 4)
+    // Use ORM's bulk_create in chunks
     for chunk in items.chunks(1000) {
-        let _ = Entity::objects(db).bulk_create(chunk.to_vec()).await;
+        let _ = BenchmarkItem::objects(db).bulk_create(chunk.to_vec()).await;
     }
 }
 
@@ -75,7 +68,7 @@ fn bench_query_all_sizes(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
             b.to_async(&rt).iter(|| async {
                 use ormada::query::QueryExt;
-                let results = Entity::objects(&db).all().await.expect("Query failed");
+                let results = BenchmarkItem::objects(&db).all().await.expect("Query failed");
                 black_box(results)
             });
         });
@@ -92,8 +85,8 @@ fn bench_query_filtered(c: &mut Criterion) {
     c.bench_function("query_filtered_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use ormada::query::QueryExt;
-            let results = Entity::objects(&db)
-                .filter(Column::Value.lt(500))
+            let results = BenchmarkItem::objects(&db)
+                .filter(BenchmarkItem::Value.lt(500))
                 .all()
                 .await
                 .expect("Query failed");
@@ -112,7 +105,7 @@ fn bench_aggregations(c: &mut Criterion) {
     group.bench_function("count", |b| {
         b.to_async(&rt).iter(|| async {
             use ormada::query::QueryExt;
-            let count = Entity::objects(&db).count().await.expect("Count failed");
+            let count = BenchmarkItem::objects(&db).count().await.expect("Count failed");
             black_box(count)
         });
     });
@@ -121,7 +114,10 @@ fn bench_aggregations(c: &mut Criterion) {
         b.to_async(&rt).iter(|| async {
             use ormada::aggregations::AggregateExt;
             use ormada::query::QueryExt;
-            let sum = Entity::objects(&db).aggregate_sum(Column::Value).await.expect("Sum failed");
+            let sum = BenchmarkItem::objects(&db)
+                .aggregate_sum(BenchmarkItem::Value)
+                .await
+                .expect("Sum failed");
             black_box(sum)
         });
     });
@@ -139,7 +135,7 @@ fn bench_values_vs_models(c: &mut Criterion) {
     group.bench_function("full_models", |b| {
         b.to_async(&rt).iter(|| async {
             use ormada::query::QueryExt;
-            let results = Entity::objects(&db).all().await.expect("Query failed");
+            let results = BenchmarkItem::objects(&db).all().await.expect("Query failed");
             black_box(results)
         });
     });
@@ -147,8 +143,8 @@ fn bench_values_vs_models(c: &mut Criterion) {
     group.bench_function("values_json", |b| {
         b.to_async(&rt).iter(|| async {
             use ormada::query::QueryExt;
-            let results = Entity::objects(&db)
-                .values(vec![Column::Name, Column::Value])
+            let results = BenchmarkItem::objects(&db)
+                .values(vec![BenchmarkItem::Name, BenchmarkItem::Value])
                 .await
                 .expect("Values failed");
             black_box(results)
@@ -168,7 +164,7 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
     group.bench_function("all_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use ormada::query::QueryExt;
-            let results = Entity::objects(&db).all().await.expect("Query failed");
+            let results = BenchmarkItem::objects(&db).all().await.expect("Query failed");
             // Simulate processing
             let count = results.len();
             black_box(count)
@@ -180,8 +176,8 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
             use futures::StreamExt;
             use ormada::query::QueryExt;
 
-            let mut stream = Entity::objects(&db)
-                .values_iter(vec![Column::Id, Column::Name], Some(500))
+            let mut stream = BenchmarkItem::objects(&db)
+                .values_iter(vec![BenchmarkItem::Id, BenchmarkItem::Name], Some(500))
                 .await
                 .expect("Iterator failed");
 
@@ -200,7 +196,7 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
             use ormada::query::QueryExt;
 
             let mut stream =
-                Entity::objects(&db).iterator(Some(500)).await.expect("Iterator failed");
+                BenchmarkItem::objects(&db).iterator(Some(500)).await.expect("Iterator failed");
 
             let mut count = 0;
             while let Some(result) = stream.next().await {

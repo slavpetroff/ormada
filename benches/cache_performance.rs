@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use ormada::prelude::*;
-use sea_orm::{Database, DatabaseConnection};
+use ormada::router::DatabaseRouter;
 
 // ============================================================================
 // BENCHMARK CONFIGURATION - Adjust these values as needed
@@ -61,23 +61,14 @@ mod benchmark_item {
     }
 }
 
-async fn setup_db() -> DatabaseConnection {
+async fn setup_db() -> DatabaseRouter {
     let db = Database::connect("sqlite::memory:").await.expect("Failed to connect");
+    let router = DatabaseRouter::new_single(db);
 
-    // Create table using raw SQL
-    use sea_orm::ConnectionTrait;
-
-    db.execute_unprepared(
-        r#"
-        CREATE TABLE IF NOT EXISTS benchmark_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            value INTEGER NOT NULL,
-            data TEXT NOT NULL
-        )
-        "#,
-    )
-    .await
-    .expect("Failed to create table");
+    // Create table using ormada's generated method
+    benchmark_item::BenchmarkItem::create_table(&router)
+        .await
+        .expect("Failed to create table");
 
     // Seed records for high-load testing (batched to avoid SQLite limit)
     for batch_start in (0..TOTAL_RECORDS).step_by(BATCH_SIZE as usize) {
@@ -85,18 +76,18 @@ async fn setup_db() -> DatabaseConnection {
         let models: Vec<_> = (batch_start..batch_end)
             .map(|i| benchmark_item::Model {
                 value: i % 1000,
-                data: format!("Item {}", i),
+                data: format!("Item {i}"),
                 ..Default::default()
             })
             .collect();
 
-        benchmark_item::BenchmarkItem::objects(&db)
+        benchmark_item::BenchmarkItem::objects(&router)
             .bulk_create(models)
             .await
             .expect("Failed to seed batch");
     }
 
-    db
+    router
 }
 
 fn bench_cache_hit_vs_miss(c: &mut Criterion) {
