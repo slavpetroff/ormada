@@ -1,6 +1,6 @@
-# seaorm-django
+# Ergorm
 
-**Django-inspired ergonomic ORM for SeaORM with zero-cost abstractions**
+**Ergonomic ORM for SeaORM with zero-cost abstractions**
 
 [![Coverage](https://img.shields.io/badge/coverage-84%25-green)](./tarpaulin-report.html)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](./LICENSE)
@@ -9,7 +9,7 @@
 
 - 🚀 **Zero-cost abstractions** - Compile-time typed queries, no runtime overhead
 - 🎯 **Type-safe** - Full compile-time checking with typestate pattern
-- 🐍 **Django-like** - 90%+ API compatibility for familiar, ergonomic queries
+- 🐍 **Ergonomic API** - Familiar, expressive queries with minimal boilerplate
 - ⚡ **Performance** - Direct integration with SeaORM, no duplication
 
 ## Quick Start
@@ -20,16 +20,16 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-seaorm-django = { version = "0.3", features = ["derive"] }
+ergorm = { version = "0.3", features = ["derive"] }
 sea-orm = "0.12"
 ```
 
 ### Define a Model
 
 ```rust
-use seaorm_django::prelude::*;
+use ergorm::prelude::*;
 
-#[django_model(table = "books")]
+#[ergorm_model(table = "books")]
 pub struct Book {
     #[primary_key]
     pub id: i32,
@@ -53,10 +53,10 @@ That's it! No manual `impl LifecycleHooks` needed.
 ### Connect and Query
 
 ```rust
-use seaorm_django::prelude::*;
+use ergorm::prelude::*;
 
 #[tokio::main]
-async fn main() -> Result<(), DjangoOrmError> {
+async fn main() -> Result<(), ErgormError> {
     // Connect using DatabaseRouter (supports primary/replica routing)
     let db = Database::connect("sqlite::memory:").await?;
     let router = DatabaseRouter::new_single(db);
@@ -100,7 +100,7 @@ async fn main() -> Result<(), DjangoOrmError> {
 The `DatabaseRouter` provides intelligent routing for read/write operations:
 
 ```rust
-use seaorm_django::prelude::*;
+use ergorm::prelude::*;
 
 // Single database (development)
 let router = DatabaseRouter::new_single(primary_db);
@@ -126,7 +126,7 @@ let books = Book::objects(&router).all().await?;  // → Primary (for consistenc
 ### Using `tx!` Macro (Recommended)
 
 ```rust
-use seaorm_django::prelude::*;
+use ergorm::prelude::*;
 
 let result = tx!(router, |txn| async move {
     let author = Author::objects(txn)
@@ -144,10 +144,10 @@ let result = tx!(router, |txn| async move {
 ### Using `#[atomic]` Decorator
 
 ```rust
-use seaorm_django::prelude::*;
+use ergorm::prelude::*;
 
 #[atomic(db)]
-async fn create_author_with_book(db: &DatabaseRouter) -> Result<(), DjangoOrmError> {
+async fn create_author_with_book(db: &DatabaseRouter) -> Result<(), ErgormError> {
     // Everything here runs in a transaction
     let author = Author::objects(db).create(...).await?;
     let book = Book::objects(db).create(...).await?;
@@ -160,17 +160,17 @@ async fn create_author_with_book(db: &DatabaseRouter) -> Result<(), DjangoOrmErr
 By default, hooks are auto-generated and do nothing. For custom hooks:
 
 ```rust
-#[django_model(table = "books", hooks = true)]
+#[ergorm_model(table = "books", hooks = true)]
 pub struct Book { /* fields */ }
 
 #[async_trait]
 impl LifecycleHooks for book::Model {
-    async fn before_save(&mut self) -> Result<(), DjangoOrmError> {
+    async fn before_save(&mut self) -> Result<(), ErgormError> {
         // Validate, transform, log, etc.
         Ok(())
     }
     
-    async fn after_create(&self) -> Result<(), DjangoOrmError> {
+    async fn after_create(&self) -> Result<(), ErgormError> {
         // Send notification, update cache, etc.
         Ok(())
     }

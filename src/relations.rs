@@ -12,7 +12,7 @@
 //! Relation definitions and generates the extended struct at compile time.
 
 use crate::db::ConnectionTrait;
-use crate::error::DjangoOrmError;
+use crate::error::ErgormError;
 use crate::fields::{ColumnTrait, Condition};
 use crate::models::{EntityTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 use rustc_hash::FxHashMap;
@@ -101,7 +101,7 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait {
     async fn load_related<C: ConnectionTrait>(
         models: &[Self::Model],
         db: &C,
-    ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, DjangoOrmError>;
+    ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, ErgormError>;
 
     /// Set the related model on the parent model
     fn set_related(model: &mut Self::Model, related: Option<Related::Model>);
@@ -116,7 +116,7 @@ pub trait LoadRelations<Parent: EntityTrait> {
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
-    ) -> Result<Self::Output, DjangoOrmError>;
+    ) -> Result<Self::Output, ErgormError>;
 
     /// Populate relations on models
     fn populate(models: &mut [Parent::Model], data: &Self::Output);
@@ -129,7 +129,7 @@ impl<E: EntityTrait> LoadRelations<E> for () {
     async fn load_all<C: ConnectionTrait>(
         _models: &[E::Model],
         _db: &C,
-    ) -> Result<(), DjangoOrmError> {
+    ) -> Result<(), ErgormError> {
         Ok(())
     }
 
@@ -147,7 +147,7 @@ where
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
-    ) -> Result<Self::Output, DjangoOrmError> {
+    ) -> Result<Self::Output, ErgormError> {
         <Parent as HasRelation<R1>>::load_related(models, db).await
     }
 
@@ -175,7 +175,7 @@ where
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
-    ) -> Result<Self::Output, DjangoOrmError> {
+    ) -> Result<Self::Output, ErgormError> {
         let r1 = <Parent as HasRelation<R1>>::load_related(models, db).await?;
         let r2 = <Parent as HasRelation<R2>>::load_related(models, db).await?;
         Ok((r1, r2))
@@ -281,7 +281,7 @@ where
     ///     }
     /// }
     /// ```
-    pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, DjangoOrmError> {
+    pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, ErgormError> {
         // Execute main query
         let db = self.db;
         let mut models = self.select.all(db).await?;
@@ -327,9 +327,9 @@ where
     ///     println!("Author: {}", author.name);
     /// }
     /// ```
-    pub async fn first(self) -> Result<E::ModelWithRelations, DjangoOrmError> {
+    pub async fn first(self) -> Result<E::ModelWithRelations, ErgormError> {
         let results = self.all().await?;
-        results.into_iter().next().ok_or_else(|| DjangoOrmError::empty_result("first"))
+        results.into_iter().next().ok_or_else(|| ErgormError::empty_result("first"))
     }
 
     /// Get the last record with prefetched relations
@@ -353,9 +353,9 @@ where
     ///     println!("Author: {}", author.name);
     /// }
     /// ```
-    pub async fn last(self) -> Result<E::ModelWithRelations, DjangoOrmError> {
+    pub async fn last(self) -> Result<E::ModelWithRelations, ErgormError> {
         let results = self.all().await?;
-        results.into_iter().last().ok_or_else(|| DjangoOrmError::empty_result("last"))
+        results.into_iter().last().ok_or_else(|| ErgormError::empty_result("last"))
     }
 
     /// Count records matching the query
@@ -373,7 +373,7 @@ where
     ///     .count()
     ///     .await?;
     /// ```
-    pub async fn count(self) -> Result<u64, DjangoOrmError> {
+    pub async fn count(self) -> Result<u64, ErgormError> {
         let count_select =
             self.select.select_only().column_as(Expr::col(Asterisk).count(), "count");
 
@@ -396,7 +396,7 @@ where
     ///     .exists()
     ///     .await?;
     /// ```
-    pub async fn exists(self) -> Result<bool, DjangoOrmError> {
+    pub async fn exists(self) -> Result<bool, ErgormError> {
         let result = self.select.limit(1).one(self.db).await?;
         Ok(result.is_some())
     }

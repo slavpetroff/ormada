@@ -3,7 +3,7 @@
 //! Uses typestate pattern to ensure `on_conflict()` and `update_fields()` are called
 //! before `execute()` - this is enforced at compile time.
 
-use crate::error::DjangoOrmError;
+use crate::error::ErgormError;
 use sea_orm::{
     sea_query::OnConflict, ActiveModelTrait, ConnectionTrait, EntityTrait, IntoActiveModel,
 };
@@ -120,9 +120,9 @@ where
     ///
     /// This method is only available after both `on_conflict()` and `update_fields()`
     /// have been called, ensuring compile-time validation of the builder configuration.
-    pub async fn execute(self) -> Result<u64, DjangoOrmError>
+    pub async fn execute(self) -> Result<u64, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {

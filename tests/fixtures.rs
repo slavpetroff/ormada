@@ -16,7 +16,7 @@ pub mod models {
     pub mod author {
         use super::*;
 
-        #[django_model(table = "authors")]
+        #[ergorm_model(table = "authors")]
         pub struct Author {
             #[primary_key]
             pub id: i32,
@@ -36,13 +36,13 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-        // LifecycleHooks is auto-implemented by #[django_model] - no manual impl needed!
+        // LifecycleHooks is auto-implemented by #[ergorm_model] - no manual impl needed!
     }
 
     pub mod book {
         use super::*;
 
-        #[django_model(table = "books")]
+        #[ergorm_model(table = "books")]
         pub struct Book {
             #[primary_key]
             pub id: i32,
@@ -62,7 +62,7 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-        // LifecycleHooks is auto-implemented by #[django_model] - no manual impl needed!
+        // LifecycleHooks is auto-implemented by #[ergorm_model] - no manual impl needed!
     }
 }
 

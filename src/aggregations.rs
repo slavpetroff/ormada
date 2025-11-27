@@ -53,7 +53,7 @@
 //! println!("Average price: {}", stats.averages.get("price").unwrap());
 //! ```
 
-use crate::error::DjangoOrmError;
+use crate::error::ErgormError;
 use crate::query::QuerySet;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QuerySelect};
 use std::collections::HashMap;
@@ -225,7 +225,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Published books: {}", count);
     /// ```
-    async fn aggregate_count(self) -> Result<u64, DjangoOrmError>;
+    async fn aggregate_count(self) -> Result<u64, ErgormError>;
 
     /// Sum numeric column values (Django's .aggregate(Sum('field')))
     ///
@@ -245,7 +245,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// - `Some(value)` - The sum if records exist
     /// - `None` - If no records match the query
-    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
 
     /// Calculate average of numeric column (Django's .aggregate(Avg('field')))
     ///
@@ -261,7 +261,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Average price: ${:.2}", avg_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
 
     /// Get maximum value (Django's .aggregate(Max('field')))
     ///
@@ -276,7 +276,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Most expensive: ${}", max_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
 
     /// Get minimum value (Django's .aggregate(Min('field')))
     ///
@@ -292,7 +292,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Cheapest: ${}", min_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError>;
+    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
 }
 
 // Helper struct for parsing aggregation results
@@ -308,17 +308,17 @@ struct AggregateValueFloat {
 }
 
 impl<
-        E: EntityTrait + crate::traits::DjangoEntity,
+        E: EntityTrait + crate::traits::ErgormEntity,
         C: ConnectionTrait,
         S: crate::query::CanExecute,
     > AggregateExt<E> for QuerySet<'_, E, C, S>
 {
-    async fn aggregate_count(self) -> Result<u64, DjangoOrmError> {
+    async fn aggregate_count(self) -> Result<u64, ErgormError> {
         // Use the existing count() method
         self.count().await
     }
 
-    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
@@ -349,7 +349,7 @@ impl<
         }
     }
 
-    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
         use sea_orm::sea_query::{Expr, Func};
 
         let column_expr = Expr::col(column.as_column_ref());
@@ -364,7 +364,7 @@ impl<
         }
     }
 
-    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
@@ -394,7 +394,7 @@ impl<
         }
     }
 
-    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, DjangoOrmError> {
+    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 

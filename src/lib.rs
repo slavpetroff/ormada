@@ -337,7 +337,7 @@ pub mod prelude {
     // =========================================================================
     pub use crate::aggregations::{AggregateExt, AggregateValue};
     pub use crate::batching;
-    pub use crate::error::DjangoOrmError;
+    pub use crate::error::ErgormError;
     pub use crate::hooks::LifecycleHooks;
     pub use crate::query::{
         Aggregated, Aggregation, CanExecute, CanFilter, CanOrder, CanPaginate, ColumnExt,
@@ -348,7 +348,7 @@ pub mod prelude {
     pub use crate::router::{
         ConsistencyContext, DatabaseRouter, RoutingStrategy, TransactionState,
     };
-    pub use crate::traits::{DjangoConnection, DjangoEntity, SoftDeleteConfig, WithRelationsTrait};
+    pub use crate::traits::{ErgormConnection, ErgormEntity, SoftDeleteConfig, WithRelationsTrait};
     pub use crate::types::OnDelete;
     pub use async_trait::async_trait;
 
@@ -359,7 +359,7 @@ pub mod prelude {
 
     // Derive macros
     #[cfg(feature = "derive")]
-    pub use seaorm_django_derive::{atomic, django_model, django_projection, DjangoModel};
+    pub use seaorm_django_derive::{atomic, ergorm_model, ergorm_projection, ErgormModel};
 
     // =========================================================================
     // Utilities

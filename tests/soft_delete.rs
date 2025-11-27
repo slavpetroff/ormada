@@ -13,7 +13,7 @@ use seaorm_django::prelude::*;
 pub mod soft_article {
     use super::*;
 
-    #[django_model(table = "soft_articles")]
+    #[ergorm_model(table = "soft_articles")]
     pub struct SoftArticle {
         #[primary_key]
         pub id: i32,

@@ -424,7 +424,7 @@ async fn test_upsert_in_transaction(#[future] db: DatabaseRouter) {
 #[tokio::test]
 async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] author: Author) {
     let _author = author;
-    let result: Result<(), DjangoOrmError> = tx!(db, |txn| async move {
+    let result: Result<(), ErgormError> = tx!(db, |txn| async move {
         // Upsert that would succeed
         Author::objects(txn)
             .upsert_many(vec![Author {
@@ -441,7 +441,7 @@ async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] a
             .await?;
 
         // Force error to test rollback
-        Err(DjangoOrmError::validation("test", "rollback", "Intentional error"))
+        Err(ErgormError::validation("test", "rollback", "Intentional error"))
     })
     .await;
 

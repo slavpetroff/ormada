@@ -23,7 +23,7 @@ pub mod tracked_author {
     use super::*;
 
     // hooks = true means we'll provide our own LifecycleHooks implementation
-    #[django_model(table = "tracked_authors", hooks = true)]
+    #[ergorm_model(table = "tracked_authors", hooks = true)]
     pub struct TrackedAuthor {
         #[primary_key]
         pub id: i32,
@@ -40,7 +40,7 @@ pub mod tracked_author {
 
     #[async_trait]
     impl LifecycleHooks for Model {
-        async fn before_delete(&self) -> Result<(), DjangoOrmError> {
+        async fn before_delete(&self) -> Result<(), ErgormError> {
             DELETE_HOOK_CALLED.lock().unwrap().push(format!("before_delete:{}", self.name));
             Ok(())
         }
@@ -95,7 +95,7 @@ pub mod blocking_author {
     use super::*;
 
     // hooks = true means we'll provide our own LifecycleHooks implementation
-    #[django_model(table = "blocking_authors", hooks = true)]
+    #[ergorm_model(table = "blocking_authors", hooks = true)]
     pub struct BlockingAuthor {
         #[primary_key]
         pub id: i32,
@@ -106,8 +106,8 @@ pub mod blocking_author {
 
     #[async_trait]
     impl LifecycleHooks for Model {
-        async fn before_delete(&self) -> Result<(), DjangoOrmError> {
-            Err(DjangoOrmError::validation("BlockingAuthor", "delete", "Deletion blocked"))
+        async fn before_delete(&self) -> Result<(), ErgormError> {
+            Err(ErgormError::validation("BlockingAuthor", "delete", "Deletion blocked"))
         }
     }
 }
@@ -151,7 +151,7 @@ pub mod full_hooks_author {
     use super::*;
 
     // hooks = true means we'll provide our own LifecycleHooks implementation
-    #[django_model(table = "full_hooks_authors", hooks = true)]
+    #[ergorm_model(table = "full_hooks_authors", hooks = true)]
     pub struct FullHooksAuthor {
         #[primary_key]
         pub id: i32,
@@ -187,49 +187,49 @@ pub mod full_hooks_author {
 
     #[async_trait]
     impl LifecycleHooks for Model {
-        async fn before_create(&mut self) -> Result<(), DjangoOrmError> {
+        async fn before_create(&mut self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("before_create");
             BEFORE_CREATE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn after_create(&self) -> Result<(), DjangoOrmError> {
+        async fn after_create(&self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("after_create");
             AFTER_CREATE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn before_update(&mut self) -> Result<(), DjangoOrmError> {
+        async fn before_update(&mut self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("before_update");
             BEFORE_UPDATE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn after_update(&self) -> Result<(), DjangoOrmError> {
+        async fn after_update(&self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("after_update");
             AFTER_UPDATE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn before_save(&mut self) -> Result<(), DjangoOrmError> {
+        async fn before_save(&mut self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("before_save");
             BEFORE_SAVE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn after_save(&self) -> Result<(), DjangoOrmError> {
+        async fn after_save(&self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("after_save");
             AFTER_SAVE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn before_delete(&self) -> Result<(), DjangoOrmError> {
+        async fn before_delete(&self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("before_delete");
             BEFORE_DELETE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
 
-        async fn after_delete(&self) -> Result<(), DjangoOrmError> {
+        async fn after_delete(&self) -> Result<(), ErgormError> {
             HOOK_CALLS.lock().unwrap().push("after_delete");
             AFTER_DELETE_COUNT.fetch_add(1, Ordering::SeqCst);
             Ok(())
@@ -360,7 +360,7 @@ async fn test_full_hooks_delete_calls_before_delete(#[future] db_full_hooks: Dat
 pub mod default_hooks_author {
     use super::*;
 
-    #[django_model(table = "default_hooks_authors")]
+    #[ergorm_model(table = "default_hooks_authors")]
     pub struct DefaultHooksAuthor {
         #[primary_key]
         pub id: i32,

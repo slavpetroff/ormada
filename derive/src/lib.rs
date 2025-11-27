@@ -1,4 +1,4 @@
-//! Proc macro for #[derive(DjangoModel)]
+//! Proc macro for #[derive(ErgormModel)]
 //!
 //! This crate provides a derive macro that automatically generates
 //! Model-based create/update operations with auto field handling.
@@ -56,10 +56,10 @@ fn has_sea_orm_attribute(field: &syn::Field, attr_name: &str) -> bool {
     false
 }
 
-/// Check if a field has a specific django attribute
-fn has_django_attribute(field: &syn::Field, attr_name: &str) -> bool {
+/// Check if a field has a specific ergorm attribute
+fn has_ergorm_attribute(field: &syn::Field, attr_name: &str) -> bool {
     for attr in &field.attrs {
-        if attr.path().is_ident("django") {
+        if attr.path().is_ident("ergorm") {
             // Simple string-based check for attribute presence
             let meta_str = quote::quote!(#attr).to_string();
             if meta_str.contains(attr_name) {
@@ -70,9 +70,9 @@ fn has_django_attribute(field: &syn::Field, attr_name: &str) -> bool {
     false
 }
 
-/// Derive macro for Django-like Model-based operations
-#[proc_macro_derive(DjangoModel, attributes(django))]
-pub fn derive_django_model(input: TokenStream) -> TokenStream {
+/// Derive macro for Ergorm Model-based operations
+#[proc_macro_derive(ErgormModel, attributes(ergorm))]
+pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let struct_name = &input.ident;
@@ -84,7 +84,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
             _ => {
                 return syn::Error::new_spanned(
                     struct_name,
-                    "DjangoModel can only be derived for structs with named fields",
+                    "ErgormModel can only be derived for structs with named fields",
                 )
                 .to_compile_error()
                 .into();
@@ -93,7 +93,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(
                 struct_name,
-                "DjangoModel can only be derived for structs",
+                "ErgormModel can only be derived for structs",
             )
             .to_compile_error()
             .into();
@@ -118,13 +118,13 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
             continue;
         }
 
-        // Detect auto fields from #[django(...)] attributes
-        if has_django_attribute(field, "auto_now_add") {
+        // Detect auto fields from #[ergorm(...)] attributes
+        if has_ergorm_attribute(field, "auto_now_add") {
             auto_now_add_fields.push(field_name);
             continue;
         }
 
-        if has_django_attribute(field, "auto_now") {
+        if has_ergorm_attribute(field, "auto_now") {
             auto_now_fields.push(field_name);
         }
     }
@@ -218,8 +218,8 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
         #trait_impl
 
         // ===== DJANGO ENTITY TRAIT =====
-        impl ::seaorm_django::traits::DjangoEntity for Entity {
-            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
+        impl ::seaorm_django::traits::ErgormEntity for Entity {
+            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::ErgormError> {
                 let now = ::chrono::Utc::now().fixed_offset();
                 ::core::result::Result::Ok(ActiveModel {
                     #(#create_field_assignments,)*
@@ -229,7 +229,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
             async fn save_model<'a, C: ::sea_orm::ConnectionTrait>(
                 db: &'a C,
                 model: Model,
-            ) -> Result<Model, seaorm_django::error::DjangoOrmError> {
+            ) -> Result<Model, seaorm_django::error::ErgormError> {
                 model.save(db).await
             }
         }
@@ -270,7 +270,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Attribute macro for atomic transactions (Django's @transaction.atomic)
+/// Attribute macro for atomic transactions
 ///
 /// Wraps the function body in a transaction.
 ///
@@ -278,7 +278,7 @@ pub fn derive_django_model(input: TokenStream) -> TokenStream {
 ///
 /// ```rust,ignore
 /// #[atomic(db)]
-/// async fn create_user(db: &DatabaseConnection, name: String) -> Result<(), DjangoOrmError> {
+/// async fn create_user(db: &DatabaseConnection, name: String) -> Result<(), ErgormError> {
 ///     // This code runs inside a transaction!
 ///     // 'db' is shadowed by the transaction handle
 ///     let user = User::objects(db).create(name).await?;
@@ -290,7 +290,7 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
     atomic::impl_atomic(args, input)
 }
 
-/// Attribute macro for defining Django-like models with clean syntax
+/// Attribute macro for defining Ergorm models with clean syntax
 ///
 /// This macro transforms a simple struct definition into a full `SeaORM` entity
 /// with all the necessary derives and boilerplate.
@@ -306,7 +306,7 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// ```rust,ignore
 /// use seaorm_django::prelude::*;
 ///
-/// #[django_model(table = "books")]
+/// #[ergorm_model(table = "books")]
 /// struct Book {
 ///     #[primary_key]
 ///     id: i32,
@@ -332,12 +332,12 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// To provide custom hooks, use `hooks = true`:
 ///
 /// ```rust,ignore
-/// #[django_model(table = "books", hooks = true)]
+/// #[ergorm_model(table = "books", hooks = true)]
 /// struct Book { /* fields */ }
 ///
 /// #[async_trait]
 /// impl LifecycleHooks for book::Model {
-///     async fn before_save(&mut self) -> Result<(), DjangoOrmError> {
+///     async fn before_save(&mut self) -> Result<(), ErgormError> {
 ///         // Custom logic before save
 ///         Ok(())
 ///     }
@@ -361,8 +361,8 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// - `#[skip_serializing]` - Skip field when serializing
 /// - `#[skip_deserializing]` - Skip field when deserializing
 #[proc_macro_attribute]
-pub fn django_model(attr: TokenStream, item: TokenStream) -> TokenStream {
-    match model::impl_django_model(attr.into(), item.into()) {
+pub fn ergorm_model(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match model::impl_ergorm_model(attr.into(), item.into()) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }
@@ -379,14 +379,14 @@ pub fn django_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// use seaorm_django::prelude::*;
 ///
 /// // Simple projection (all fields must exist on Book)
-/// #[django_projection(model = Book)]
+/// #[ergorm_projection(model = Book)]
 /// struct BookSummary {
 ///     title: String,
 ///     price: f64,
 /// }
 ///
 /// // With computed fields (for aggregations)
-/// #[django_projection(model = Book)]
+/// #[ergorm_projection(model = Book)]
 /// struct AuthorBookStats {
 ///     author_id: i32,           // Validated
 ///     #[computed]
@@ -408,7 +408,7 @@ pub fn django_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   are not validated against the model and must be provided by the query
 ///   (e.g., via `.annotate()` for aggregations).
 #[proc_macro_attribute]
-pub fn django_projection(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn ergorm_projection(attr: TokenStream, item: TokenStream) -> TokenStream {
     match projection::generate_projection(attr.into(), item.into()) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),

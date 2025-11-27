@@ -1,7 +1,7 @@
-///! Implementation of the `#[django_model]` attribute macro
+///! Implementation of the `#[ergorm_model]` attribute macro
 ///!
 ///! This module provides the core functionality for transforming clean model definitions
-///! into SeaORM-compatible code with Django-like ergonomics.
+///! into SeaORM-compatible code with ergonomic APIs.
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
@@ -9,7 +9,7 @@ use syn::{
     Attribute, Data, DeriveInput, Expr, Fields, Ident, Lit, Meta, Token,
 };
 
-/// Configuration for the `#[django_model]` attribute
+/// Configuration for the `#[ergorm_model]` attribute
 #[derive(Debug, Clone)]
 struct ModelConfig {
     table_name: String,
@@ -308,8 +308,8 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
     })
 }
 
-/// Main implementation of the django_model attribute macro
-pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
+/// Main implementation of the ergorm_model attribute macro
+pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
     let config: ModelConfig = syn::parse2(attr)?;
     let mut input: DeriveInput = syn::parse2(input)?;
 
@@ -537,13 +537,13 @@ pub fn impl_django_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         // LifecycleHooks implementation (auto-generated unless hooks = "custom")
         #lifecycle_hooks_impl
 
-        // Forward DjangoEntity methods to Entity
+        // Forward ErgormEntity methods to Entity
         impl Model {
             /// Validate and convert Model to ActiveModel for creation
             ///
             /// This is a convenience method that forwards to the Entity implementation.
-            pub fn to_active_model_for_create(model: Self) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
-                <Entity as ::seaorm_django::traits::DjangoEntity>::to_active_model_for_create(model)
+            pub fn to_active_model_for_create(model: Self) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::ErgormError> {
+                <Entity as ::seaorm_django::traits::ErgormEntity>::to_active_model_for_create(model)
             }
         }
 
@@ -798,7 +798,7 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() > #max {
                             return ::core::result::Result::Err(
-                                ::seaorm_django::error::DjangoOrmError::validation(
+                                ::seaorm_django::error::ErgormError::validation(
                                     #table_name,
                                     #field_name_str,
                                     ::std::format!("exceeds max_length of {}", #max)
@@ -811,7 +811,7 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() < #min {
                             return ::core::result::Result::Err(
-                                ::seaorm_django::error::DjangoOrmError::validation(
+                                ::seaorm_django::error::ErgormError::validation(
                                     #table_name,
                                     #field_name_str,
                                     ::std::format!("is shorter than min_length of {}", #min)
@@ -830,7 +830,7 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) < #min {
                         return ::core::result::Result::Err(
-                            ::seaorm_django::error::DjangoOrmError::validation(
+                            ::seaorm_django::error::ErgormError::validation(
                                 #table_name,
                                 #field_name_str,
                                 ::std::format!("value {} is less than minimum {}", model.#field_name, #min)
@@ -844,7 +844,7 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) > #max {
                         return ::core::result::Result::Err(
-                            ::seaorm_django::error::DjangoOrmError::validation(
+                            ::seaorm_django::error::ErgormError::validation(
                                 #table_name,
                                 #field_name_str,
                                 ::std::format!("value {} exceeds maximum {}", model.#field_name, #max)
@@ -889,8 +889,8 @@ fn generate_django_entity_impl(
     };
 
     Ok(quote! {
-        impl ::seaorm_django::traits::DjangoEntity for Entity {
-            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::DjangoOrmError> {
+        impl ::seaorm_django::traits::ErgormEntity for Entity {
+            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::ErgormError> {
                 // Validation logic
                 #(#validations)*
 
@@ -903,7 +903,7 @@ fn generate_django_entity_impl(
             async fn save_model<'a, C: ::seaorm_django::__internal::ConnectionTrait>(
                 db: &'a C,
                 model: Model,
-            ) -> ::core::result::Result<Model, ::seaorm_django::error::DjangoOrmError> {
+            ) -> ::core::result::Result<Model, ::seaorm_django::error::ErgormError> {
                 model.save(db).await
             }
 
@@ -963,7 +963,7 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
                         db: &C,
                     ) -> ::core::result::Result<
                         ::seaorm_django::prelude::FxHashMap<Self::RelatedPK, <#entity as ::seaorm_django::__internal::EntityTrait>::Model>,
-                        ::seaorm_django::error::DjangoOrmError
+                        ::seaorm_django::error::ErgormError
                     > {
                         use ::seaorm_django::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
 
@@ -1039,7 +1039,7 @@ fn generate_model_save_impl(
             pub async fn save<'a, C: ::seaorm_django::__internal::ConnectionTrait>(
                 mut self,
                 db: &'a C,
-            ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
+            ) -> ::core::result::Result<Self, ::seaorm_django::error::ErgormError> {
                 use ::seaorm_django::hooks::LifecycleHooks;
                 use ::seaorm_django::__internal::ActiveModelTrait;
                 use ::seaorm_django::__internal::TryIntoModel;
@@ -1085,7 +1085,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 pub async fn delete<C: ::seaorm_django::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
+                ) -> ::core::result::Result<Self, ::seaorm_django::error::ErgormError> {
                     use ::seaorm_django::__internal::{ActiveModelTrait, Set, ActiveValue};
                     use ::seaorm_django::hooks::LifecycleHooks;
 
@@ -1109,7 +1109,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 pub async fn force_delete<C: ::seaorm_django::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
+                ) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError> {
                     use ::seaorm_django::__internal::ActiveModelTrait;
                     use ::seaorm_django::hooks::LifecycleHooks;
 
@@ -1129,7 +1129,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 pub async fn restore<C: ::seaorm_django::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<Self, ::seaorm_django::error::DjangoOrmError> {
+                ) -> ::core::result::Result<Self, ::seaorm_django::error::ErgormError> {
                     use ::seaorm_django::__internal::{ActiveModelTrait, Set, ActiveValue};
                     use ::seaorm_django::hooks::LifecycleHooks;
 
@@ -1160,7 +1160,7 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 pub async fn delete<C: ::seaorm_django::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError> {
+                ) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError> {
                     use ::seaorm_django::__internal::ActiveModelTrait;
                     use ::seaorm_django::hooks::LifecycleHooks;
 
@@ -1276,7 +1276,7 @@ fn generate_model_convenience_methods(
             #default_ordering_method
 
             /// Create the table for this model
-            pub async fn create_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError>
+            pub async fn create_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError>
             where
                 C: ::seaorm_django::__internal::ConnectionTrait,
             {
@@ -1300,7 +1300,7 @@ fn generate_model_convenience_methods(
             }
 
             /// Drop the table for this model
-            pub async fn drop_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::DjangoOrmError>
+            pub async fn drop_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError>
             where
                 C: ::seaorm_django::__internal::ConnectionTrait,
             {

@@ -1,13 +1,13 @@
 //! Error types for seaorm-django
 //!
 //! This module provides the error type that all ORM operations return.
-//! All ORM methods return `Result<T, DjangoOrmError>` which can be
+//! All ORM methods return `Result<T, ErgormError>` which can be
 //! seamlessly converted to application-level errors using the `?` operator.
 //!
 //! # Examples
 //!
 //! ```rust,ignore
-//! use seaorm_django::error::DjangoOrmError;
+//! use seaorm_django::error::ErgormError;
 //!
 //! async fn get_book(id: i32) -> Result<BookDTO, AppError> {
 //!     let book = Book::objects(db).get(id).await?;  // Auto-converts to AppError
@@ -36,10 +36,10 @@ use std::fmt;
 /// ```rust,ignore
 /// match Book::objects(db).get(id).await {
 ///     Ok(book) => println!("Found: {}", book.title),
-///     Err(DjangoOrmError::NotFound { entity, id }) => {
+///     Err(ErgormError::NotFound { entity, id }) => {
 ///         eprintln!("{entity} {id} not found");
 ///     }
-///     Err(DjangoOrmError::Database(e)) => {
+///     Err(ErgormError::Database(e)) => {
 ///         eprintln!("Database error: {}", e);
 ///     }
 ///     Err(e) => eprintln!("Error: {}", e),
@@ -61,10 +61,10 @@ use std::fmt;
 /// Create a newtype wrapper in your application to convert to your error type:
 ///
 /// ```rust,ignore
-/// pub struct AppError(pub DjangoOrmError);
+/// pub struct AppError(pub ErgormError);
 ///
-/// impl From<DjangoOrmError> for AppError {
-///     fn from(err: DjangoOrmError) -> Self {
+/// impl From<ErgormError> for AppError {
+///     fn from(err: ErgormError) -> Self {
 ///         AppError(err)
 ///     }
 /// }
@@ -76,7 +76,7 @@ use std::fmt;
 /// }
 /// ```
 #[derive(Debug)]
-pub enum DjangoOrmError {
+pub enum ErgormError {
     /// Database error from `SeaORM`
     ///
     /// Includes: connection errors, query syntax errors, constraint violations,
@@ -86,13 +86,13 @@ pub enum DjangoOrmError {
     ///
     /// ```rust,ignore
     /// // Connection error
-    /// Err(DjangoOrmError::Database(DbErr::Conn(...)))
+    /// Err(ErgormError::Database(DbErr::Conn(...)))
     ///
     /// // Query error
-    /// Err(DjangoOrmError::Database(DbErr::Query(...)))
+    /// Err(ErgormError::Database(DbErr::Query(...)))
     ///
     /// // Constraint violation (e.g., duplicate key)
-    /// Err(DjangoOrmError::Database(DbErr::Exec(...)))
+    /// Err(ErgormError::Database(DbErr::Exec(...)))
     /// ```
     Database(sea_orm::DbErr),
 
@@ -105,7 +105,7 @@ pub enum DjangoOrmError {
     /// ```rust,ignore
     /// match Book::objects(db).get(id).await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(DjangoOrmError::NotFound { entity, .. }) => {
+    ///     Err(ErgormError::NotFound { entity, .. }) => {
     ///         println!("No {} found", entity);
     ///     }
     ///     Err(e) => return Err(e),
@@ -127,7 +127,7 @@ pub enum DjangoOrmError {
     /// ```rust,ignore
     /// match author.save(db).await {
     ///     Ok(_) => println!("Saved"),
-    ///     Err(DjangoOrmError::Validation { field, reason, .. }) => {
+    ///     Err(ErgormError::Validation { field, reason, .. }) => {
     ///         println!("Field '{}' failed: {}", field, reason);
     ///     }
     ///     Err(e) => return Err(e),
@@ -172,7 +172,7 @@ pub enum DjangoOrmError {
     },
 }
 
-impl fmt::Display for DjangoOrmError {
+impl fmt::Display for ErgormError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Database(e) => write!(f, "Database error: {e}"),
@@ -195,21 +195,21 @@ impl fmt::Display for DjangoOrmError {
     }
 }
 
-impl std::error::Error for DjangoOrmError {}
+impl std::error::Error for ErgormError {}
 
-impl From<sea_orm::DbErr> for DjangoOrmError {
+impl From<sea_orm::DbErr> for ErgormError {
     fn from(err: sea_orm::DbErr) -> Self {
         Self::Database(err)
     }
 }
 
-impl DjangoOrmError {
+impl ErgormError {
     /// Create a `NotFound` error
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// return Err(DjangoOrmError::not_found("Book", id.to_string()));
+    /// return Err(ErgormError::not_found("Book", id.to_string()));
     /// ```
     pub fn not_found(entity: &'static str, id: impl ToString) -> Self {
         Self::NotFound { entity, id: id.to_string() }
@@ -220,7 +220,7 @@ impl DjangoOrmError {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// return Err(DjangoOrmError::validation(
+    /// return Err(ErgormError::validation(
     ///     "Author",
     ///     "name",
     ///     "must not be empty"
@@ -239,7 +239,7 @@ impl DjangoOrmError {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// return Err(DjangoOrmError::empty_result("first"));
+    /// return Err(ErgormError::empty_result("first"));
     /// ```
     pub const fn empty_result(operation: &'static str) -> Self {
         Self::EmptyResult { operation }
@@ -250,7 +250,7 @@ impl DjangoOrmError {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// return Err(DjangoOrmError::missing_config("execute", "on_conflict"));
+    /// return Err(ErgormError::missing_config("execute", "on_conflict"));
     /// ```
     pub const fn missing_config(method: &'static str, missing: &'static str) -> Self {
         Self::MissingConfiguration { method, missing }
@@ -261,7 +261,7 @@ impl DjangoOrmError {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// return Err(DjangoOrmError::concurrency_conflict("get_or_create", 3));
+    /// return Err(ErgormError::concurrency_conflict("get_or_create", 3));
     /// ```
     pub const fn concurrency_conflict(operation: &'static str, attempts: u8) -> Self {
         Self::ConcurrencyConflict { operation, attempts }
@@ -276,10 +276,10 @@ mod tests {
     #[test]
     fn test_database_error_conversion() {
         let db_err = DbErr::RecordNotFound("test".to_string());
-        let django_err: DjangoOrmError = db_err.into();
+        let django_err: ErgormError = db_err.into();
 
         match django_err {
-            DjangoOrmError::Database(_) => (),
+            ErgormError::Database(_) => (),
             _ => panic!("Expected Database variant"),
         }
     }
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn test_database_error_display() {
         let db_err = DbErr::RecordNotFound("User with id=5".to_string());
-        let error = DjangoOrmError::Database(db_err);
+        let error = ErgormError::Database(db_err);
         assert!(error.to_string().contains("Database error"));
         assert!(error.to_string().contains("User with id=5"));
     }
@@ -295,24 +295,24 @@ mod tests {
     #[test]
     fn test_error_is_send() {
         fn assert_send<T: Send>() {}
-        assert_send::<DjangoOrmError>();
+        assert_send::<ErgormError>();
     }
 
     #[test]
     fn test_error_is_sync() {
         fn assert_sync<T: Sync>() {}
-        assert_sync::<DjangoOrmError>();
+        assert_sync::<ErgormError>();
     }
 
     #[test]
     fn test_error_trait_implementation() {
-        let error = DjangoOrmError::validation("test", "field", "reason");
+        let error = ErgormError::validation("test", "field", "reason");
         let _: &dyn std::error::Error = &error;
     }
 
     #[test]
     fn test_not_found_error() {
-        let error = DjangoOrmError::not_found("Book", 123);
+        let error = ErgormError::not_found("Book", 123);
         assert!(error.to_string().contains("Book"));
         assert!(error.to_string().contains("123"));
         assert!(error.to_string().contains("not found"));
@@ -320,10 +320,10 @@ mod tests {
 
     #[test]
     fn test_not_found_pattern_matching() {
-        let error = DjangoOrmError::NotFound { entity: "Author", id: "456".to_string() };
+        let error = ErgormError::NotFound { entity: "Author", id: "456".to_string() };
 
         match error {
-            DjangoOrmError::NotFound { entity, id } => {
+            ErgormError::NotFound { entity, id } => {
                 assert_eq!(entity, "Author");
                 assert_eq!(id, "456");
             }
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_validation_error() {
-        let error = DjangoOrmError::validation("User", "email", "invalid format");
+        let error = ErgormError::validation("User", "email", "invalid format");
         assert!(error.to_string().contains("User"));
         assert!(error.to_string().contains("email"));
         assert!(error.to_string().contains("invalid format"));
@@ -342,14 +342,14 @@ mod tests {
 
     #[test]
     fn test_validation_pattern_matching() {
-        let error = DjangoOrmError::Validation {
+        let error = ErgormError::Validation {
             entity: "Book",
             field: "title",
             reason: "too long".to_string(),
         };
 
         match error {
-            DjangoOrmError::Validation { entity, field, reason } => {
+            ErgormError::Validation { entity, field, reason } => {
                 assert_eq!(entity, "Book");
                 assert_eq!(field, "title");
                 assert_eq!(reason, "too long");
@@ -360,32 +360,32 @@ mod tests {
 
     #[test]
     fn test_error_variants_are_distinct() {
-        let not_found = DjangoOrmError::not_found("Book", 1);
-        let validation = DjangoOrmError::validation("Book", "title", "required");
-        let empty = DjangoOrmError::empty_result("first");
+        let not_found = ErgormError::not_found("Book", 1);
+        let validation = ErgormError::validation("Book", "title", "required");
+        let empty = ErgormError::empty_result("first");
 
-        assert!(matches!(not_found, DjangoOrmError::NotFound { .. }));
-        assert!(matches!(validation, DjangoOrmError::Validation { .. }));
-        assert!(matches!(empty, DjangoOrmError::EmptyResult { .. }));
+        assert!(matches!(not_found, ErgormError::NotFound { .. }));
+        assert!(matches!(validation, ErgormError::Validation { .. }));
+        assert!(matches!(empty, ErgormError::EmptyResult { .. }));
     }
 
     #[test]
     fn test_empty_result_error() {
-        let error = DjangoOrmError::empty_result("first");
+        let error = ErgormError::empty_result("first");
         assert!(error.to_string().contains("No records found"));
         assert!(error.to_string().contains("first"));
     }
 
     #[test]
     fn test_missing_config_error() {
-        let error = DjangoOrmError::missing_config("execute", "on_conflict");
+        let error = ErgormError::missing_config("execute", "on_conflict");
         assert!(error.to_string().contains("execute"));
         assert!(error.to_string().contains("on_conflict"));
     }
 
     #[test]
     fn test_concurrency_conflict_error() {
-        let error = DjangoOrmError::concurrency_conflict("get_or_create", 3);
+        let error = ErgormError::concurrency_conflict("get_or_create", 3);
         assert!(error.to_string().contains("get_or_create"));
         assert!(error.to_string().contains("3"));
         assert!(error.to_string().contains("retry"));

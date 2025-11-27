@@ -62,16 +62,15 @@
 //! ```
 
 use crate::db::{ConnectionTrait, DbErr, TransactionTrait};
-use crate::error::DjangoOrmError;
+use crate::error::ErgormError;
 use crate::fields::{ColumnTrait, Condition, Order, PrimaryKeyTrait, Value};
 use crate::hooks::LifecycleHooks;
 use crate::models::{
     ActiveModelBehavior, ActiveModelTrait, EntityTrait, FromQueryResult, IntoActiveModel,
-    ModelTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Select,
+    ModelTrait, QueryFilter, QueryOrder, QuerySelect, Select,
 };
 use crate::upsert::UpsertBuilder;
 use sea_orm::sea_query::{BinOper, ColumnRef, Expr, Func, SimpleExpr};
-use sea_orm::{Iterable, PrimaryKeyToColumn, TransactionSession};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -736,7 +735,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
     /// Apply soft delete filter to the query based on current mode
     fn apply_soft_delete_filter(&self, mut select: Select<E>) -> Select<E>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         use crate::traits::SoftDeleteConfig;
         use sea_orm::sea_query::{Alias, SimpleExpr};
@@ -990,7 +989,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, 
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExecute + 'a> QuerySet<'a, E, C, S>
 where
-    E: crate::traits::DjangoEntity,
+    E: crate::traits::ErgormEntity,
 {
     /// Execute query and return all matching results (Django's .`all()`)
     ///
@@ -999,7 +998,7 @@ where
     /// # Returns
     ///
     /// - `Ok(Vec<E::Model>)` - Vector of matching models (may be empty)
-    /// - `Err(DjangoOrmError)` - Database error occurred
+    /// - `Err(ErgormError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1034,9 +1033,9 @@ where
     /// ```rust,ignore
     /// let books_again = qs.all().await?;  // Cache hit! No DB query
     /// ```
-    pub async fn all(&self) -> Result<Vec<E::Model>, DjangoOrmError>
+    pub async fn all(&self) -> Result<Vec<E::Model>, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         // Try to read from cache first (allows multiple concurrent readers)
         {
@@ -1070,8 +1069,8 @@ where
     /// # Returns
     ///
     /// - `Ok(E::Model)` - First matching model found
-    /// - `Err(DjangoOrmError::EmptyResult { .. })` - No matching models
-    /// - `Err(DjangoOrmError::Database(_))` - Database error occurred
+    /// - `Err(ErgormError::EmptyResult { .. })` - No matching models
+    /// - `Err(ErgormError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1091,7 +1090,7 @@ where
     /// // Handle no results
     /// match Book::objects(db).first().await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(DjangoOrmError::EmptyResult { .. }) => {
+    ///     Err(ErgormError::EmptyResult { .. }) => {
     ///         println!("No books in database");
     ///     }
     ///     Err(e) => return Err(e),
@@ -1107,9 +1106,9 @@ where
     /// # Caching
     ///
     /// Uses the same cache as `.all()`. If cache exists, returns first element.
-    pub async fn first(&self) -> Result<E::Model, DjangoOrmError>
+    pub async fn first(&self) -> Result<E::Model, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         // Try cache first
         {
@@ -1118,7 +1117,7 @@ where
                 return cached_results
                     .first()
                     .cloned()
-                    .ok_or_else(|| DjangoOrmError::empty_result("first"));
+                    .ok_or_else(|| ErgormError::empty_result("first"));
             }
         }
 
@@ -1129,7 +1128,7 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::empty_result("first"))
+            .ok_or_else(|| ErgormError::empty_result("first"))
     }
 
     /// Execute query and return last result
@@ -1140,8 +1139,8 @@ where
     /// # Returns
     ///
     /// - `Ok(E::Model)` - Last matching model found
-    /// - `Err(DjangoOrmError::NotFound { .. })` - No matching models
-    /// - `Err(DjangoOrmError::Database(_))` - Database error occurred
+    /// - `Err(ErgormError::NotFound { .. })` - No matching models
+    /// - `Err(ErgormError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1153,7 +1152,7 @@ where
     /// // Handle no results
     /// match Book::objects(db).last().await {
     ///     Ok(book) => println!("Last: {}", book.title),
-    ///     Err(DjangoOrmError::NotFound { .. }) => {
+    ///     Err(ErgormError::NotFound { .. }) => {
     ///         println!("No books found");
     ///     }
     ///     Err(e) => return Err(e),
@@ -1165,9 +1164,9 @@ where
     /// This method orders by primary key descending to efficiently get the last record.
     /// If you need the last record based on a different ordering, use
     /// `.order_by_desc(field).first()` instead.
-    pub async fn last(&self) -> Result<E::Model, DjangoOrmError>
+    pub async fn last(&self) -> Result<E::Model, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         use sea_orm::{Iterable, PrimaryKeyToColumn};
 
@@ -1186,7 +1185,7 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::not_found(E::default().table_name(), "last".to_string()))
+            .ok_or_else(|| ErgormError::not_found(E::default().table_name(), "last".to_string()))
     }
 
     /// Get a single record by primary key (Django's .get(pk=))
@@ -1197,8 +1196,8 @@ where
     /// # Returns
     ///
     /// - `Ok(E::Model)` - Record found
-    /// - `Err(DjangoOrmError::NotFound { entity, id })` - No record with that ID
-    /// - `Err(DjangoOrmError::Database(_))` - Database error occurred
+    /// - `Err(ErgormError::NotFound { entity, id })` - No record with that ID
+    /// - `Err(ErgormError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1210,16 +1209,16 @@ where
     /// // Handle not found
     /// match Book::objects(db).get(999).await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(DjangoOrmError::NotFound { entity, id }) => {
+    ///     Err(ErgormError::NotFound { entity, id }) => {
     ///         println!("{} with id {} doesn't exist", entity, id);
     ///     }
     ///     Err(e) => return Err(e),  // Other error
     /// }
     /// // Or use ? for early return on not found
-    pub async fn get<T>(&self, id: T) -> Result<E::Model, DjangoOrmError>
+    pub async fn get<T>(&self, id: T) -> Result<E::Model, ErgormError>
     where
         T: Into<<E::PrimaryKey as PrimaryKeyTrait>::ValueType> + Send + std::fmt::Display,
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         let id_str = format!("{}", &id);
 
@@ -1229,7 +1228,7 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::not_found(E::default().table_name(), id_str))
+            .ok_or_else(|| ErgormError::not_found(E::default().table_name(), id_str))
     }
 
     /// Get the earliest record by a field (Django's .`earliest()`)
@@ -1255,20 +1254,20 @@ where
     /// # Returns
     ///
     /// - `Ok(Model)` - The earliest record
-    /// - `Err(DjangoOrmError::EmptyResult { .. })` - No records found
-    /// - `Err(DjangoOrmError::Database)` - Database error
+    /// - `Err(ErgormError::EmptyResult { .. })` - No records found
+    /// - `Err(ErgormError::Database)` - Database error
     ///
     /// # Equivalent to
     ///
     /// `.order_by_asc(column).first()` but returns error on empty result
-    pub async fn earliest(&self, column: impl ColumnTrait) -> Result<E::Model, DjangoOrmError> {
+    pub async fn earliest(&self, column: impl ColumnTrait) -> Result<E::Model, ErgormError> {
         self.inner
             .select
             .clone()
             .order_by(column, Order::Asc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::empty_result("earliest"))
+            .ok_or_else(|| ErgormError::empty_result("earliest"))
     }
 
     /// Get the latest record by a field (Django's .`latest()`)
@@ -1299,20 +1298,20 @@ where
     /// # Returns
     ///
     /// - `Ok(Model)` - The latest record
-    /// - `Err(DjangoOrmError::EmptyResult { .. })` - No records found
-    /// - `Err(DjangoOrmError::Database)` - Database error
+    /// - `Err(ErgormError::EmptyResult { .. })` - No records found
+    /// - `Err(ErgormError::Database)` - Database error
     ///
     /// # Equivalent to
     ///
     /// `.order_by_desc(column).first()` but returns error on empty result
-    pub async fn latest(&self, column: impl ColumnTrait) -> Result<E::Model, DjangoOrmError> {
+    pub async fn latest(&self, column: impl ColumnTrait) -> Result<E::Model, ErgormError> {
         self.inner
             .select
             .clone()
             .order_by(column, Order::Desc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| DjangoOrmError::empty_result("latest"))
+            .ok_or_else(|| ErgormError::empty_result("latest"))
     }
 
     /// Count records matching the query (Django's .`count()`)
@@ -1323,7 +1322,7 @@ where
     /// # Returns
     ///
     /// - `Ok(u64)` - Number of matching records (0 or more)
-    /// - `Err(DjangoOrmError)` - Database error occurred
+    /// - `Err(ErgormError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1358,9 +1357,9 @@ where
     ///
     /// This uses a SQL `COUNT(*)` query which is optimized by the database.
     /// Much faster than loading all records and counting in memory.
-    pub async fn count(&self) -> Result<u64, DjangoOrmError>
+    pub async fn count(&self) -> Result<u64, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         // Apply soft delete filter first
         let filtered = self.apply_soft_delete_filter(self.inner.select.clone());
@@ -1386,7 +1385,7 @@ where
     ///
     /// - `Ok(true)` - At least one matching record exists
     /// - `Ok(false)` - No matching records (NOT an error)
-    /// - `Err(DjangoOrmError)` - Database error occurred
+    /// - `Err(ErgormError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1423,9 +1422,9 @@ where
     /// Uses `LIMIT 1` internally, so it stops as soon as it finds any match.
     /// This is much faster than counting all records when you just need to know
     /// if any exist.
-    pub async fn exists(&self) -> Result<bool, DjangoOrmError>
+    pub async fn exists(&self) -> Result<bool, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         use sea_orm::QuerySelect;
 
@@ -1462,10 +1461,10 @@ where
     ///
     /// println!("Updated {} books", count);
     /// ```
-    pub async fn update<F>(self, updater: F) -> Result<u64, DjangoOrmError>
+    pub async fn update<F>(self, updater: F) -> Result<u64, ErgormError>
     where
         F: Fn(&mut E::Model) + Send + Sync,
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
         C: TransactionTrait,
     {
         use sea_orm::sea_query::LockType;
@@ -1684,9 +1683,9 @@ where
     ///     ..Default::default() // ID and timestamps handled automatically
     /// }).await?;
     /// ```
-    pub async fn create(self, mut model: E::Model) -> Result<E::Model, DjangoOrmError>
+    pub async fn create(self, mut model: E::Model) -> Result<E::Model, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
         E::Model: IntoActiveModel<E::ActiveModel> + crate::hooks::LifecycleHooks,
         E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {
@@ -1754,9 +1753,9 @@ where
     /// - Does not return generated IDs (for performance)
     /// - Does not trigger model hooks/signals
     /// - Check database limits (typically 1000-10000 records per operation)
-    pub async fn bulk_create(self, models: Vec<E::Model>) -> Result<u64, DjangoOrmError>
+    pub async fn bulk_create(self, models: Vec<E::Model>) -> Result<u64, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {
@@ -1767,7 +1766,7 @@ where
         let count = models.len() as u64;
 
         // Convert models to ActiveModels using DjangoEntity logic (handles IDs/timestamps)
-        let active_models: Result<Vec<E::ActiveModel>, DjangoOrmError> =
+        let active_models: Result<Vec<E::ActiveModel>, ErgormError> =
             models.into_iter().map(|model| E::to_active_model_for_create(model)).collect();
         let active_models = active_models?;
 
@@ -1842,7 +1841,7 @@ where
     /// # Returns
     ///
     /// - `Ok(u64)` - Number of records deleted (0 if no matches)
-    /// - `Err(DjangoOrmError)` - Database error occurred
+    /// - `Err(ErgormError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1867,7 +1866,7 @@ where
     /// - Always use with a filter to avoid accidentally deleting all records
     /// - Uses bulk DELETE with primary key IN clause for performance
     /// - Check foreign key constraints (may fail if records are referenced)
-    pub async fn delete(self) -> Result<u64, DjangoOrmError>
+    pub async fn delete(self) -> Result<u64, ErgormError>
     where
         E::Model: ModelTrait,
     {
@@ -1977,9 +1976,9 @@ where
     /// # Performance
     ///
     /// Makes 1-2 queries within a transaction for safety.
-    pub async fn get_or_create<F>(self, creator: F) -> Result<(E::Model, bool), DjangoOrmError>
+    pub async fn get_or_create<F>(self, creator: F) -> Result<(E::Model, bool), ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
         F: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
@@ -2027,7 +2026,7 @@ where
         }
 
         // All retries exhausted
-        Err(DjangoOrmError::concurrency_conflict("get_or_create", 3))
+        Err(ErgormError::concurrency_conflict("get_or_create", 3))
     }
 
     /// Update existing record or create new one (Django's .`update_or_create()`)
@@ -2077,9 +2076,9 @@ where
         self,
         updater: U,
         creator: Creator,
-    ) -> Result<(E::Model, bool), DjangoOrmError>
+    ) -> Result<(E::Model, bool), ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
         U: Fn(&mut E::Model), // Changed: Fn instead of FnOnce to allow retries
         Creator: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
         E::Model: IntoActiveModel<E::ActiveModel>,
@@ -2128,7 +2127,7 @@ where
         }
 
         // All retries exhausted
-        Err(DjangoOrmError::concurrency_conflict("update_or_create", 3))
+        Err(ErgormError::concurrency_conflict("update_or_create", 3))
     }
 
     /// Get specific column values as JSON (Django's `values()`)
@@ -2153,7 +2152,7 @@ where
     pub async fn values(
         &self,
         columns: Vec<E::Column>,
-    ) -> Result<Vec<serde_json::Value>, DjangoOrmError> {
+    ) -> Result<Vec<serde_json::Value>, ErgormError> {
         use sea_orm::{JsonValue, QuerySelect};
 
         if columns.is_empty() {
@@ -2199,8 +2198,8 @@ where
         &self,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<E::Model, DjangoOrmError>> + use<'a, E, C, S>,
-        DjangoOrmError,
+        impl futures::Stream<Item = Result<E::Model, ErgormError>> + use<'a, E, C, S>,
+        ErgormError,
     > {
         use futures::stream::{self, StreamExt};
         use sea_orm::QuerySelect;
@@ -2220,7 +2219,7 @@ where
 
                 let results: Vec<E::Model> = match select.all(db).await {
                     Ok(r) => r,
-                    Err(e) => return Some((Err(DjangoOrmError::from(e)), (offset, true))),
+                    Err(e) => return Some((Err(ErgormError::from(e)), (offset, true))),
                 };
 
                 let is_done = results.len() < chunk_size as usize;
@@ -2262,8 +2261,8 @@ where
         columns: Vec<E::Column>,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C, S>,
-        DjangoOrmError,
+        impl futures::Stream<Item = Result<serde_json::Value, ErgormError>> + use<'a, E, C, S>,
+        ErgormError,
     > {
         use futures::stream::{self, StreamExt};
         use sea_orm::QuerySelect;
@@ -2297,7 +2296,7 @@ where
                 let results: Vec<serde_json::Value> =
                     match select.limit(chunk_size).offset(offset).into_json().all(db).await {
                         Ok(r) => r,
-                        Err(e) => return Some((Err(DjangoOrmError::from(e)), (offset, true))),
+                        Err(e) => return Some((Err(ErgormError::from(e)), (offset, true))),
                     };
 
                 let is_done = results.len() < chunk_size as usize;
@@ -2350,8 +2349,8 @@ where
         flat: bool,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<serde_json::Value, DjangoOrmError>> + use<'a, E, C, S>,
-        DjangoOrmError,
+        impl futures::Stream<Item = Result<serde_json::Value, ErgormError>> + use<'a, E, C, S>,
+        ErgormError,
     > {
         use futures::stream::StreamExt;
 
@@ -2365,7 +2364,7 @@ where
                     result.and_then(|obj| {
                         obj.as_object().and_then(|map| map.values().next().cloned()).ok_or_else(
                             || {
-                                DjangoOrmError::validation(
+                                ErgormError::validation(
                                     "QuerySet",
                                     "values_list",
                                     "Invalid value format",
@@ -2425,7 +2424,7 @@ where
         &self,
         columns: Vec<E::Column>,
         flat: bool,
-    ) -> Result<Vec<serde_json::Value>, DjangoOrmError> {
+    ) -> Result<Vec<serde_json::Value>, ErgormError> {
         use sea_orm::{JsonValue, QuerySelect};
 
         if columns.is_empty() {
@@ -2529,9 +2528,9 @@ where
     ///
     /// - `.explain_analyze()` - Runs query and provides actual timings
     /// - `.debug_sql()` - Shows the raw SQL query
-    pub async fn explain(&self) -> Result<String, DjangoOrmError>
+    pub async fn explain(&self) -> Result<String, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         use sea_orm::QueryTrait;
 
@@ -2595,9 +2594,9 @@ where
     /// - **`SQLite`**: Limited - same as `explain()`
     /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
     /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
-    pub async fn explain_analyze(&self) -> Result<String, DjangoOrmError>
+    pub async fn explain_analyze(&self) -> Result<String, ErgormError>
     where
-        E: crate::traits::DjangoEntity,
+        E: crate::traits::ErgormEntity,
     {
         use sea_orm::QueryTrait;
 
@@ -2649,7 +2648,7 @@ where
     ///     println!("{}: ${}", summary.title, summary.price);
     /// }
     /// ```
-    pub async fn project<T>(&self) -> Result<Vec<T>, DjangoOrmError>
+    pub async fn project<T>(&self) -> Result<Vec<T>, ErgormError>
     where
         T: FromQueryResult + Send,
     {

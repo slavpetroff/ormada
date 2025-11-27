@@ -1,15 +1,15 @@
 //! Core traits for Django-like ORM functionality
 
-use crate::error::DjangoOrmError;
+use crate::error::ErgormError;
 use sea_orm::{ConnectionTrait, EntityTrait};
 
 /// Trait alias for connections that support Django-style operations
 ///
 /// This is a marker trait for types that implement `ConnectionTrait`.
 /// For transactions, use the `tx!` macro or `#[atomic]` attribute.
-pub trait DjangoConnection: ConnectionTrait {}
+pub trait ErgormConnection: ConnectionTrait {}
 
-impl<T: ConnectionTrait> DjangoConnection for T {}
+impl<T: ConnectionTrait> ErgormConnection for T {}
 
 // ============================================================================
 // Entity Capability Enums
@@ -69,12 +69,12 @@ impl Default for SoftDeleteConfig {
 ///
 /// This is automatically implemented by #[derive(DjangoModel)] and #[`django_model`].
 /// It handles auto-increment IDs, `auto_now/auto_now_add` timestamps, and field validation.
-pub trait DjangoEntity: EntityTrait {
+pub trait ErgormEntity: EntityTrait {
     /// Convert a Model to `ActiveModel` for creation with validation
     ///
     /// This method validates field constraints (`max_length`, range, etc.) before creating
     /// the `ActiveModel`. Returns an error if validation fails.
-    fn to_active_model_for_create(model: Self::Model) -> Result<Self::ActiveModel, DjangoOrmError>;
+    fn to_active_model_for_create(model: Self::Model) -> Result<Self::ActiveModel, ErgormError>;
 
     /// Save a model (update all fields)
     ///
@@ -83,7 +83,7 @@ pub trait DjangoEntity: EntityTrait {
     async fn save_model<C: ConnectionTrait>(
         db: &C,
         model: Self::Model,
-    ) -> Result<Self::Model, DjangoOrmError>;
+    ) -> Result<Self::Model, ErgormError>;
 
     /// Get soft delete configuration for this entity
     ///
@@ -121,18 +121,18 @@ mod tests {
     #[test]
     fn test_django_connection_trait_exists() {
         // This is a compile-time test - if it compiles, the trait works
-        fn assert_django_connection<T: DjangoConnection>() {}
+        fn assert_django_connection<T: ErgormConnection>() {}
 
-        // Test that DatabaseConnection implements DjangoConnection
+        // Test that DatabaseConnection implements ErgormConnection
         assert_django_connection::<DatabaseConnection>();
     }
 
     #[test]
     fn test_trait_bound_convenience() {
-        // Verify that DjangoConnection can be used as a single bound
-        fn generic_with_django_connection<C: DjangoConnection>() {}
+        // Verify that ErgormConnection can be used as a single bound
+        fn generic_with_django_connection<C: ErgormConnection>() {}
 
-        // This should compile with DjangoConnection instead of multiple bounds
+        // This should compile with ErgormConnection instead of multiple bounds
         generic_with_django_connection::<DatabaseConnection>();
     }
 

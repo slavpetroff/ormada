@@ -41,7 +41,7 @@
 //!     db: &DatabaseConnection,
 //!     title: String,
 //!     author_name: String,
-//! ) -> Result<Book, DjangoOrmError> {
+//! ) -> Result<Book, ErgormError> {
 //!     // This entire function runs in a transaction
 //!     let author = Author::objects(db)
 //!         .create(Author {
@@ -71,7 +71,7 @@
 //!     
 //!     // If this fails, book creation is rolled back
 //!     if book.price < 0 {
-//!         return Err(DjangoOrmError::Custom("Invalid price".into()));
+//!         return Err(ErgormError::Custom("Invalid price".into()));
 //!     }
 //!     
 //!     Ok(book)
@@ -122,7 +122,7 @@
 //!     
 //!     // This fails - entire transaction rolls back
 //!     if author.age < 18 {
-//!         return Err(DjangoOrmError::Custom("Author must be 18+".into()));
+//!         return Err(ErgormError::Custom("Author must be 18+".into()));
 //!     }
 //!     
 //!     let book = create_book(txn, author.id).await?;
@@ -214,10 +214,10 @@ macro_rules! tx {
             use sea_orm::TransactionTrait;
 
             // Begin transaction - static dispatch, no boxing
-            let __txn = $db.begin().await.map_err($crate::error::DjangoOrmError::from)?;
+            let __txn = $db.begin().await.map_err($crate::error::ErgormError::from)?;
 
             // Execute the body directly - user controls the return type
-            let __result: Result<_, $crate::error::DjangoOrmError> = (|| async {
+            let __result: Result<_, $crate::error::ErgormError> = (|| async {
                 let $txn = &__txn;
                 $body
             })()
@@ -226,7 +226,7 @@ macro_rules! tx {
             // Commit or rollback based on result
             match __result {
                 Ok(__value) => {
-                    __txn.commit().await.map_err($crate::error::DjangoOrmError::from)?;
+                    __txn.commit().await.map_err($crate::error::ErgormError::from)?;
                     Ok(__value)
                 }
                 Err(__err) => {
