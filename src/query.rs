@@ -1050,15 +1050,15 @@ where
 
         // Cache miss - execute query and cache results
         let results = query.all(self.inner.db).await?;
-        let results_arc = Arc::new(results.clone());
+        let results_arc = Arc::new(results);
 
         // Update cache (exclusive write lock)
         {
             let mut cache = self.inner.cache.write().await;
-            *cache = Some(results_arc);
+            *cache = Some(Arc::clone(&results_arc));
         }
 
-        Ok(results)
+        Ok((*results_arc).clone())
     }
 
     /// Execute query and return first result (Ormada's .`first()`)
