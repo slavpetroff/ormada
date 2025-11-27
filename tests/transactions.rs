@@ -3,14 +3,16 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::uninlined_format_args)]
 
 //! Transaction integration tests
 
 mod fixtures;
 
 use fixtures::*;
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // Basic Transaction Tests
@@ -57,7 +59,7 @@ async fn test_tx_macro_commit(#[future] db: DatabaseRouter) {
 #[awt]
 #[tokio::test]
 async fn test_tx_macro_rollback_on_error(#[future] db: DatabaseRouter) {
-    let result: Result<(), ErgormError> = tx!(db, |txn| async move {
+    let result: Result<(), OrmadaError> = tx!(db, |txn| async move {
         // Create author
         let _author = Author::objects(txn)
             .create(Author {
@@ -69,7 +71,7 @@ async fn test_tx_macro_rollback_on_error(#[future] db: DatabaseRouter) {
             .await?;
 
         // Trigger error to test rollback
-        return Err(ErgormError::validation("test", "rollback", "Intentional error"));
+        return Err(OrmadaError::validation("test", "rollback", "Intentional error"));
     })
     .await;
 
@@ -93,8 +95,8 @@ async fn test_transaction_with_multiple_creates(#[future] db: DatabaseRouter) {
         for i in 1..=5 {
             let author = Author::objects(txn)
                 .create(Author {
-                    name: format!("Author {}", i),
-                    email: format!("author{}@example.com", i),
+                    name: format!("Author {i}"),
+                    email: format!("author{i}@example.com"),
                     age: 25 + i,
                     ..Default::default()
                 })
@@ -146,7 +148,7 @@ async fn test_transaction_rollback_on_constraint_violation(
 ) {
     let initial_count = Book::objects(&db).count().await.unwrap();
 
-    let result: Result<(), ErgormError> = tx!(db, |txn| async move {
+    let result: Result<(), OrmadaError> = tx!(db, |txn| async move {
         // Create valid book
         Book::objects(txn)
             .create(Book {
@@ -384,11 +386,7 @@ async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
             .await?;
 
         // Force error to test rollback
-        Err::<(), ErgormError>(ErgormError::validation(
-            "test",
-            "rollback",
-            "Intentional error",
-        ))
+        Err::<(), OrmadaError>(OrmadaError::validation("test", "rollback", "Intentional error"))
     })
     .await;
 
@@ -446,7 +444,7 @@ async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
                 })
                 .await?;
 
-            Err::<(), ErgormError>(ErgormError::validation("test", "rollback", "Inner fail"))
+            Err::<(), OrmadaError>(OrmadaError::validation("test", "rollback", "Inner fail"))
         })
         .await;
 

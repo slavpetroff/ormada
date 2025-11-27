@@ -9,9 +9,9 @@
 mod fixtures;
 
 use fixtures::*;
+use ormada::prelude::*;
+use ormada::router::{ConsistencyContext, DatabaseRouter};
 use rstest::*;
-use seaorm_django::prelude::*;
-use seaorm_django::router::{ConsistencyContext, DatabaseRouter};
 
 #[tokio::test]
 async fn test_router_with_replicas() {
@@ -466,7 +466,7 @@ async fn test_router_tx_macro() {
     Author::create_table(&router).await.unwrap();
 
     // Use tx! macro on router
-    let author = seaorm_django::tx!(router, |txn| async move {
+    let author = ormada::tx!(router, |txn| async move {
         Author::objects(txn)
             .create(Author {
                 id: 0,
@@ -497,7 +497,7 @@ async fn test_router_nested_tx_macro() {
     Book::create_table(&router).await.unwrap();
 
     // Use nested tx! on router
-    let (author, book) = seaorm_django::tx!(router, |txn| async move {
+    let (author, book) = ormada::tx!(router, |txn| async move {
         let author = Author::objects(txn)
             .create(Author {
                 id: 0,
@@ -510,7 +510,7 @@ async fn test_router_nested_tx_macro() {
             .await?;
 
         // Nested transaction
-        let book = seaorm_django::tx!(txn, |inner| async move {
+        let book = ormada::tx!(txn, |inner| async move {
             Book::objects(inner)
                 .create(Book {
                     id: 0,
@@ -547,8 +547,8 @@ async fn test_router_multiple_queries() {
         Author::objects(&router)
             .create(Author {
                 id: 0,
-                name: format!("Author {}", i),
-                email: format!("author{}@test.com", i),
+                name: format!("Author {i}"),
+                email: format!("author{i}@test.com"),
                 age: 20 + i,
                 created_at: chrono::Utc::now().fixed_offset(),
                 updated_at: chrono::Utc::now().fixed_offset(),

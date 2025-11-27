@@ -14,7 +14,7 @@ use syn::{parse_macro_input, ItemFn};
 /// async fn create_book_with_author(
 ///     db: &DatabaseConnection,
 ///     title: String,
-/// ) -> Result<Book, DjangoOrmError> {
+/// ) -> Result<Book, OrmadaOrmError> {
 ///     let author = Author::objects(db).create(...).await?;
 ///     Book::objects(db).create(Book { author_id: author.id, ... }).await
 /// }
@@ -55,7 +55,7 @@ pub fn impl_atomic(args: TokenStream, input: TokenStream) -> TokenStream {
             let __txn = #db_arg_name.begin().await?;
 
             // Execute the body with transaction shadowing the db argument
-            let __result: Result<_, seaorm_django::error::DjangoOrmError> = async {
+            let __result: Result<_, ormada::error::OrmadaOrmError> = async {
                 // Shadow the db argument with the transaction handle
                 let #db_arg_name = &__txn;
 

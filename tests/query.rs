@@ -3,16 +3,22 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::needless_update)]
 
 //! Query integration tests
 //!
-//! This module contains all query-related integration tests for the Django-like ORM.
+//! This module contains all query-related integration tests for the Ormada-like ORM.
 
 mod fixtures;
 
 use fixtures::*;
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // Basic Query Operations

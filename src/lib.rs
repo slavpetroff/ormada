@@ -1,6 +1,6 @@
-//! # seaorm-django
+//! # ormada
 //!
-//! **Django-inspired ergonomic ORM for `SeaORM` with zero-cost abstractions**
+//! **Ormada-inspired ergonomic ORM for `SeaORM` with zero-cost abstractions**
 
 // Allow test code to use unwrap/expect for clarity
 #![cfg_attr(test, allow(clippy::unwrap_used))]
@@ -9,16 +9,16 @@
 #![cfg_attr(test, allow(unused_must_use))]
 #![cfg_attr(test, allow(non_snake_case))]
 //!
-//! This library brings Django's elegant ORM API to Rust, providing:
+//! This library brings Ormada's elegant ORM API to Rust, providing:
 //! - **🚀 Zero-cost abstractions**: Compile-time typed relations, no runtime overhead
 //! - **🎯 Type-safe**: Full compile-time checking, works with `SeaORM`'s generated types
-//! - **🐍 Django-like**: 85%+ API compatibility for familiar, ergonomic queries
+//! - **🐍 Ormada-like**: 85%+ API compatibility for familiar, ergonomic queries
 //! - **⚡ Performance**: No duplication, direct integration with `SeaORM`
 //!
 //! ## Core Features
 //!
 //! ### 📊 Query API
-//! Django-style `QuerySet` with filtering, ordering, pagination, and aggregation:
+//! Ormada-style `QuerySet` with filtering, ordering, pagination, and aggregation:
 //! - `filter()` / `exclude()` - WHERE clauses with method chaining
 //! - `distinct()` - Remove duplicate rows
 //! - `order_by_asc()` / `order_by_desc()` - Ordering
@@ -39,8 +39,8 @@
 //! - All executed at database level for performance
 //!
 //! ### ✍️ Write API
-//! Django-style model operations:
-//! - `save()` - Django-like full model updates
+//! Ormada-style model operations:
+//! - `save()` - Ormada-like full model updates
 //! - `update()` - Bulk updates with filters
 //! - `delete()` - Soft/hard delete operations
 //!
@@ -50,7 +50,7 @@
 //! - 10-100x faster than individual operations
 //!
 //! ### 🔒 Transactions
-//! Django-style atomic operations for data consistency:
+//! Ormada-style atomic operations for data consistency:
 //! - `atomic()` - Execute operations in a transaction
 //! - `#[atomic]` - Attribute macro for transactional functions (new!)
 //! - `savepoint()` - Nested transactions with rollback points
@@ -60,7 +60,7 @@
 //! ### 🔍 Q Objects
 //! Complex query building with OR/AND/NOT logic:
 //! - `Q::all()` - AND conditions
-//! - `Q::any()` - OR conditions  
+//! - `Q::any()` - OR conditions
 //! - `Q::not()` - NOT conditions
 //! - Nestable and combinable
 //!
@@ -73,7 +73,7 @@
 //! ## Quick Start
 //!
 //! ```rust,ignore
-//! use seaorm_django::prelude::*;
+//! use ormada::prelude::*;
 //! use sea_orm::ColumnTrait;
 //!
 //! // === QUERYING ===
@@ -130,7 +130,7 @@
 //!     ..Default::default()
 //! }).await?;
 //!
-//! // Update (Django-style: updates ALL fields)
+//! // Update (Ormada-style: updates ALL fields)
 //! let updated = Book::save(db, book).await?;
 //!
 //! // Bulk update
@@ -148,7 +148,7 @@
 //! // === TRANSACTIONS ===
 //!
 //! // Atomic operations - all succeed or all fail - simple and ergonomic!
-//! use seaorm_django::tx;
+//! use ormada::tx;
 //!
 //! let (author, book) = tx!(db, |txn| async move {
 //!     // Create author
@@ -158,7 +158,7 @@
 //!         age: 30,
 //!         ..Default::default()
 //!     }).await?;
-//!     
+//!
 //!     // Create book - if this fails, author creation also rolls back
 //!     let book = Book::objects(txn).create(Book {
 //!         title: "Rust Guide".to_string(),
@@ -166,14 +166,14 @@
 //!         price: 2999,
 //!         ..Default::default()
 //!     }).await?;
-//!     
+//!
 //!     Ok((author, book))
 //! }).await?;
 //! ```
 //!
 //! ## Column Operations
 //!
-//! All `SeaORM` Column enums automatically get Django-like methods via `ColumnExt`:
+//! All `SeaORM` Column enums automatically get Ormada-like methods via `ColumnExt`:
 //!
 //! ```rust,ignore
 //! // String operations
@@ -202,22 +202,22 @@
 //! Enable the `derive` feature for automatic implementation:
 //!
 //! ```rust,ignore
-//! use seaorm_django_derive::DjangoModel;
+//! use ormada_derive::OrmadaModel;
 //! use sea_orm::entity::prelude::*;
 //!
-//! #[derive(DjangoModel, DeriveEntityModel)]
+//! #[derive(OrmadaModel, DeriveEntityModel)]
 //! #[sea_orm(table_name = "books")]
-//! #[django(relations(author = "author::Entity"))]
+//! #[ormada(relations(author = "author::Entity"))]
 //! pub struct Model {
 //!     #[sea_orm(primary_key)]
 //!     pub id: i32,
 //!     pub title: String,
 //!     pub author_id: i32,
-//!     
-//!     #[django(auto_now_add)]
+//!
+//!     #[ormada(auto_now_add)]
 //!     pub created_at: DateTimeWithTimeZone,
-//!     
-//!     #[django(auto_now)]
+//!
+//!     #[ormada(auto_now)]
 //!     pub updated_at: DateTimeWithTimeZone,
 //! }
 //! ```
@@ -231,23 +231,23 @@
 
 #![deny(missing_docs)]
 #![allow(async_fn_in_trait)]
-#![doc(html_root_url = "https://docs.rs/seaorm-django/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/ormada/0.1.0")]
 
 // =============================================================================
-// Django-like Module Structure
+// Ormada-like Module Structure
 // =============================================================================
-// These modules mirror Django's package structure for familiarity:
-// - db: Database connections, transactions (like django.db)
-// - fields: Column types, value types (like django.db.models.fields)
-// - models: Entity/model traits (like django.db.models)
+// These modules mirror Ormada's package structure for familiarity:
+// - db: Database connections, transactions (like ormada.db)
+// - fields: Column types, value types (like ormada.db.models.fields)
+// - models: Entity/model traits (like ormada.db.models)
 
-/// Database connection and transaction types (`django.db` equivalent)
+/// Database connection and transaction types (`ormada.db` equivalent)
 pub mod db;
 
-/// Field and column types (`django.db.models.fields` equivalent)
+/// Field and column types (`ormada.db.models.fields` equivalent)
 pub mod fields;
 
-/// Model and entity types (`django.db.models` equivalent)
+/// Model and entity types (`ormada.db.models` equivalent)
 pub mod models;
 
 // =============================================================================
@@ -269,7 +269,7 @@ pub mod error;
 /// Lifecycle hooks (before_save, after_create, etc.)
 pub mod hooks;
 
-/// QuerySet API - Django-style query building
+/// QuerySet API - Ormada-style query building
 pub mod query;
 
 /// Relation handling and eager loading
@@ -304,15 +304,15 @@ pub use internal as __internal;
 
 /// Convenience re-exports for common usage
 ///
-/// Import everything you need with: `use seaorm_django::prelude::*;`
+/// Import everything you need with: `use ormada::prelude::*;`
 pub mod prelude {
-    //! Commonly used imports for seaorm-django
+    //! Commonly used imports for ormada
     //!
     //! This prelude provides all the types you need to work with the ORM.
     //! Users should ONLY need to import from here - no direct `sea_orm` imports needed.
 
     // =========================================================================
-    // Database (django.db equivalent)
+    // Database (ormada.db equivalent)
     // =========================================================================
     pub use crate::db::{
         Database, DatabaseBackend, DatabaseConnection, DatabaseTransaction, DbErr, IsolationLevel,
@@ -320,7 +320,7 @@ pub mod prelude {
     };
 
     // =========================================================================
-    // Fields (django.db.models.fields equivalent)
+    // Fields (ormada.db.models.fields equivalent)
     // =========================================================================
     pub use crate::fields::{
         ActiveValue, ColumnTrait, Condition, DateTimeWithTimeZone, ExprTrait, NotSet, Order, Set,
@@ -328,7 +328,7 @@ pub mod prelude {
     };
 
     // =========================================================================
-    // Models (django.db.models equivalent)
+    // Models (ormada.db.models equivalent)
     // =========================================================================
     pub use crate::models::{EntityTrait, FromQueryResult, ModelTrait};
 
@@ -337,7 +337,7 @@ pub mod prelude {
     // =========================================================================
     pub use crate::aggregations::{AggregateExt, AggregateValue};
     pub use crate::batching;
-    pub use crate::error::ErgormError;
+    pub use crate::error::OrmadaError;
     pub use crate::hooks::LifecycleHooks;
     pub use crate::query::{
         Aggregated, Aggregation, CanExecute, CanFilter, CanOrder, CanPaginate, ColumnExt,
@@ -348,7 +348,7 @@ pub mod prelude {
     pub use crate::router::{
         ConsistencyContext, DatabaseRouter, RoutingStrategy, TransactionState,
     };
-    pub use crate::traits::{ErgormConnection, ErgormEntity, SoftDeleteConfig, WithRelationsTrait};
+    pub use crate::traits::{OrmadaConnection, OrmadaEntity, SoftDeleteConfig, WithRelationsTrait};
     pub use crate::types::OnDelete;
     pub use async_trait::async_trait;
 
@@ -359,7 +359,7 @@ pub mod prelude {
 
     // Derive macros
     #[cfg(feature = "derive")]
-    pub use seaorm_django_derive::{atomic, ergorm_model, ergorm_projection, ErgormModel};
+    pub use ormada_derive::{atomic, ergorm_projection, ormada_model, OrmadaModel};
 
     // =========================================================================
     // Utilities

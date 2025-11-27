@@ -6,14 +6,14 @@
 
 //! Soft delete integration tests
 
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // Model with soft delete enabled
 pub mod soft_article {
     use super::*;
 
-    #[ergorm_model(table = "soft_articles")]
+    #[ormada_model(table = "soft_articles")]
     pub struct SoftArticle {
         #[primary_key]
         pub id: i32,

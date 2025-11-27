@@ -3,14 +3,17 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
 
 //! Write operations integration tests
 
 mod fixtures;
 
 use fixtures::*;
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // Create Operations

@@ -3,14 +3,15 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::indexing_slicing)]
 
 //! Relations integration tests - `prefetch_related` and N+1 prevention
 
 mod fixtures;
 
 use fixtures::*;
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // Basic Relation Loading

@@ -1,4 +1,4 @@
-# Ergorm
+# Ormada
 
 **Ergonomic ORM for SeaORM with zero-cost abstractions**
 
@@ -20,16 +20,16 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ergorm = { version = "0.3", features = ["derive"] }
+ormada = { version = "0.3", features = ["derive"] }
 sea-orm = "0.12"
 ```
 
 ### Define a Model
 
 ```rust
-use ergorm::prelude::*;
+use ormada::prelude::*;
 
-#[ergorm_model(table = "books")]
+#[ormada_model(table = "books")]
 pub struct Book {
     #[primary_key]
     pub id: i32,
@@ -53,10 +53,10 @@ That's it! No manual `impl LifecycleHooks` needed.
 ### Connect and Query
 
 ```rust
-use ergorm::prelude::*;
+use ormada::prelude::*;
 
 #[tokio::main]
-async fn main() -> Result<(), ErgormError> {
+async fn main() -> Result<(), OrmadaError> {
     // Connect using DatabaseRouter (supports primary/replica routing)
     let db = Database::connect("sqlite::memory:").await?;
     let router = DatabaseRouter::new_single(db);
@@ -100,7 +100,7 @@ async fn main() -> Result<(), ErgormError> {
 The `DatabaseRouter` provides intelligent routing for read/write operations:
 
 ```rust
-use ergorm::prelude::*;
+use ormada::prelude::*;
 
 // Single database (development)
 let router = DatabaseRouter::new_single(primary_db);
@@ -126,7 +126,7 @@ let books = Book::objects(&router).all().await?;  // → Primary (for consistenc
 ### Using `tx!` Macro (Recommended)
 
 ```rust
-use ergorm::prelude::*;
+use ormada::prelude::*;
 
 let result = tx!(router, |txn| async move {
     let author = Author::objects(txn)
@@ -144,10 +144,10 @@ let result = tx!(router, |txn| async move {
 ### Using `#[atomic]` Decorator
 
 ```rust
-use ergorm::prelude::*;
+use ormada::prelude::*;
 
 #[atomic(db)]
-async fn create_author_with_book(db: &DatabaseRouter) -> Result<(), ErgormError> {
+async fn create_author_with_book(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     // Everything here runs in a transaction
     let author = Author::objects(db).create(...).await?;
     let book = Book::objects(db).create(...).await?;
@@ -160,17 +160,17 @@ async fn create_author_with_book(db: &DatabaseRouter) -> Result<(), ErgormError>
 By default, hooks are auto-generated and do nothing. For custom hooks:
 
 ```rust
-#[ergorm_model(table = "books", hooks = true)]
+#[ormada_model(table = "books", hooks = true)]
 pub struct Book { /* fields */ }
 
 #[async_trait]
 impl LifecycleHooks for book::Model {
-    async fn before_save(&mut self) -> Result<(), ErgormError> {
+    async fn before_save(&mut self) -> Result<(), OrmadaError> {
         // Validate, transform, log, etc.
         Ok(())
     }
     
-    async fn after_create(&self) -> Result<(), ErgormError> {
+    async fn after_create(&self) -> Result<(), OrmadaError> {
         // Send notification, update cache, etc.
         Ok(())
     }
@@ -227,7 +227,7 @@ Book::objects(&db).filter(q).all().await?
 ## Soft Delete
 
 ```rust
-#[django_model(table = "articles")]
+#[ormada_model(table = "articles")]
 pub struct Article {
     #[primary_key]
     pub id: i32,

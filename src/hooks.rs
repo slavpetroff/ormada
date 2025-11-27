@@ -1,6 +1,6 @@
 //! Lifecycle hooks for models
 //!
-//! This module provides lifecycle hooks similar to Django's signals and model hooks.
+//! This module provides lifecycle hooks similar to Ormada's signals and model hooks.
 //! Hooks are methods that are automatically called at specific points in a model's lifecycle.
 //!
 //! # Available Hooks
@@ -20,7 +20,7 @@
 //! use seaorm_django::prelude::*;
 //! use async_trait::async_trait;
 //!
-//! #[django_model(table = "books")]
+//! #[ormada_model(table = "books")]
 //! pub struct Book {
 //!     #[primary_key]
 //!     pub id: i32,
@@ -30,14 +30,14 @@
 //!
 //! #[async_trait]
 //! impl LifecycleHooks for Book {
-//!     async fn before_save(&mut self) -> Result<(), ErgormError> {
+//!     async fn before_save(&mut self) -> Result<(), OrmadaError> {
 //!         self.updated_at = Utc::now().into();
 //!         Ok(())
 //!     }
 //! }
 //! ```
 
-use crate::error::ErgormError;
+use crate::error::OrmadaError;
 use async_trait::async_trait;
 
 /// Lifecycle hooks for models - implement this trait to add custom behavior.
@@ -50,7 +50,7 @@ use async_trait::async_trait;
 /// ```rust,ignore
 /// #[async_trait]
 /// impl LifecycleHooks for Book {
-///     async fn before_save(&mut self) -> Result<(), ErgormError> {
+///     async fn before_save(&mut self) -> Result<(), OrmadaError> {
 ///         self.updated_at = Utc::now().into();
 ///         Ok(())
 ///     }
@@ -59,42 +59,42 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait LifecycleHooks: Sized + Send + Sync {
     /// Called before creating a new record (INSERT)
-    async fn before_create(&mut self) -> Result<(), ErgormError> {
+    async fn before_create(&mut self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called after creating a new record (INSERT)
-    async fn after_create(&self) -> Result<(), ErgormError> {
+    async fn after_create(&self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called before updating an existing record (UPDATE)
-    async fn before_update(&mut self) -> Result<(), ErgormError> {
+    async fn before_update(&mut self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called after updating an existing record (UPDATE)
-    async fn after_update(&self) -> Result<(), ErgormError> {
+    async fn after_update(&self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called before save (CREATE or UPDATE)
-    async fn before_save(&mut self) -> Result<(), ErgormError> {
+    async fn before_save(&mut self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called after save (CREATE or UPDATE)
-    async fn after_save(&self) -> Result<(), ErgormError> {
+    async fn after_save(&self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called before deleting a record (DELETE)
-    async fn before_delete(&self) -> Result<(), ErgormError> {
+    async fn before_delete(&self) -> Result<(), OrmadaError> {
         Ok(())
     }
 
     /// Called after deleting a record (DELETE)
-    async fn after_delete(&self) -> Result<(), ErgormError> {
+    async fn after_delete(&self) -> Result<(), OrmadaError> {
         Ok(())
     }
 }

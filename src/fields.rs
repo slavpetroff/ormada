@@ -1,12 +1,12 @@
 //! Field and column types
 //!
-//! This module provides field-related types, mirroring Django's `django.db.models.fields`.
+//! This module provides field-related types, mirroring Ormada's `ormada.db.models.fields`.
 //! Users should import from here instead of using `sea_orm` directly.
 //!
 //! # Usage
 //!
 //! ```rust,ignore
-//! use seaorm_django::fields::{ColumnTrait, Value};
+//! use ormada::fields::{ColumnTrait, Value};
 //!
 //! // Column operations
 //! let condition = Book::Title.eq("Rust");
@@ -45,5 +45,5 @@ pub use sea_orm::PrimaryKeyTrait;
 pub use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 
 /// Type alias for datetime with timezone (`DateTime<FixedOffset>`)
-/// This matches SeaORM's `DateTimeWithTimeZone` type and Django's `DateTimeField`
+/// This matches SeaORM's `DateTimeWithTimeZone` type and Ormada's `DateTimeField`
 pub type DateTimeWithTimeZone = DateTime<FixedOffset>;

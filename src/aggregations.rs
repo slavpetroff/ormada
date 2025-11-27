@@ -1,6 +1,6 @@
-//! Aggregation functions for database operations (Django's aggregate/annotate)
+//! Aggregation functions for database operations (Ormada's aggregate/annotate)
 //!
-//! This module provides Django-style aggregation functions like COUNT, SUM, AVG, MAX, MIN.
+//! This module provides Ormada-style aggregation functions like COUNT, SUM, AVG, MAX, MIN.
 //! These operations are performed at the database level for optimal performance.
 //!
 //! # Examples
@@ -8,7 +8,7 @@
 //! ## Basic Aggregations
 //!
 //! ```rust,ignore
-//! use seaorm_django::prelude::*;
+//! use ormada::prelude::*;
 //!
 //! // Get total count
 //! let total = Book::objects(db)
@@ -53,7 +53,7 @@
 //! println!("Average price: {}", stats.averages.get("price").unwrap());
 //! ```
 
-use crate::error::ErgormError;
+use crate::error::OrmadaError;
 use crate::query::QuerySet;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QuerySelect};
 use std::collections::HashMap;
@@ -70,7 +70,7 @@ use std::collections::HashMap;
 /// # Example
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// let value = AggregateValue::Sum {
 ///     column: "price".into(),
@@ -211,7 +211,7 @@ impl AggregateValue {
 
 /// Extension trait for aggregation operations on `QuerySet`
 pub trait AggregateExt<E: EntityTrait> {
-    /// Count records (Django's .`count()`)
+    /// Count records (Ormada's .`count()`)
     ///
     /// Returns the number of records matching the query.
     ///
@@ -225,9 +225,9 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Published books: {}", count);
     /// ```
-    async fn aggregate_count(self) -> Result<u64, ErgormError>;
+    async fn aggregate_count(self) -> Result<u64, OrmadaError>;
 
-    /// Sum numeric column values (Django's .aggregate(Sum('field')))
+    /// Sum numeric column values (Ormada's .aggregate(Sum('field')))
     ///
     /// Calculates the sum of all values in the specified column.
     ///
@@ -245,9 +245,9 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// - `Some(value)` - The sum if records exist
     /// - `None` - If no records match the query
-    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
+    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError>;
 
-    /// Calculate average of numeric column (Django's .aggregate(Avg('field')))
+    /// Calculate average of numeric column (Ormada's .aggregate(Avg('field')))
     ///
     /// Computes the arithmetic mean of all values in the specified column.
     ///
@@ -261,9 +261,9 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Average price: ${:.2}", avg_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
+    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError>;
 
-    /// Get maximum value (Django's .aggregate(Max('field')))
+    /// Get maximum value (Ormada's .aggregate(Max('field')))
     ///
     /// Finds the maximum value in the specified column.
     ///
@@ -276,9 +276,9 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Most expensive: ${}", max_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
+    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError>;
 
-    /// Get minimum value (Django's .aggregate(Min('field')))
+    /// Get minimum value (Ormada's .aggregate(Min('field')))
     ///
     /// Finds the minimum value in the specified column.
     ///
@@ -292,7 +292,7 @@ pub trait AggregateExt<E: EntityTrait> {
     ///
     /// println!("Cheapest: ${}", min_price.unwrap_or(0.0));
     /// ```
-    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError>;
+    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError>;
 }
 
 // Helper struct for parsing aggregation results
@@ -308,17 +308,17 @@ struct AggregateValueFloat {
 }
 
 impl<
-        E: EntityTrait + crate::traits::ErgormEntity,
+        E: EntityTrait + crate::traits::OrmadaEntity,
         C: ConnectionTrait,
         S: crate::query::CanExecute,
     > AggregateExt<E> for QuerySet<'_, E, C, S>
 {
-    async fn aggregate_count(self) -> Result<u64, ErgormError> {
+    async fn aggregate_count(self) -> Result<u64, OrmadaError> {
         // Use the existing count() method
         self.count().await
     }
 
-    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
+    async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
@@ -349,7 +349,7 @@ impl<
         }
     }
 
-    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
+    async fn aggregate_avg(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
 
         let column_expr = Expr::col(column.as_column_ref());
@@ -364,7 +364,7 @@ impl<
         }
     }
 
-    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
+    async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
@@ -394,7 +394,7 @@ impl<
         }
     }
 
-    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, ErgormError> {
+    async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 

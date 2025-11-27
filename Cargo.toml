@@ -1,11 +1,11 @@
 [package]
-name = "seaorm-django"
+name = "ormada"
 version = "0.1.0"
 edition = "2021"
-authors = ["SeaORM Django Contributors"]
-description = "Django-like ergonomic query API for SeaORM with zero duplication"
+authors = ["Stanislav Petroff <slavpetroff@gmail.com>"]
+description = "Django-like ergonomic query API for Rust"
 license = "MIT OR Apache-2.0"
-keywords = ["seaorm", "orm", "database", "django", "query"]
+keywords = ["orm", "database", "ormada", "query"]
 categories = ["database"]
 
 [dependencies]
@@ -21,27 +21,59 @@ async-trait = "0.1"
 rustc-hash = "2.1.1"
 
 # Optional dependencies
-seaorm-django-derive = { path = "./derive", optional = true }
+ormada-derive = { path = "./derive", optional = true }
 
 [features]
 default = ["derive"]
-derive = ["seaorm-django-derive"]
+derive = ["ormada-derive"]
 
 [lints.clippy]
-# Forbid panic-inducing methods in production code
-unwrap_used = "warn"
-expect_used = "warn"
-panic = "warn"
-# Also forbid other risky patterns
+# =============================================================================
+# PRODUCTION CODE LINTS (applied to lib, NOT tests/benches)
+# Tests override these via #![allow(...)] at the top of each test file
+# =============================================================================
+
+# Deny panic-inducing methods in production code
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+# Deny risky patterns
 indexing_slicing = "warn"
-# Encourage better error handling
 unwrap_in_result = "warn"
-# Require handling Results (especially for writes)
-unused_must_use = "warn"
+
+# Correctness (errors that are almost certainly bugs)
+correctness = { level = "deny", priority = -1 }
+
+# Style lints (warn, not deny)
+style = { level = "warn", priority = -1 }
+
+# Complexity lints
+complexity = { level = "warn", priority = -1 }
+
+# Performance lints
+perf = { level = "warn", priority = -1 }
+
+# Pedantic lints for high quality (warn only)
+pedantic = { level = "warn", priority = -1 }
+
+# Nursery lints (experimental, warn only)
+nursery = { level = "warn", priority = -1 }
+
+# Allow some pedantic lints that are too noisy
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
 
 [lints.rust]
 # Forbid unused results at the Rust level
 unused_must_use = "deny"
+# Forbid unsafe code
+unsafe_code = "forbid"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

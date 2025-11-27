@@ -9,8 +9,8 @@
 mod fixtures;
 
 use fixtures::*;
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // Basic Upsert Tests
@@ -129,8 +129,8 @@ async fn test_upsert_bulk_all_new(#[future] db: DatabaseRouter) {
     let authors: Vec<Author> = (1..=10)
         .map(|i| Author {
             id: i * 100,
-            name: format!("Author {}", i),
-            email: format!("author{}@example.com", i),
+            name: format!("Author {i}"),
+            email: format!("author{i}@example.com"),
             age: 25 + i,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
@@ -194,8 +194,8 @@ async fn test_upsert_performance(#[future] db: DatabaseRouter, #[case] count: us
     let authors: Vec<Author> = (0..count)
         .map(|i| Author {
             id: (i + 1) as i32,
-            name: format!("Author {}", i),
-            email: format!("author{}@example.com", i),
+            name: format!("Author {i}"),
+            email: format!("author{i}@example.com"),
             age: 25 + (i as i32 % 50),
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
@@ -422,9 +422,8 @@ async fn test_upsert_in_transaction(#[future] db: DatabaseRouter) {
 #[rstest]
 #[awt]
 #[tokio::test]
-async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] author: Author) {
-    let _author = author;
-    let result: Result<(), ErgormError> = tx!(db, |txn| async move {
+async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] _author: Author) {
+    let result: Result<(), OrmadaError> = tx!(db, |txn| async move {
         // Upsert that would succeed
         Author::objects(txn)
             .upsert_many(vec![Author {
@@ -441,7 +440,7 @@ async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] a
             .await?;
 
         // Force error to test rollback
-        Err(ErgormError::validation("test", "rollback", "Intentional error"))
+        Err(OrmadaError::validation("test", "rollback", "Intentional error"))
     })
     .await;
 
@@ -521,8 +520,8 @@ async fn test_upsert_all_new_records(#[future] db: DatabaseRouter) {
     let authors: Vec<Author> = (1..=5)
         .map(|i| Author {
             id: i * 100,
-            name: format!("Author {}", i),
-            email: format!("author{}@example.com", i),
+            name: format!("Author {i}"),
+            email: format!("author{i}@example.com"),
             age: 25 + i,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),

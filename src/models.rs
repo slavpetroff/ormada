@@ -1,12 +1,12 @@
 //! Model and entity types
 //!
-//! This module provides model-related types, mirroring Django's `django.db.models`.
+//! This module provides model-related types, mirroring Ormada's `ormada.db.models`.
 //! Users should import from here instead of using `sea_orm` directly.
 //!
 //! # Usage
 //!
 //! ```rust,ignore
-//! use seaorm_django::models::{EntityTrait, ModelTrait};
+//! use ormada::models::{EntityTrait, ModelTrait};
 //! ```
 
 // Entity trait - core trait for all entities

@@ -1,9 +1,9 @@
 [package]
-name = "seaorm-django-derive"
+name = "ormada-derive"
 version = "0.1.0"
 edition = "2021"
-authors = ["SeaORM Django Contributors"]
-description = "Proc macro for seaorm-django - Django-like ORM for SeaORM"
+authors = ["Stanislav Petroff <slavpetroff@gmail.com>"]
+description = "Proc macro for ormada - Djano-like ORM for Rust"
 license = "MIT OR Apache-2.0"
 
 [lib]

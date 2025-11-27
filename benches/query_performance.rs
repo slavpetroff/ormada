@@ -1,13 +1,20 @@
+// Benchmarks are allowed to use unwrap/expect for clarity
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+#![allow(unused_must_use)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::uninlined_format_args)]
+
 use std::hint::black_box;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use ormada::prelude::*;
 use sea_orm::{Database, DatabaseConnection};
-use seaorm_django::prelude::*;
 
-// Test entity for benchmarks - using ORM's django_model macro
-use seaorm_django::prelude::django_model;
+// Test entity for benchmarks - using ORM's ormada_model macro
 
-#[django_model(table = "benchmark_items")]
+#[ormada_model(table = "benchmark_items")]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkItem {
     #[primary_key]
@@ -18,9 +25,6 @@ pub struct BenchmarkItem {
     pub value: i32,
     pub category: String,
 }
-
-#[async_trait]
-impl LifecycleHooks for BenchmarkItem {}
 
 // Use the generated module directly
 
@@ -42,7 +46,7 @@ async fn setup_db() -> DatabaseConnection {
 }
 
 async fn seed_data(db: &DatabaseConnection, count: usize) {
-    use seaorm_django::query::QueryExt;
+    use ormada::query::QueryExt;
 
     // Bulk insert test data using ORM's bulk_create API
     let items: Vec<Model> = (0..count)
@@ -54,7 +58,7 @@ async fn seed_data(db: &DatabaseConnection, count: usize) {
         })
         .collect();
 
-    // Use ORM's bulk_create in chunks (per django-orm.md rule 4)
+    // Use ORM's bulk_create in chunks (per ormada-orm.md rule 4)
     for chunk in items.chunks(1000) {
         let _ = Entity::objects(db).bulk_create(chunk.to_vec()).await;
     }
@@ -70,7 +74,7 @@ fn bench_query_all_sizes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
             b.to_async(&rt).iter(|| async {
-                use seaorm_django::query::QueryExt;
+                use ormada::query::QueryExt;
                 let results = Entity::objects(&db).all().await.expect("Query failed");
                 black_box(results)
             });
@@ -87,7 +91,7 @@ fn bench_query_filtered(c: &mut Criterion) {
 
     c.bench_function("query_filtered_10k", |b| {
         b.to_async(&rt).iter(|| async {
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
             let results = Entity::objects(&db)
                 .filter(Column::Value.lt(500))
                 .all()
@@ -107,7 +111,7 @@ fn bench_aggregations(c: &mut Criterion) {
 
     group.bench_function("count", |b| {
         b.to_async(&rt).iter(|| async {
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
             let count = Entity::objects(&db).count().await.expect("Count failed");
             black_box(count)
         });
@@ -115,8 +119,8 @@ fn bench_aggregations(c: &mut Criterion) {
 
     group.bench_function("sum_with_clone", |b| {
         b.to_async(&rt).iter(|| async {
-            use seaorm_django::aggregations::AggregateExt;
-            use seaorm_django::query::QueryExt;
+            use ormada::aggregations::AggregateExt;
+            use ormada::query::QueryExt;
             let sum = Entity::objects(&db).aggregate_sum(Column::Value).await.expect("Sum failed");
             black_box(sum)
         });
@@ -134,7 +138,7 @@ fn bench_values_vs_models(c: &mut Criterion) {
 
     group.bench_function("full_models", |b| {
         b.to_async(&rt).iter(|| async {
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
             let results = Entity::objects(&db).all().await.expect("Query failed");
             black_box(results)
         });
@@ -142,7 +146,7 @@ fn bench_values_vs_models(c: &mut Criterion) {
 
     group.bench_function("values_json", |b| {
         b.to_async(&rt).iter(|| async {
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
             let results = Entity::objects(&db)
                 .values(vec![Column::Name, Column::Value])
                 .await
@@ -163,7 +167,7 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
 
     group.bench_function("all_10k", |b| {
         b.to_async(&rt).iter(|| async {
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
             let results = Entity::objects(&db).all().await.expect("Query failed");
             // Simulate processing
             let count = results.len();
@@ -174,7 +178,7 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
     group.bench_function("values_iter_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use futures::StreamExt;
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
 
             let mut stream = Entity::objects(&db)
                 .values_iter(vec![Column::Id, Column::Name], Some(500))
@@ -193,7 +197,7 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
     group.bench_function("model_iter_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use futures::StreamExt;
-            use seaorm_django::query::QueryExt;
+            use ormada::query::QueryExt;
 
             let mut stream =
                 Entity::objects(&db).iterator(Some(500)).await.expect("Iterator failed");

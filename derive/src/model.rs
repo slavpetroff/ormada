@@ -1,4 +1,4 @@
-///! Implementation of the `#[ergorm_model]` attribute macro
+///! Implementation of the `#[ormada_model]` attribute macro
 ///!
 ///! This module provides the core functionality for transforming clean model definitions
 ///! into SeaORM-compatible code with ergonomic APIs.
@@ -9,7 +9,7 @@ use syn::{
     Attribute, Data, DeriveInput, Expr, Fields, Ident, Lit, Meta, Token,
 };
 
-/// Configuration for the `#[ergorm_model]` attribute
+/// Configuration for the `#[ormada_model]` attribute
 #[derive(Debug, Clone)]
 struct ModelConfig {
     table_name: String,
@@ -308,8 +308,8 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
     })
 }
 
-/// Main implementation of the ergorm_model attribute macro
-pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
+/// Main implementation of the ormada_model attribute macro
+pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
     let config: ModelConfig = syn::parse2(attr)?;
     let mut input: DeriveInput = syn::parse2(input)?;
 
@@ -323,12 +323,12 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
             _ => {
                 return Err(syn::Error::new_spanned(
                     struct_name,
-                    "django_model only supports structs with named fields",
+                    "ormada_model only supports structs with named fields",
                 ));
             }
         },
         _ => {
-            return Err(syn::Error::new_spanned(struct_name, "django_model only supports structs"));
+            return Err(syn::Error::new_spanned(struct_name, "ormada_model only supports structs"));
         }
     };
 
@@ -404,7 +404,7 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     // Note: We don't derive Default here because we inject relation fields later
     // Use the sea_orm derive through our internal module
     input.attrs.push(syn::parse_quote! {
-        #[derive(Clone, Debug, PartialEq, Eq, ::seaorm_django::__internal::sea_orm::DeriveEntityModel)]
+        #[derive(Clone, Debug, PartialEq, Eq, ::ormada::__internal::sea_orm::DeriveEntityModel)]
     });
 
     // Add sea_orm table_name attribute
@@ -443,7 +443,7 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
                     mutability: syn::FieldMutability::None,
                     ident: Some(relation_name),
                     colon_token: Some(syn::token::Colon::default()),
-                    ty: syn::parse_quote! { ::core::option::Option<<#relation_type as ::seaorm_django::__internal::EntityTrait>::Model> },
+                    ty: syn::parse_quote! { ::core::option::Option<<#relation_type as ::ormada::__internal::EntityTrait>::Model> },
                 });
             }
         }
@@ -470,9 +470,9 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         // Auto-generate default no-op implementation
         quote! {
             // Default LifecycleHooks implementation (all hooks are no-ops)
-            // Use `#[django_model(table = "...", hooks = true)]` to provide custom hooks
-            #[::async_trait::async_trait]
-            impl ::seaorm_django::hooks::LifecycleHooks for Model {}
+            // Use `#[ormada_model(table = "...", hooks = true)]` to provide custom hooks
+            #[::ormada::__internal::async_trait]
+            impl ::ormada::hooks::LifecycleHooks for Model {}
         }
     };
 
@@ -483,12 +483,12 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         // pub(crate) allows other models to reference Entity for relations
         pub(crate) mod _internal {
             use ::serde::{Serialize, Deserialize};
-            // Use sea_orm re-exported through seaorm_django to avoid requiring direct dependency
-            // All types come from seaorm_django's internal module
-            use ::seaorm_django::__internal::sea_orm::entity::prelude::*;
-            use ::seaorm_django::__internal::*;
-            use ::seaorm_django::prelude::DateTimeWithTimeZone;
-            use ::seaorm_django::types::OnDelete;
+            // Use sea_orm re-exported through ormada to avoid requiring direct dependency
+            // All types come from ormada's internal module
+            use ::ormada::__internal::sea_orm::entity::prelude::*;
+            use ::ormada::__internal::*;
+            use ::ormada::prelude::DateTimeWithTimeZone;
+            use ::ormada::types::OnDelete;
 
             // The Model struct with DeriveEntityModel (this generates Entity internally)
             #input
@@ -499,7 +499,7 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
             // ActiveModelBehavior implementation
             #entity_impl
 
-            // Django entity trait implementation
+            // Ormada entity trait implementation
             #django_entity_impl
 
             // HasRelation implementations for foreign keys
@@ -530,20 +530,20 @@ pub fn impl_ergorm_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         #model_convenience_impl
 
         // Implement HasEntityType trait so relations! macro can extract Entity from Model
-        impl ::seaorm_django::relations::HasEntityType for Model {
+        impl ::ormada::relations::HasEntityType for Model {
             type __Entity = Entity;
         }
 
         // LifecycleHooks implementation (auto-generated unless hooks = "custom")
         #lifecycle_hooks_impl
 
-        // Forward ErgormEntity methods to Entity
+        // Forward OrmadaEntity methods to Entity
         impl Model {
             /// Validate and convert Model to ActiveModel for creation
             ///
             /// This is a convenience method that forwards to the Entity implementation.
-            pub fn to_active_model_for_create(model: Self) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::ErgormError> {
-                <Entity as ::seaorm_django::traits::ErgormEntity>::to_active_model_for_create(model)
+            pub fn to_active_model_for_create(model: Self) -> ::core::result::Result<ActiveModel, ::ormada::error::OrmadaError> {
+                <Entity as ::ormada::traits::OrmadaEntity>::to_active_model_for_create(model)
             }
         }
 
@@ -573,7 +573,7 @@ fn to_snake_case(s: &str) -> String {
     result
 }
 
-/// Strip django-specific attributes from a field, keeping only SeaORM/serde ones
+/// Strip ormada-specific attributes from a field, keeping only SeaORM/serde ones
 fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     // Make field public
     field.vis = syn::Visibility::Public(syn::token::Pub::default());
@@ -582,7 +582,7 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     let mut new_attrs = Vec::new();
 
     for attr in &field.attrs {
-        // Keep doc comments and other non-django attributes
+        // Keep doc comments and other non-ormada attributes
         if !attr.path().is_ident("primary_key")
             && !attr.path().is_ident("foreign_key")
             && !attr.path().is_ident("index")
@@ -656,7 +656,7 @@ fn generate_model_struct(
     }
 
     Ok(quote! {
-        #[derive(Clone, Debug, PartialEq, Eq, ::seaorm_django::__internal::sea_orm::DeriveEntityModel, ::serde::Serialize, ::serde::Deserialize, Default)]
+        #[derive(Clone, Debug, PartialEq, Eq, ::ormada::__internal::sea_orm::DeriveEntityModel, ::serde::Serialize, ::serde::Deserialize, Default)]
         #[sea_orm(table_name = #table_name)]
         pub struct Model {
             #(#fields)*
@@ -675,7 +675,7 @@ fn generate_column_enum(field_configs: &[(&syn::Field, FieldConfig)]) -> TokenSt
         .collect();
 
     quote! {
-        #[derive(Copy, Clone, Debug, ::seaorm_django::__internal::sea_orm::EnumIter, ::seaorm_django::__internal::sea_orm::DeriveColumn)]
+        #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DeriveColumn)]
         pub enum Column {
             #(#variants,)*
         }
@@ -692,12 +692,12 @@ fn generate_primary_key_enum(primary_key_fields: &[Ident]) -> TokenStream {
         .collect();
 
     quote! {
-        #[derive(Copy, Clone, Debug, ::seaorm_django::__internal::sea_orm::EnumIter, ::seaorm_django::__internal::sea_orm::DerivePrimaryKey)]
+        #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DerivePrimaryKey)]
         pub enum PrimaryKey {
             #(#variants,)*
         }
 
-        impl ::seaorm_django::__internal::PrimaryKeyTrait for PrimaryKey {
+        impl ::ormada::__internal::PrimaryKeyTrait for PrimaryKey {
             type ValueType = i32; // TODO: Detect actual type
         }
     }
@@ -706,7 +706,7 @@ fn generate_primary_key_enum(primary_key_fields: &[Ident]) -> TokenStream {
 fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenStream {
     if foreign_keys.is_empty() {
         return quote! {
-            #[derive(Copy, Clone, Debug, ::seaorm_django::__internal::sea_orm::EnumIter, ::seaorm_django::__internal::sea_orm::DeriveRelation)]
+            #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DeriveRelation)]
             pub enum Relation {}
         };
     }
@@ -765,7 +765,7 @@ fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenSt
         .collect();
 
     quote! {
-        #[derive(Copy, Clone, Debug, ::seaorm_django::__internal::sea_orm::EnumIter, ::seaorm_django::__internal::sea_orm::DeriveRelation)]
+        #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DeriveRelation)]
         pub enum Relation {
             #(#variants,)*
         }
@@ -774,7 +774,7 @@ fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenSt
 
 fn generate_entity_impl() -> TokenStream {
     quote! {
-        impl ::seaorm_django::__internal::ActiveModelBehavior for ActiveModel {}
+        impl ::ormada::__internal::ActiveModelBehavior for ActiveModel {}
     }
 }
 
@@ -798,7 +798,7 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() > #max {
                             return ::core::result::Result::Err(
-                                ::seaorm_django::error::ErgormError::validation(
+                                ::ormada::error::OrmadaError::validation(
                                     #table_name,
                                     #field_name_str,
                                     ::std::format!("exceeds max_length of {}", #max)
@@ -811,7 +811,7 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() < #min {
                             return ::core::result::Result::Err(
-                                ::seaorm_django::error::ErgormError::validation(
+                                ::ormada::error::OrmadaError::validation(
                                     #table_name,
                                     #field_name_str,
                                     ::std::format!("is shorter than min_length of {}", #min)
@@ -830,7 +830,7 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) < #min {
                         return ::core::result::Result::Err(
-                            ::seaorm_django::error::ErgormError::validation(
+                            ::ormada::error::OrmadaError::validation(
                                 #table_name,
                                 #field_name_str,
                                 ::std::format!("value {} is less than minimum {}", model.#field_name, #min)
@@ -844,7 +844,7 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) > #max {
                         return ::core::result::Result::Err(
-                            ::seaorm_django::error::ErgormError::validation(
+                            ::ormada::error::OrmadaError::validation(
                                 #table_name,
                                 #field_name_str,
                                 ::std::format!("value {} exceeds maximum {}", model.#field_name, #max)
@@ -858,20 +858,20 @@ fn generate_django_entity_impl(
         // Generate field assignment
         if config.auto_now_add || config.auto_now {
             create_assignments.push(quote! {
-                #field_name: ::seaorm_django::__internal::Set(now)
+                #field_name: ::ormada::__internal::Set(now)
             });
         } else if config.is_primary_key {
             create_assignments.push(quote! {
-                #field_name: ::seaorm_django::__internal::NotSet
+                #field_name: ::ormada::__internal::NotSet
             });
         } else if let Some(ref fk) = config.foreign_key {
             create_assignments.push(quote! {
-                #field_name: ::seaorm_django::__internal::Set(model.#field_name)
+                #field_name: ::ormada::__internal::Set(model.#field_name)
             });
         } else {
             // Regular field
             create_assignments.push(quote! {
-                #field_name: ::seaorm_django::__internal::Set(model.#field_name)
+                #field_name: ::ormada::__internal::Set(model.#field_name)
             });
         }
     }
@@ -880,8 +880,8 @@ fn generate_django_entity_impl(
     let soft_delete_impl = if let Some(field) = soft_delete_field {
         let field_str = field.to_string();
         quote! {
-            fn soft_delete() -> ::seaorm_django::traits::SoftDeleteConfig {
-                ::seaorm_django::traits::SoftDeleteConfig::Enabled { column: #field_str }
+            fn soft_delete() -> ::ormada::traits::SoftDeleteConfig {
+                ::ormada::traits::SoftDeleteConfig::Enabled { column: #field_str }
             }
         }
     } else {
@@ -889,21 +889,21 @@ fn generate_django_entity_impl(
     };
 
     Ok(quote! {
-        impl ::seaorm_django::traits::ErgormEntity for Entity {
-            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::ErgormError> {
+        impl ::ormada::traits::OrmadaEntity for Entity {
+            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::ormada::error::OrmadaError> {
                 // Validation logic
                 #(#validations)*
 
-                let now = ::seaorm_django::__internal::Utc::now().fixed_offset();
+                let now = ::ormada::__internal::Utc::now().fixed_offset();
                 ::core::result::Result::Ok(ActiveModel {
                     #(#create_assignments,)*
                 })
             }
 
-            async fn save_model<'a, C: ::seaorm_django::__internal::ConnectionTrait>(
+            async fn save_model<'a, C: ::ormada::__internal::ConnectionTrait>(
                 db: &'a C,
                 model: Model,
-            ) -> ::core::result::Result<Model, ::seaorm_django::error::ErgormError> {
+            ) -> ::core::result::Result<Model, ::ormada::error::OrmadaError> {
                 model.save(db).await
             }
 
@@ -920,7 +920,7 @@ fn generate_with_relations_trait(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> 
     // For now, we generate a minimal implementation with no relations
     // In the future, this could be enhanced to support actual relation loading
     quote! {
-        impl ::seaorm_django::traits::WithRelationsTrait for Entity {
+        impl ::ormada::traits::WithRelationsTrait for Entity {
             type Model = Model;
             type ModelWithRelations = Model; // For now, same as Model
 
@@ -947,25 +947,25 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
             let relation_name = format_ident!("{}", relation_name_str);
 
             quote! {
-                impl ::seaorm_django::relations::HasRelation<#entity> for Entity {
+                impl ::ormada::relations::HasRelation<#entity> for Entity {
                     type RelatedPK = i32; // TODO: Detect actual type
 
                     fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
                         model.#field_name
                     }
 
-                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::seaorm_django::__internal::EntityTrait>::Model>) {
+                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
                         model.#relation_name = related;
                     }
 
-                    async fn load_related<C: ::seaorm_django::__internal::ConnectionTrait>(
+                    async fn load_related<C: ::ormada::__internal::ConnectionTrait>(
                         models: &[Self::Model],
                         db: &C,
                     ) -> ::core::result::Result<
-                        ::seaorm_django::prelude::FxHashMap<Self::RelatedPK, <#entity as ::seaorm_django::__internal::EntityTrait>::Model>,
-                        ::seaorm_django::error::ErgormError
+                        ::ormada::prelude::FxHashMap<Self::RelatedPK, <#entity as ::ormada::__internal::EntityTrait>::Model>,
+                        ::ormada::error::OrmadaError
                     > {
-                        use ::seaorm_django::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
+                        use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
 
                         let fk_values: ::std::vec::Vec<Self::RelatedPK> = models
                             .iter()
@@ -973,20 +973,20 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
                             .collect();
 
                         if fk_values.is_empty() {
-                            return ::core::result::Result::Ok(::seaorm_django::prelude::FxHashMap::default());
+                            return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
                         }
 
-                        let pk_cols: ::std::vec::Vec<_> = <#entity as ::seaorm_django::__internal::EntityTrait>::PrimaryKey::iter()
+                        let pk_cols: ::std::vec::Vec<_> = <#entity as ::ormada::__internal::EntityTrait>::PrimaryKey::iter()
                             .map(|pk| pk.into_column())
                             .collect();
                         let id_column = pk_cols[0];
 
-                        let related_models = <#entity as ::seaorm_django::__internal::EntityTrait>::find()
+                        let related_models = <#entity as ::ormada::__internal::EntityTrait>::find()
                             .filter(id_column.is_in(fk_values))
                             .all(db)
                             .await?;
 
-                        let mut map = ::seaorm_django::prelude::FxHashMap::default();
+                        let mut map = ::ormada::prelude::FxHashMap::default();
                         for model in related_models {
                             let key = model.id;
                             map.insert(key, model);
@@ -1009,7 +1009,7 @@ fn generate_model_save_impl(
     let auto_now_updates = field_configs.iter().filter_map(|(ident, _, config)| {
         if config.auto_now {
             Some(quote! {
-                active_model.#ident = ::seaorm_django::__internal::Set(::seaorm_django::__internal::Utc::now().fixed_offset());
+                active_model.#ident = ::ormada::__internal::Set(::ormada::__internal::Utc::now().fixed_offset());
             })
         } else {
             None
@@ -1021,7 +1021,7 @@ fn generate_model_save_impl(
     let force_set_updates = field_configs.iter().filter_map(|(ident, _, config)| {
         if !config.is_primary_key && !config.auto_now {
             Some(quote! {
-                active_model.#ident = ::seaorm_django::__internal::Set(active_model.#ident.unwrap());
+                active_model.#ident = ::ormada::__internal::Set(active_model.#ident.unwrap());
             })
         } else {
             None
@@ -1036,13 +1036,13 @@ fn generate_model_save_impl(
             /// Otherwise, it inserts.
             /// Handles `auto_now` fields automatically.
             /// Triggers `before_save` and `after_save` hooks.
-            pub async fn save<'a, C: ::seaorm_django::__internal::ConnectionTrait>(
+            pub async fn save<'a, C: ::ormada::__internal::ConnectionTrait>(
                 mut self,
                 db: &'a C,
-            ) -> ::core::result::Result<Self, ::seaorm_django::error::ErgormError> {
-                use ::seaorm_django::hooks::LifecycleHooks;
-                use ::seaorm_django::__internal::ActiveModelTrait;
-                use ::seaorm_django::__internal::TryIntoModel;
+            ) -> ::core::result::Result<Self, ::ormada::error::OrmadaError> {
+                use ::ormada::hooks::LifecycleHooks;
+                use ::ormada::__internal::ActiveModelTrait;
+                use ::ormada::__internal::TryIntoModel;
 
                 // Pre-save hooks
                 <Self as LifecycleHooks>::before_save(&mut self).await?;
@@ -1082,18 +1082,18 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 /// The record remains in the database but is excluded from queries by default.
                 /// Use `.with_deleted()` to include soft-deleted records in queries.
                 /// Use `.restore()` to un-delete a soft-deleted record.
-                pub async fn delete<C: ::seaorm_django::__internal::ConnectionTrait>(
+                pub async fn delete<C: ::ormada::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<Self, ::seaorm_django::error::ErgormError> {
-                    use ::seaorm_django::__internal::{ActiveModelTrait, Set, ActiveValue};
-                    use ::seaorm_django::hooks::LifecycleHooks;
+                ) -> ::core::result::Result<Self, ::ormada::error::OrmadaError> {
+                    use ::ormada::__internal::{ActiveModelTrait, Set, ActiveValue};
+                    use ::ormada::hooks::LifecycleHooks;
 
                     <Self as LifecycleHooks>::before_delete(&self).await?;
 
                     // Convert to ActiveModel and set deleted_at
                     let mut active = ActiveModel::from(self);
-                    active.#field_name = Set(::core::option::Option::Some(::seaorm_django::__internal::Utc::now().fixed_offset()));
+                    active.#field_name = Set(::core::option::Option::Some(::ormada::__internal::Utc::now().fixed_offset()));
 
                     // Update in database
                     let updated = active.update(db).await?;
@@ -1106,12 +1106,12 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 /// Permanently delete this record from the database (hard delete).
                 ///
                 /// This cannot be undone. Use `.delete()` for soft delete instead.
-                pub async fn force_delete<C: ::seaorm_django::__internal::ConnectionTrait>(
+                pub async fn force_delete<C: ::ormada::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError> {
-                    use ::seaorm_django::__internal::ActiveModelTrait;
-                    use ::seaorm_django::hooks::LifecycleHooks;
+                ) -> ::core::result::Result<(), ::ormada::error::OrmadaError> {
+                    use ::ormada::__internal::ActiveModelTrait;
+                    use ::ormada::hooks::LifecycleHooks;
 
                     <Self as LifecycleHooks>::before_delete(&self).await?;
 
@@ -1126,12 +1126,12 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
                 /// Restore a soft-deleted record (set deleted_at to NULL).
                 ///
                 /// Makes the record visible in queries again.
-                pub async fn restore<C: ::seaorm_django::__internal::ConnectionTrait>(
+                pub async fn restore<C: ::ormada::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<Self, ::seaorm_django::error::ErgormError> {
-                    use ::seaorm_django::__internal::{ActiveModelTrait, Set, ActiveValue};
-                    use ::seaorm_django::hooks::LifecycleHooks;
+                ) -> ::core::result::Result<Self, ::ormada::error::OrmadaError> {
+                    use ::ormada::__internal::{ActiveModelTrait, Set, ActiveValue};
+                    use ::ormada::hooks::LifecycleHooks;
 
                     // TODO: Should we have before_restore hooks?
                     // For now, treat it as an update
@@ -1157,12 +1157,12 @@ fn generate_model_delete_impl(soft_delete_field: Option<&Ident>) -> syn::Result<
         Ok(quote! {
             impl Model {
                 /// Delete this record from the database.
-                pub async fn delete<C: ::seaorm_django::__internal::ConnectionTrait>(
+                pub async fn delete<C: ::ormada::__internal::ConnectionTrait>(
                     mut self,
                     db: &C,
-                ) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError> {
-                    use ::seaorm_django::__internal::ActiveModelTrait;
-                    use ::seaorm_django::hooks::LifecycleHooks;
+                ) -> ::core::result::Result<(), ::ormada::error::OrmadaError> {
+                    use ::ormada::__internal::ActiveModelTrait;
+                    use ::ormada::hooks::LifecycleHooks;
 
                     <Self as LifecycleHooks>::before_delete(&self).await?;
 
@@ -1228,21 +1228,21 @@ fn generate_model_convenience_methods(
 
         if desc {
             quote! {
-                /// Apply default ordering (from #[django_model(ordering = "...")])
-                pub fn default_ordering<C: ::seaorm_django::__internal::ConnectionTrait>(
+                /// Apply default ordering (from #[ormada_model(ordering = "...")])
+                pub fn default_ordering<C: ::ormada::__internal::ConnectionTrait>(
                     db: &C,
-                ) -> ::seaorm_django::query::QuerySet<'_, _Entity, C> {
-                    use ::seaorm_django::query::QueryExt;
+                ) -> ::ormada::query::QuerySet<'_, _Entity, C> {
+                    use ::ormada::query::QueryExt;
                     _Entity::objects(db).order_by_desc(Self::#column_ident)
                 }
             }
         } else {
             quote! {
-                /// Apply default ordering (from #[django_model(ordering = "...")])
-                pub fn default_ordering<C: ::seaorm_django::__internal::ConnectionTrait>(
+                /// Apply default ordering (from #[ormada_model(ordering = "...")])
+                pub fn default_ordering<C: ::ormada::__internal::ConnectionTrait>(
                     db: &C,
-                ) -> ::seaorm_django::query::QuerySet<'_, _Entity, C> {
-                    use ::seaorm_django::query::QueryExt;
+                ) -> ::ormada::query::QuerySet<'_, _Entity, C> {
+                    use ::ormada::query::QueryExt;
                     _Entity::objects(db).order_by_asc(Self::#column_ident)
                 }
             }
@@ -1256,32 +1256,32 @@ fn generate_model_convenience_methods(
             // Column constants for convenient access: Book::Title instead of book::Column::Title
             #(#column_constants)*
 
-            /// Get a QuerySet for this model (Django's Model.objects equivalent)
+            /// Get a QuerySet for this model (Ormada's Model.objects equivalent)
             ///
             /// # Example
             /// ```
             /// use crate::models::Book;
             ///
             /// let books: Vec<Book> = Book::objects(db)
-            ///     .filter(Book::Title.contains("Django"))
+            ///     .filter(Book::Title.contains("Ormada"))
             ///     .all().await?;
             /// ```
-            pub fn objects<C: ::seaorm_django::__internal::ConnectionTrait>(
+            pub fn objects<C: ::ormada::__internal::ConnectionTrait>(
                 db: &C,
-            ) -> ::seaorm_django::query::QuerySet<'_, _Entity, C> {
-                use ::seaorm_django::query::QueryExt;
+            ) -> ::ormada::query::QuerySet<'_, _Entity, C> {
+                use ::ormada::query::QueryExt;
                 _Entity::objects(db)
             }
 
             #default_ordering_method
 
             /// Create the table for this model
-            pub async fn create_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError>
+            pub async fn create_table<C>(db: &C) -> ::core::result::Result<(), ::ormada::error::OrmadaError>
             where
-                C: ::seaorm_django::__internal::ConnectionTrait,
+                C: ::ormada::__internal::ConnectionTrait,
             {
-                use ::seaorm_django::__internal::{Schema, ConnectionTrait, DbBackend};
-                use ::seaorm_django::__internal::sea_query::{MysqlQueryBuilder, PostgresQueryBuilder, SqliteQueryBuilder};
+                use ::ormada::__internal::{Schema, ConnectionTrait, DbBackend};
+                use ::ormada::__internal::sea_query::{MysqlQueryBuilder, PostgresQueryBuilder, SqliteQueryBuilder};
 
                 let backend = db.get_database_backend();
                 let schema = Schema::new(backend);
@@ -1300,12 +1300,12 @@ fn generate_model_convenience_methods(
             }
 
             /// Drop the table for this model
-            pub async fn drop_table<C>(db: &C) -> ::core::result::Result<(), ::seaorm_django::error::ErgormError>
+            pub async fn drop_table<C>(db: &C) -> ::core::result::Result<(), ::ormada::error::OrmadaError>
             where
-                C: ::seaorm_django::__internal::ConnectionTrait,
+                C: ::ormada::__internal::ConnectionTrait,
             {
-                use ::seaorm_django::__internal::{ConnectionTrait, DbBackend};
-                use ::seaorm_django::__internal::sea_query::{MysqlQueryBuilder, PostgresQueryBuilder, SqliteQueryBuilder, Table};
+                use ::ormada::__internal::{ConnectionTrait, DbBackend};
+                use ::ormada::__internal::sea_query::{MysqlQueryBuilder, PostgresQueryBuilder, SqliteQueryBuilder, Table};
 
                 let backend = db.get_database_backend();
                 let stmt = Table::drop().table(_Entity).to_owned();

@@ -1,12 +1,12 @@
 //! Database connection and transaction types
 //!
-//! This module provides all database-related types, mirroring Django's `django.db` module.
+//! This module provides all database-related types, mirroring Ormada's `ormada.db` module.
 //! Users should import from here instead of using `sea_orm` directly.
 //!
 //! # Usage
 //!
 //! ```rust,ignore
-//! use seaorm_django::db::{Database, DatabaseConnection};
+//! use ormada::db::{Database, DatabaseConnection};
 //!
 //! let db = Database::connect("sqlite::memory:").await?;
 //! ```

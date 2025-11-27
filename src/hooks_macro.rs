@@ -3,11 +3,11 @@
 //! NOTE: This macro is now deprecated. Use `#[async_trait]` directly instead:
 //!
 //! ```rust,ignore
-//! use seaorm_django::prelude::*;
+//! use ormada::prelude::*;
 //!
 //! #[async_trait]
 //! impl LifecycleHooks for User {
-//!     async fn before_save(&mut self) -> Result<(), DjangoOrmError> {
+//!     async fn before_save(&mut self) -> Result<(), OrmadaOrmError> {
 //!         self.updated_at = Utc::now().into();
 //!         Ok(())
 //!     }
@@ -24,7 +24,7 @@ macro_rules! hooks {
 
     // Parse &mut self methods
     (@impl $model:ident [$($mut_methods:tt)*] [$($immut_methods:tt)*]
-     async fn $method:ident(&mut self) -> Result<(), DjangoOrmError> $body:block
+     async fn $method:ident(&mut self) -> Result<(), OrmadaOrmError> $body:block
      $($rest:tt)*
     ) => {
         hooks! { @impl $model
@@ -36,7 +36,7 @@ macro_rules! hooks {
 
     // Parse &self methods (no generic needed anymore)
     (@impl $model:ident [$($mut_methods:tt)*] [$($immut_methods:tt)*]
-     async fn $method:ident(&self) -> Result<(), DjangoOrmError> $body:block
+     async fn $method:ident(&self) -> Result<(), OrmadaOrmError> $body:block
      $($rest:tt)*
     ) => {
         hooks! { @impl $model
@@ -51,10 +51,10 @@ macro_rules! hooks {
         #[::async_trait::async_trait]
         impl $crate::hooks::LifecycleHooks for $model {
             $(
-                async fn $mut_method(&mut self) -> ::core::result::Result<(), $crate::error::DjangoOrmError> $mut_body
+                async fn $mut_method(&mut self) -> ::core::result::Result<(), $crate::error::OrmadaOrmError> $mut_body
             )*
             $(
-                async fn $immut_method(&self) -> ::core::result::Result<(), $crate::error::DjangoOrmError> $immut_body
+                async fn $immut_method(&self) -> ::core::result::Result<(), $crate::error::OrmadaOrmError> $immut_body
             )*
         }
     };

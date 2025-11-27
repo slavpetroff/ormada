@@ -1,22 +1,29 @@
+// Integration tests are allowed to use unwrap/expect for clarity
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+#![allow(unused_must_use)]
+#![allow(clippy::indexing_slicing)]
+
 //! rstest fixtures for comprehensive test support
 //!
 //! This module provides reusable fixtures for all integration tests,
 //! following rstest best practices and eliminating test boilerplate.
 
+use ormada::prelude::*;
 use rstest::*;
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // Test Models
 // ============================================================================
 
 pub mod models {
-    use seaorm_django::prelude::*;
+    use ormada::prelude::*;
 
     pub mod author {
         use super::*;
 
-        #[ergorm_model(table = "authors")]
+        #[ormada_model(table = "authors")]
         pub struct Author {
             #[primary_key]
             pub id: i32,
@@ -36,13 +43,13 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-        // LifecycleHooks is auto-implemented by #[ergorm_model] - no manual impl needed!
+        // LifecycleHooks is auto-implemented by #[ormada_model] - no manual impl needed!
     }
 
     pub mod book {
         use super::*;
 
-        #[ergorm_model(table = "books")]
+        #[ormada_model(table = "books")]
         pub struct Book {
             #[primary_key]
             pub id: i32,
@@ -62,7 +69,7 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-        // LifecycleHooks is auto-implemented by #[ergorm_model] - no manual impl needed!
+        // LifecycleHooks is auto-implemented by #[ormada_model] - no manual impl needed!
     }
 }
 

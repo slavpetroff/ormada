@@ -1,7 +1,7 @@
-//! Query result caching (Django-style connection-scoped caching)
+//! Query result caching (Ormada-style connection-scoped caching)
 //!
 //! Provides automatic query result caching within a connection scope,
-//! similar to Django's transaction-level query caching. Cache is automatically
+//! similar to Ormada's transaction-level query caching. Cache is automatically
 //! cleared when the scope ends, preventing stale data.
 
 use sea_orm::{DatabaseConnection, DbErr};

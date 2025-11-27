@@ -12,15 +12,15 @@ pub struct RelationInfo {
     pub foreign_key_field: syn::Ident,
 }
 
-/// Parse relation information from django attributes
+/// Parse relation information from ormada attributes
 ///
-/// Looks for `#[django(relations(field = "path::to::Entity", ...))]`
+/// Looks for `#[ormada(relations(field = "path::to::Entity", ...))]`
 pub fn parse_relations(input: &DeriveInput) -> Vec<RelationInfo> {
     let mut relations = Vec::new();
 
-    // Look for #[django(relations(...))] on the struct
+    // Look for #[ormada(relations(...))] on the struct
     for attr in &input.attrs {
-        if !attr.path().is_ident("django") {
+        if !attr.path().is_ident("ormada") {
             continue;
         }
 
@@ -95,7 +95,7 @@ pub fn generate_model_with_relations(
             quote! {
                 /// Prefetched relation field
                 pub #field_name: ::core::option::Option<
-                    <#related_entity as ::seaorm_django::traits::WithRelationsTrait>::ModelWithRelations
+                    <#related_entity as ::ormada::traits::WithRelationsTrait>::ModelWithRelations
                 >
             }
         })
@@ -112,7 +112,7 @@ pub fn generate_model_with_relations(
             quote! {
                 #[doc = #doc]
                 pub fn #field_name(&self) -> ::core::option::Option<
-                    &<#related_entity as ::seaorm_django::traits::WithRelationsTrait>::ModelWithRelations
+                    &<#related_entity as ::ormada::traits::WithRelationsTrait>::ModelWithRelations
                 > {
                     self.#field_name.as_ref()
                 }
@@ -240,7 +240,7 @@ pub fn generate_trait_impl(relations: &[RelationInfo], fields: &[&syn::Field]) -
                 #field_name: #access
                     .get(&model.#fk_field)
                     .cloned()
-                    .map(|m| <#related_entity as ::seaorm_django::traits::WithRelationsTrait>::from_model_and_relations(m, &()))
+                    .map(|m| <#related_entity as ::ormada::traits::WithRelationsTrait>::from_model_and_relations(m, &()))
             }
         })
         .collect();
@@ -256,7 +256,7 @@ pub fn generate_trait_impl(relations: &[RelationInfo], fields: &[&syn::Field]) -
 
     // Always generate, regardless of whether entity has relations
     quote! {
-        impl ::seaorm_django::traits::WithRelationsTrait for Entity {
+        impl ::ormada::traits::WithRelationsTrait for Entity {
             type Model = Model;
             type ModelWithRelations = ModelWithRelations;
             type Relations = #relations_type;
@@ -287,7 +287,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
             let fk_field = &rel.foreign_key_field;
 
             quote! {
-                impl ::seaorm_django::relations::HasRelation<#related_entity> for Entity {
+                impl ::ormada::relations::HasRelation<#related_entity> for Entity {
                     type RelatedPK = <<#related_entity as ::sea_orm::EntityTrait>::PrimaryKey as ::sea_orm::PrimaryKeyTrait>::ValueType;
 
                     fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
@@ -298,8 +298,8 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                         models: &[Self::Model],
                         db: &C,
                     ) -> ::core::result::Result<
-                        ::seaorm_django::prelude::FxHashMap<Self::RelatedPK, <#related_entity as ::sea_orm::EntityTrait>::Model>,
-                        ::seaorm_django::error::DjangoOrmError
+                        ::ormada::prelude::FxHashMap<Self::RelatedPK, <#related_entity as ::sea_orm::EntityTrait>::Model>,
+                        ::ormada::error::OrmadaOrmError
                     > {
                         use ::sea_orm::{EntityTrait, QueryFilter, ColumnTrait, PrimaryKeyToColumn, ModelTrait, Iterable};
 
@@ -309,7 +309,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                             .collect();
 
                         if fk_values.is_empty() {
-                            return ::core::result::Result::Ok(::seaorm_django::prelude::FxHashMap::default());
+                            return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
                         }
 
                         // Get primary key column for filtering
@@ -325,7 +325,7 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
 
                         // Build FxHashMap using primary key values (assuming id field)
                         ::core::result::Result::Ok(
-                            ::seaorm_django::prelude::FxHashMap::from_iter(
+                            ::ormada::prelude::FxHashMap::from_iter(
                                 related_models
                                     .into_iter()
                                     .map(|m| (m.id, m))

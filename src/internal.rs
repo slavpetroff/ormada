@@ -1,9 +1,9 @@
 //! Internal re-exports for macro-generated code
 //!
-//! This module re-exports SeaORM types needed by the `#[django_model]` macro.
+//! This module re-exports SeaORM types needed by the `#[ormada_model]` macro.
 //! **Users should NOT import from this module directly.**
 //!
-//! All paths in generated code use `::seaorm_django::__internal::` to ensure
+//! All paths in generated code use `::ormada::__internal::` to ensure
 //! consumers don't need `sea_orm` as a direct dependency.
 
 #![allow(unused_imports)]
@@ -77,6 +77,7 @@ pub use sea_orm::QueryFilter;
 pub use sea_orm::QueryOrder;
 pub use sea_orm::QuerySelect;
 pub use sea_orm::Select;
+pub use sea_orm::TransactionTrait;
 
 // =============================================================================
 // Value & Expression Types

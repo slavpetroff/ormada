@@ -1,6 +1,6 @@
 //! Batching utilities for memory-efficient operations
 //!
-//! Provides Django-style batching for large querysets to prevent OOM errors.
+//! Provides Ormada-style batching for large querysets to prevent OOM errors.
 
 /// Default batch size for bulk operations
 pub const DEFAULT_BATCH_SIZE: usize = 1000;

@@ -1,4 +1,4 @@
-//! Proc macro for #[derive(ErgormModel)]
+//! Proc macro for #[derive(OrmadaModel)]
 //!
 //! This crate provides a derive macro that automatically generates
 //! Model-based create/update operations with auto field handling.
@@ -56,10 +56,10 @@ fn has_sea_orm_attribute(field: &syn::Field, attr_name: &str) -> bool {
     false
 }
 
-/// Check if a field has a specific ergorm attribute
+/// Check if a field has a specific ormada attribute
 fn has_ergorm_attribute(field: &syn::Field, attr_name: &str) -> bool {
     for attr in &field.attrs {
-        if attr.path().is_ident("ergorm") {
+        if attr.path().is_ident("ormada") {
             // Simple string-based check for attribute presence
             let meta_str = quote::quote!(#attr).to_string();
             if meta_str.contains(attr_name) {
@@ -70,9 +70,9 @@ fn has_ergorm_attribute(field: &syn::Field, attr_name: &str) -> bool {
     false
 }
 
-/// Derive macro for Ergorm Model-based operations
-#[proc_macro_derive(ErgormModel, attributes(ergorm))]
-pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
+/// Derive macro for Ormada Model-based operations
+#[proc_macro_derive(OrmadaModel, attributes(ormada))]
+pub fn derive_ormada_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let struct_name = &input.ident;
@@ -84,7 +84,7 @@ pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
             _ => {
                 return syn::Error::new_spanned(
                     struct_name,
-                    "ErgormModel can only be derived for structs with named fields",
+                    "OrmadaModel can only be derived for structs with named fields",
                 )
                 .to_compile_error()
                 .into();
@@ -93,7 +93,7 @@ pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(
                 struct_name,
-                "ErgormModel can only be derived for structs",
+                "OrmadaModel can only be derived for structs",
             )
             .to_compile_error()
             .into();
@@ -118,7 +118,7 @@ pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
             continue;
         }
 
-        // Detect auto fields from #[ergorm(...)] attributes
+        // Detect auto fields from #[ormada(...)] attributes
         if has_ergorm_attribute(field, "auto_now_add") {
             auto_now_add_fields.push(field_name);
             continue;
@@ -218,8 +218,8 @@ pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
         #trait_impl
 
         // ===== DJANGO ENTITY TRAIT =====
-        impl ::seaorm_django::traits::ErgormEntity for Entity {
-            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::seaorm_django::error::ErgormError> {
+        impl ::ormada::traits::OrmadaEntity for Entity {
+            fn to_active_model_for_create(model: Model) -> ::core::result::Result<ActiveModel, ::ormada::error::OrmadaError> {
                 let now = ::chrono::Utc::now().fixed_offset();
                 ::core::result::Result::Ok(ActiveModel {
                     #(#create_field_assignments,)*
@@ -229,24 +229,24 @@ pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
             async fn save_model<'a, C: ::sea_orm::ConnectionTrait>(
                 db: &'a C,
                 model: Model,
-            ) -> Result<Model, seaorm_django::error::ErgormError> {
+            ) -> Result<Model, ormada::error::OrmadaError> {
                 model.save(db).await
             }
         }
 
         // ===== UPDATE OPERATION =====
         impl Model {
-            /// Save (update) this model (Django-style: updates ALL fields)
+            /// Save (update) this model (Ormada-style: updates ALL fields)
             ///
             /// All model fields are updated in the database.
-            /// Fields marked with #[django(auto_now)] are automatically set to the current timestamp.
+            /// Fields marked with #[ormada(auto_now)] are automatically set to the current timestamp.
             ///
-            /// This follows Django's behavior where .save() updates all fields,
+            /// This follows Ormada's behavior where .save() updates all fields,
             /// not just modified ones.
             pub async fn save<'a, C: ::sea_orm::ConnectionTrait>(
                 self,
                 db: &'a C,
-            ) -> Result<Self, seaorm_django::error::DjangoOrmError> {
+            ) -> Result<Self, ormada::error::OrmadaOrmError> {
                 use sea_orm::Set;
                 let now = ::chrono::Utc::now().fixed_offset();
 
@@ -278,7 +278,7 @@ pub fn derive_ergorm_model(input: TokenStream) -> TokenStream {
 ///
 /// ```rust,ignore
 /// #[atomic(db)]
-/// async fn create_user(db: &DatabaseConnection, name: String) -> Result<(), ErgormError> {
+/// async fn create_user(db: &DatabaseConnection, name: String) -> Result<(), OrmadaError> {
 ///     // This code runs inside a transaction!
 ///     // 'db' is shadowed by the transaction handle
 ///     let user = User::objects(db).create(name).await?;
@@ -290,7 +290,7 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
     atomic::impl_atomic(args, input)
 }
 
-/// Attribute macro for defining Ergorm models with clean syntax
+/// Attribute macro for defining Ormada models with clean syntax
 ///
 /// This macro transforms a simple struct definition into a full `SeaORM` entity
 /// with all the necessary derives and boilerplate.
@@ -304,9 +304,9 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// # Usage
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
-/// #[ergorm_model(table = "books")]
+/// #[ormada_model(table = "books")]
 /// struct Book {
 ///     #[primary_key]
 ///     id: i32,
@@ -332,12 +332,12 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// To provide custom hooks, use `hooks = true`:
 ///
 /// ```rust,ignore
-/// #[ergorm_model(table = "books", hooks = true)]
+/// #[ormada_model(table = "books", hooks = true)]
 /// struct Book { /* fields */ }
 ///
 /// #[async_trait]
 /// impl LifecycleHooks for book::Model {
-///     async fn before_save(&mut self) -> Result<(), ErgormError> {
+///     async fn before_save(&mut self) -> Result<(), OrmadaError> {
 ///         // Custom logic before save
 ///         Ok(())
 ///     }
@@ -361,8 +361,8 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 /// - `#[skip_serializing]` - Skip field when serializing
 /// - `#[skip_deserializing]` - Skip field when deserializing
 #[proc_macro_attribute]
-pub fn ergorm_model(attr: TokenStream, item: TokenStream) -> TokenStream {
-    match model::impl_ergorm_model(attr.into(), item.into()) {
+pub fn ormada_model(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match model::impl_ormada_model(attr.into(), item.into()) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }
@@ -376,7 +376,7 @@ pub fn ergorm_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Usage
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// // Simple projection (all fields must exist on Book)
 /// #[ergorm_projection(model = Book)]

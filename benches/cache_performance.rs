@@ -1,3 +1,12 @@
+// Benchmarks are allowed to use unwrap/expect for clarity
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+#![allow(unused_must_use)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::needless_raw_string_hashes)]
+
 //! Benchmark for caching performance
 //!
 //! Measures the benefit of QuerySet caching vs repeated queries
@@ -13,8 +22,8 @@ use std::hint::black_box;
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
+use ormada::prelude::*;
 use sea_orm::{Database, DatabaseConnection};
-use seaorm_django::prelude::*;
 
 // ============================================================================
 // BENCHMARK CONFIGURATION - Adjust these values as needed
@@ -37,9 +46,9 @@ const SAMPLE_SIZE: usize = 50;
 
 // Model for benchmarking
 mod benchmark_item {
-    use seaorm_django::prelude::*;
+    use ormada::prelude::*;
 
-    #[django_model(table = "benchmark_items")]
+    #[ormada_model(table = "benchmark_items")]
     pub struct BenchmarkItem {
         #[primary_key]
         pub id: i32,
@@ -50,9 +59,6 @@ mod benchmark_item {
         #[max_length(100)]
         pub data: String,
     }
-
-    #[async_trait]
-    impl LifecycleHooks for Model {}
 }
 
 async fn setup_db() -> DatabaseConnection {

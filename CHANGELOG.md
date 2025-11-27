@@ -1,4 +1,4 @@
-# seaorm-django Changelog
+# ormada Changelog
 
 ## v0.3.0 - Typestate, Improved Ergonomics & Encapsulation
 
@@ -39,22 +39,22 @@ let books = Book::objects(db)
 
 ```rust
 // Before (required boilerplate):
-#[django_model(table = "books")]
+#[ormada_model(table = "books")]
 struct Book { ... }
 #[async_trait]
 impl LifecycleHooks for Model {}  // ❌ Required even if empty
 
 // After (just works):
-#[django_model(table = "books")]
+#[ormada_model(table = "books")]
 struct Book { ... }
 // ✅ LifecycleHooks auto-generated!
 
 // For custom hooks:
-#[django_model(table = "books", hooks = true)]
+#[ormada_model(table = "books", hooks = true)]
 struct Book { ... }
 #[async_trait]
 impl LifecycleHooks for book::Model {
-    async fn before_save(&mut self) -> Result<(), DjangoOrmError> { ... }
+    async fn before_save(&mut self) -> Result<(), OrmadaOrmError> { ... }
 }
 ```
 
@@ -69,7 +69,7 @@ impl LifecycleHooks for book::Model {
 - `ConnectionTrait`, `TransactionTrait`, `ExprTrait`
 
 ### 📚 Documentation
-- Updated `#[django_model]` macro documentation with all attributes
+- Updated `#[ormada_model]` macro documentation with all attributes
 - Added lifecycle hooks documentation with examples
 - Clarified SeaORM encapsulation philosophy
 
@@ -85,15 +85,15 @@ impl LifecycleHooks for book::Model {
 ### 🎉 New Features
 
 #### Query Methods
-- **`distinct()`** - Remove duplicate rows from results (Django's `.distinct()`)
-- **`earliest(column)`** - Get earliest record by field (Django's `.earliest()`)
-- **`latest(column)`** - Get latest record by field (Django's `.latest()`)
-- **`values(columns)`** - Select specific columns as JSON objects (Django's `.values()`)
-- **`values_list(columns, flat)`** - Select columns as arrays (Django's `.values_list()`)
+- **`distinct()`** - Remove duplicate rows from results (Ormada's `.distinct()`)
+- **`earliest(column)`** - Get earliest record by field (Ormada's `.earliest()`)
+- **`latest(column)`** - Get latest record by field (Ormada's `.latest()`)
+- **`values(columns)`** - Select specific columns as JSON objects (Ormada's `.values()`)
+- **`values_list(columns, flat)`** - Select columns as arrays (Ormada's `.values_list()`)
 
 #### Upsert Operations
-- **`get_or_create(creator)`** - Get existing or create new record atomically (Django's `.get_or_create()`)
-- **`update_or_create(updater, creator)`** - Update existing or create new (Django's `.update_or_create()`)
+- **`get_or_create(creator)`** - Get existing or create new record atomically (Ormada's `.get_or_create()`)
+- **`update_or_create(updater, creator)`** - Update existing or create new (Ormada's `.update_or_create()`)
 
 #### Transactions
 - **`#[atomic]`** - Attribute macro for transactional functions (supports nesting!)
@@ -145,7 +145,7 @@ let books = book::Entity::objects(db)
 
 #### After
 ```rust
-// Rich, Django-like API
+// Rich, Ormada-like API
 // Get unique results
 let unique_books = book::Entity::objects(db)
     .distinct()
@@ -204,11 +204,11 @@ Every method now includes:
 - ✅ Error handling patterns
 - ✅ Comparison with alternatives
 
-### 🎯 Django Compatibility
+### 🎯 Ormada Compatibility
 
-Current Django ORM API coverage: **90%+**
+Current Ormada ORM API coverage: **90%+**
 
-Implemented Django methods:
+Implemented Ormada methods:
 - ✅ `.filter()` / `.exclude()`
 - ✅ `.distinct()`
 - ✅ `.order_by()` / `.reverse()`
@@ -225,7 +225,7 @@ Implemented Django methods:
 1. **Type Safety**: All methods fully type-checked at compile time
 2. **Ergonomics**: Chainable, fluent API throughout
 3. **Zero-Cost**: No runtime overhead vs hand-written SeaORM
-4. **Error Handling**: Consistent `Result<T, DjangoOrmError>` pattern
+4. **Error Handling**: Consistent `Result<T, OrmadaOrmError>` pattern
 5. **Async/Await**: Proper async support with Send bounds
 
 ---
@@ -235,5 +235,5 @@ Implemented Django methods:
 - Basic QuerySet API (filter, exclude, order_by, limit, offset)
 - Q objects for complex queries
 - Relation prefetching with compile-time types
-- Django-style save() method
+- Ormada-style save() method
 - Comprehensive error types

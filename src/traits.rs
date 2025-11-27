@@ -1,15 +1,15 @@
-//! Core traits for Django-like ORM functionality
+//! Core traits for Ormada-like ORM functionality
 
-use crate::error::ErgormError;
+use crate::error::OrmadaError;
 use sea_orm::{ConnectionTrait, EntityTrait};
 
-/// Trait alias for connections that support Django-style operations
+/// Trait alias for connections that support Ormada-style operations
 ///
 /// This is a marker trait for types that implement `ConnectionTrait`.
 /// For transactions, use the `tx!` macro or `#[atomic]` attribute.
-pub trait ErgormConnection: ConnectionTrait {}
+pub trait OrmadaConnection: ConnectionTrait {}
 
-impl<T: ConnectionTrait> ErgormConnection for T {}
+impl<T: ConnectionTrait> OrmadaConnection for T {}
 
 // ============================================================================
 // Entity Capability Enums
@@ -65,16 +65,16 @@ impl Default for SoftDeleteConfig {
     }
 }
 
-/// Trait for entities that support Django-style creation behavior
+/// Trait for entities that support Ormada-style creation behavior
 ///
-/// This is automatically implemented by #[derive(DjangoModel)] and #[`django_model`].
+/// This is automatically implemented by #[derive(OrmadaModel)] and #[`ormada_model`].
 /// It handles auto-increment IDs, `auto_now/auto_now_add` timestamps, and field validation.
-pub trait ErgormEntity: EntityTrait {
+pub trait OrmadaEntity: EntityTrait {
     /// Convert a Model to `ActiveModel` for creation with validation
     ///
     /// This method validates field constraints (`max_length`, range, etc.) before creating
     /// the `ActiveModel`. Returns an error if validation fails.
-    fn to_active_model_for_create(model: Self::Model) -> Result<Self::ActiveModel, ErgormError>;
+    fn to_active_model_for_create(model: Self::Model) -> Result<Self::ActiveModel, OrmadaError>;
 
     /// Save a model (update all fields)
     ///
@@ -83,7 +83,7 @@ pub trait ErgormEntity: EntityTrait {
     async fn save_model<C: ConnectionTrait>(
         db: &C,
         model: Self::Model,
-    ) -> Result<Self::Model, ErgormError>;
+    ) -> Result<Self::Model, OrmadaError>;
 
     /// Get soft delete configuration for this entity
     ///
@@ -96,7 +96,7 @@ pub trait ErgormEntity: EntityTrait {
 
 /// Trait for entities that support relation loading with the graph pattern
 ///
-/// This trait is automatically implemented by the `DjangoModel` derive macro
+/// This trait is automatically implemented by the `OrmadaModel` derive macro
 /// when relations are defined.
 pub trait WithRelationsTrait {
     /// The base model type (same as `EntityTrait::Model`)
@@ -121,18 +121,18 @@ mod tests {
     #[test]
     fn test_django_connection_trait_exists() {
         // This is a compile-time test - if it compiles, the trait works
-        fn assert_django_connection<T: ErgormConnection>() {}
+        fn assert_django_connection<T: OrmadaConnection>() {}
 
-        // Test that DatabaseConnection implements ErgormConnection
+        // Test that DatabaseConnection implements OrmadaConnection
         assert_django_connection::<DatabaseConnection>();
     }
 
     #[test]
     fn test_trait_bound_convenience() {
-        // Verify that ErgormConnection can be used as a single bound
-        fn generic_with_django_connection<C: ErgormConnection>() {}
+        // Verify that OrmadaConnection can be used as a single bound
+        fn generic_with_django_connection<C: OrmadaConnection>() {}
 
-        // This should compile with ErgormConnection instead of multiple bounds
+        // This should compile with OrmadaConnection instead of multiple bounds
         generic_with_django_connection::<DatabaseConnection>();
     }
 
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn test_soft_delete_config_is_debug() {
         let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
-        let debug_str = format!("{:?}", config);
+        let debug_str = format!("{config:?}");
         assert!(debug_str.contains("Enabled"));
         assert!(debug_str.contains("deleted_at"));
     }
@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn test_soft_delete_config_is_clone() {
         let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
-        let cloned = config.clone();
+        let cloned = config;
         assert_eq!(config, cloned);
     }
 
@@ -179,8 +179,8 @@ mod tests {
     fn test_soft_delete_config_is_copy() {
         let config = SoftDeleteConfig::Enabled { column: "deleted_at" };
         let copied = config;
-        let _also_copied = config; // Can use again because Copy
-        assert_eq!(copied, config);
+        let also_copied = config; // Can use again because Copy
+        assert_eq!(copied, also_copied);
     }
 
     #[test]

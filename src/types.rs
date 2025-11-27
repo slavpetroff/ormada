@@ -1,4 +1,4 @@
-//! Type definitions for seaorm-django
+//! Type definitions for ormada
 //!
 //! This module contains type definitions and enums used throughout the library.
 
@@ -9,15 +9,15 @@
 /// # Examples
 ///
 /// ```ignore
-/// #[django_model(table = "posts")]
+/// #[ormada_model(table = "posts")]
 /// struct Post {
 ///     #[primary_key]
 ///     id: i32,
-///     
+///
 ///     // Cascade: Delete posts when author is deleted
 ///     #[foreign_key(Author, on_delete = Cascade)]
 ///     author_id: i32,
-///     
+///
 ///     // SetNull: Set category to NULL when category is deleted
 ///     #[foreign_key(Category, on_delete = SetNull)]
 ///     category_id: Option<i32>,  // Must be Option for SetNull
@@ -106,7 +106,7 @@ impl OnDelete {
     /// # Examples
     ///
     /// ```
-    /// use seaorm_django::types::OnDelete;
+    /// use ormada::types::OnDelete;
     ///
     /// assert_eq!(OnDelete::Cascade.to_sql(), "CASCADE");
     /// assert_eq!(OnDelete::SetNull.to_sql(), "SET NULL");
@@ -130,7 +130,7 @@ impl OnDelete {
     /// # Examples
     ///
     /// ```
-    /// use seaorm_django::types::OnDelete;
+    /// use ormada::types::OnDelete;
     ///
     /// assert!(OnDelete::SetNull.requires_nullable());
     /// assert!(!OnDelete::Cascade.requires_nullable());
@@ -180,8 +180,9 @@ mod tests {
     fn test_enum_properties() {
         // Test that enum is Copy and Clone
         let on_delete = OnDelete::Cascade;
-        let _copy = on_delete;
-        let _clone = on_delete.clone();
+        let copy = on_delete;
+        let clone = on_delete;
+        assert_eq!(copy, clone);
 
         // Test equality
         assert_eq!(OnDelete::Cascade, OnDelete::Cascade);

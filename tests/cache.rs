@@ -8,8 +8,8 @@
 
 mod fixtures;
 
-use seaorm_django::cache::{CachedConnection, ConnectionCacheExt};
-use seaorm_django::prelude::*;
+use ormada::cache::{CachedConnection, ConnectionCacheExt};
+use ormada::prelude::*;
 
 #[tokio::test]
 async fn test_cached_connection_basic() {

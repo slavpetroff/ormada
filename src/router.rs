@@ -513,15 +513,8 @@ mod tests {
         let active = TransactionState::Active;
 
         // Exhaustive pattern matching
-        match idle {
-            TransactionState::Idle => assert!(true),
-            TransactionState::Active => panic!("Should be idle"),
-        }
-
-        match active {
-            TransactionState::Active => assert!(true),
-            TransactionState::Idle => panic!("Should be active"),
-        }
+        assert!(matches!(idle, TransactionState::Idle));
+        assert!(matches!(active, TransactionState::Active));
     }
 
     #[test]
@@ -534,7 +527,7 @@ mod tests {
     #[test]
     fn test_transaction_state_clone_copy() {
         let state = TransactionState::Active;
-        let cloned = state.clone();
+        let cloned = state;
         let copied = state; // Copy
 
         assert_eq!(state, cloned);
@@ -546,8 +539,8 @@ mod tests {
         let idle = TransactionState::Idle;
         let active = TransactionState::Active;
 
-        assert!(format!("{:?}", idle).contains("Idle"));
-        assert!(format!("{:?}", active).contains("Active"));
+        assert!(format!("{idle:?}").contains("Idle"));
+        assert!(format!("{active:?}").contains("Active"));
     }
 
     #[tokio::test]

@@ -1,12 +1,12 @@
-//! Transaction support for atomic database operations (Django's transaction.atomic)
+//! Transaction support for atomic database operations (Ormada's transaction.atomic)
 //!
-//! This module provides Django-style transaction management with Rust idioms.
+//! This module provides Ormada-style transaction management with Rust idioms.
 //! All operations within a transaction are atomic - they either all succeed or all fail.
 //!
 //! # Quick Start
 //!
 //! ```rust,ignore
-//! use seaorm_django::prelude::*;
+//! use ormada::prelude::*;
 //!
 //! // Simple transaction with tx! macro
 //! let (author, book) = tx!(db, |txn| async move {
@@ -17,7 +17,7 @@
 //!             ..Default::default()
 //!         })
 //!         .await?;
-//!     
+//!
 //!     // Create book - if this fails, author creation also rolls back
 //!     let book = Book::objects(txn)
 //!         .create(Book {
@@ -26,7 +26,7 @@
 //!             ..Default::default()
 //!         })
 //!         .await?;
-//!     
+//!
 //!     Ok((author, book))
 //! }).await?;
 //! ```
@@ -34,14 +34,14 @@
 //! # Using #[atomic] Attribute
 //!
 //! ```rust,ignore
-//! use seaorm_django::prelude::*;
+//! use ormada::prelude::*;
 //!
 //! #[atomic]
 //! async fn create_book_with_author(
 //!     db: &DatabaseConnection,
 //!     title: String,
 //!     author_name: String,
-//! ) -> Result<Book, ErgormError> {
+//! ) -> Result<Book, OrmadaError> {
 //!     // This entire function runs in a transaction
 //!     let author = Author::objects(db)
 //!         .create(Author {
@@ -49,7 +49,7 @@
 //!             ..Default::default()
 //!         })
 //!         .await?;
-//!     
+//!
 //!     Book::objects(db)
 //!         .create(Book {
 //!             title,
@@ -68,12 +68,12 @@
 //!     let book = Book::objects(txn)
 //!         .create(Book { /* ... */ })
 //!         .await?;
-//!     
+//!
 //!     // If this fails, book creation is rolled back
 //!     if book.price < 0 {
-//!         return Err(ErgormError::Custom("Invalid price".into()));
+//!         return Err(OrmadaError::Custom("Invalid price".into()));
 //!     }
-//!     
+//!
 //!     Ok(book)
 //! }).await;
 //!
@@ -88,7 +88,7 @@
 //! ## Basic Transaction
 //!
 //! ```rust,ignore
-//! use seaorm_django::{prelude::*, tx};
+//! use ormada::{prelude::*, tx};
 //!
 //! // All operations succeed or all rollback - clean and simple!
 //! tx!(db, |txn| async move {
@@ -99,7 +99,7 @@
 //!         age: 30,
 //!         ..Default::default()
 //!     }).await?;
-//!     
+//!
 //!     // Create book referencing the author
 //!     let book = Book::objects(txn).create(Book {
 //!         title: "Rust Book".to_string(),
@@ -107,7 +107,7 @@
 //!         price: 2999,
 //!         ..Default::default()
 //!     }).await?;
-//!     
+//!
 //!     Ok((author, book))
 //! }).await?;
 //! ```
@@ -115,16 +115,16 @@
 //! ## Error Handling (Automatic Rollback)
 //!
 //! ```rust,ignore
-//! use seaorm_django::tx;
+//! use ormada::tx;
 //!
 //! let result = tx!(db, |txn| async move {
 //!     let author = create_author(txn).await?;
-//!     
+//!
 //!     // This fails - entire transaction rolls back
 //!     if author.age < 18 {
-//!         return Err(ErgormError::Custom("Author must be 18+".into()));
+//!         return Err(OrmadaError::Custom("Author must be 18+".into()));
 //!     }
-//!     
+//!
 //!     let book = create_book(txn, author.id).await?;
 //!     Ok(book)
 //! }).await;
@@ -138,29 +138,29 @@
 //! ## Nested Transactions (Savepoints)
 //!
 //! ```rust,ignore
-//! use seaorm_django::tx;
+//! use ormada::tx;
 //!
 //! tx!(db, |txn| async move {
 //!     let author = create_author(txn).await?;
-//!     
+//!
 //!     // Inner transaction with savepoint - nested tx! just works!
 //!     let books_result = tx!(txn, |inner_txn| async move {
 //!         create_book(inner_txn, author.id, "Book 1").await?;
 //!         create_book(inner_txn, author.id, "Book 2").await?;
 //!         Ok(2)
 //!     }).await;
-//!     
+//!
 //!     // If books fail, only that part rolls back
 //!     // Author is still created
 //!     let book_count = books_result.unwrap_or(0);
-//!     
+//!
 //!     Ok((author, book_count))
 //! }).await?;
 //! ```
 
 /// Ergonomic transaction macro with static dispatch
 ///
-/// This macro provides Django-like transaction syntax with zero boxing overhead.
+/// This macro provides Ormada-like transaction syntax with zero boxing overhead.
 /// Uses **static dispatch** - no `Box::pin` or `dyn Future`.
 ///
 /// # Syntax
@@ -177,9 +177,9 @@
 /// # Examples
 ///
 /// ```rust,ignore
-/// use seaorm_django::tx;
+/// use ormada::tx;
 ///
-/// // Simple and clean - just like Django!
+/// // Simple and clean - just like Ormada!
 /// let result = tx!(db, |txn| async move {
 ///     let author = Author::objects(txn).create(Author {
 ///         name: "John".to_string(),
@@ -191,13 +191,13 @@
 /// // Nested transactions
 /// let result = tx!(db, |txn| async move {
 ///     let author = create_author(txn).await?;
-///     
+///
 ///     let books = tx!(txn, |inner| async move {
 ///         create_book(inner, author.id, "Book 1").await?;
 ///         create_book(inner, author.id, "Book 2").await?;
 ///         Ok(2)
 ///     }).await?;
-///     
+///
 ///     Ok((author, books))
 /// }).await?;
 /// ```
@@ -211,13 +211,13 @@
 macro_rules! tx {
     ($db:expr, |$txn:ident| async move $body:block) => {
         async {
-            use sea_orm::TransactionTrait;
+            use $crate::__internal::TransactionTrait;
 
             // Begin transaction - static dispatch, no boxing
-            let __txn = $db.begin().await.map_err($crate::error::ErgormError::from)?;
+            let __txn = $db.begin().await.map_err($crate::error::OrmadaError::from)?;
 
             // Execute the body directly - user controls the return type
-            let __result: Result<_, $crate::error::ErgormError> = (|| async {
+            let __result: Result<_, $crate::error::OrmadaError> = (|| async {
                 let $txn = &__txn;
                 $body
             })()
@@ -226,7 +226,7 @@ macro_rules! tx {
             // Commit or rollback based on result
             match __result {
                 Ok(__value) => {
-                    __txn.commit().await.map_err($crate::error::ErgormError::from)?;
+                    __txn.commit().await.map_err($crate::error::OrmadaError::from)?;
                     Ok(__value)
                 }
                 Err(__err) => {

@@ -1,4 +1,4 @@
-//! Implementation of the `#[django_projection]` attribute macro
+//! Implementation of the `#[ormada_projection]` attribute macro
 //!
 //! Provides type-safe field projections with compile-time validation.
 
@@ -9,7 +9,7 @@ use syn::{
     Attribute, Data, DeriveInput, Fields, Ident, Meta, Token,
 };
 
-/// Configuration for the `#[django_projection]` attribute
+/// Configuration for the `#[]` attribute
 #[derive(Clone)]
 struct ProjectionConfig {
     model: syn::Path,
@@ -97,14 +97,14 @@ pub fn generate_projection(attr: TokenStream, input: TokenStream) -> syn::Result
             _ => {
                 return Err(syn::Error::new_spanned(
                     input,
-                    "django_projection only works with structs with named fields",
+                    "ormada_projection only works with structs with named fields",
                 ));
             }
         },
         _ => {
             return Err(syn::Error::new_spanned(
                 input,
-                "django_projection only works with structs",
+                "ormada_projection only works with structs",
             ));
         }
     };

@@ -1,11 +1,11 @@
-//! Core Django-like Query API for `SeaORM`
+//! Core Ormada-like Query API for `SeaORM`
 //!
 //! This module provides ergonomic query building with zero duplication.
 //!
 //! # Quick Start
 //!
 //! ```rust,ignore
-//! use seaorm_django::prelude::*;
+//! use ormada::prelude::*;
 //!
 //! // Basic filtering and ordering
 //! let books = Book::objects(&db)
@@ -62,7 +62,7 @@
 //! ```
 
 use crate::db::{ConnectionTrait, DbErr, TransactionTrait};
-use crate::error::ErgormError;
+use crate::error::OrmadaError;
 use crate::fields::{ColumnTrait, Condition, Order, PrimaryKeyTrait, Value};
 use crate::hooks::LifecycleHooks;
 use crate::models::{
@@ -101,12 +101,12 @@ fn is_unique_violation(err: &DbErr) -> bool {
 }
 
 // ============================================================================
-// Column Extension Trait (Only Django-specific additions)
+// Column Extension Trait (Only Ormada-specific additions)
 // ============================================================================
 
-/// Extension trait for Django-specific column operations
+/// Extension trait for Ormada-specific column operations
 ///
-/// This trait adds Django-like aliases to SeaORM's `ColumnTrait`.
+/// This trait adds Ormada-like aliases to SeaORM's `ColumnTrait`.
 /// For standard operations like `.eq()`, `.gt()`, etc., use `ColumnTrait` directly.
 ///
 /// **Note:** `ColumnTrait` is re-exported in our prelude and provides all standard
@@ -114,9 +114,9 @@ fn is_unique_violation(err: &DbErr) -> bool {
 /// `.contains()`, `.starts_with()`, `.ends_with()`, `.is_null()`, `.is_not_null()`,
 /// `.is_in()`, etc.
 ///
-/// This trait only adds Django-specific aliases not present in SeaORM.
+/// This trait only adds Ormada-specific aliases not present in SeaORM.
 pub trait ColumnExt: ColumnTrait {
-    /// Alias for `is_in` - Django's `field__in=[...]` syntax
+    /// Alias for `is_in` - Ormada's `field__in=[...]` syntax
     ///
     /// ```rust,ignore
     /// Book::CategoryId.in_values([1, 2, 3])
@@ -134,12 +134,12 @@ pub trait ColumnExt: ColumnTrait {
 impl<T: ColumnTrait> ColumnExt for T {}
 
 // ============================================================================
-/// Main `QuerySet` structure (Django's `QuerySet` equivalent)
+/// Main `QuerySet` structure (Ormada's `QuerySet` equivalent)
 ///
 /// Provides chainable query building with automatic caching and lazy evaluation.
 /// All operations are lazy until a terminal method (.`all()`, .`first()`, etc.) is called.
 ///
-/// **Caching Behavior (Django-like):**
+/// **Caching Behavior (Ormada-like):**
 /// - First execution of `.all()`, `.first()`, etc. hits the database
 /// - Results are cached in the `QuerySet` instance
 /// - Subsequent calls on the SAME `QuerySet` reuse cached results
@@ -262,7 +262,7 @@ impl CanExecute for Aggregated {}
 /// # Example
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// let qs = Book::objects(db);
 /// assert_eq!(qs.state(), QueryState::Fresh);
@@ -374,7 +374,7 @@ pub enum OrderDirection {
 /// # Example
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// let plan = Book::objects(db).filter(Book::Price.lt(50)).plan();
 ///
@@ -735,7 +735,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
     /// Apply soft delete filter to the query based on current mode
     fn apply_soft_delete_filter(&self, mut select: Select<E>) -> Select<E>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         use crate::traits::SoftDeleteConfig;
         use sea_orm::sea_query::{Alias, SimpleExpr};
@@ -780,7 +780,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
 // ============================================================================
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanFilter> QuerySet<'a, E, C, S> {
-    /// Filter records (Django's .`filter()`)
+    /// Filter records (Ormada's .`filter()`)
     ///
     /// Creates a new `QuerySet` with added filter. Transitions to `Filtered` state.
     /// Available on `Fresh` and `Filtered` states.
@@ -798,7 +798,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanFilter> QuerySet<'a, E, C, S>
         )
     }
 
-    /// Exclude records (Django's .`exclude()`)
+    /// Exclude records (Ormada's .`exclude()`)
     ///
     /// Creates a new `QuerySet` with added exclusion. Transitions to `Filtered` state.
     /// Available on `Fresh` and `Filtered` states.
@@ -852,7 +852,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
         self.with_soft_delete_mode(SoftDeleteMode::OnlyDeleted)
     }
 
-    /// Remove duplicate rows (Django's .`distinct()`)
+    /// Remove duplicate rows (Ormada's .`distinct()`)
     ///
     /// Returns only unique records. Useful when joins might create duplicates.
     ///
@@ -892,7 +892,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
 // ============================================================================
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanOrder> QuerySet<'a, E, C, S> {
-    /// Order by a column in ascending order (Django's .`order_by`('field'))
+    /// Order by a column in ascending order (Ormada's .`order_by`('field'))
     ///
     /// Transitions to `Ordered` state. Available on `Fresh`, `Filtered`, and `Ordered` states.
     ///
@@ -922,7 +922,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanOrder> QuerySet<'a, E, C, S> 
         )
     }
 
-    /// Order by a column in descending order (Django's .`order_by`('-field'))
+    /// Order by a column in descending order (Ormada's .`order_by`('-field'))
     ///
     /// Transitions to `Ordered` state. Available on `Fresh`, `Filtered`, and `Ordered` states.
     ///
@@ -958,7 +958,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanOrder> QuerySet<'a, E, C, S> 
 // ============================================================================
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, S> {
-    /// Limit results (Django's [:n])
+    /// Limit results (Ormada's [:n])
     ///
     /// Transitions to `Paginated` state. Available on `Fresh`, `Filtered`, `Ordered`, and `Paginated` states.
     ///
@@ -989,16 +989,16 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, 
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExecute + 'a> QuerySet<'a, E, C, S>
 where
-    E: crate::traits::ErgormEntity,
+    E: crate::traits::OrmadaEntity,
 {
-    /// Execute query and return all matching results (Django's .`all()`)
+    /// Execute query and return all matching results (Ormada's .`all()`)
     ///
     /// Returns a vector of all models that match the query filters.
     ///
     /// # Returns
     ///
     /// - `Ok(Vec<E::Model>)` - Vector of matching models (may be empty)
-    /// - `Err(ErgormError)` - Database error occurred
+    /// - `Err(OrmadaError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1033,9 +1033,9 @@ where
     /// ```rust,ignore
     /// let books_again = qs.all().await?;  // Cache hit! No DB query
     /// ```
-    pub async fn all(&self) -> Result<Vec<E::Model>, ErgormError>
+    pub async fn all(&self) -> Result<Vec<E::Model>, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         // Try to read from cache first (allows multiple concurrent readers)
         {
@@ -1061,7 +1061,7 @@ where
         Ok(results)
     }
 
-    /// Execute query and return first result (Django's .`first()`)
+    /// Execute query and return first result (Ormada's .`first()`)
     ///
     /// Returns the first matching model or error if no matches found.
     /// Useful with ordering to get the "latest" or "oldest" record.
@@ -1069,8 +1069,8 @@ where
     /// # Returns
     ///
     /// - `Ok(E::Model)` - First matching model found
-    /// - `Err(ErgormError::EmptyResult { .. })` - No matching models
-    /// - `Err(ErgormError::Database(_))` - Database error occurred
+    /// - `Err(OrmadaError::EmptyResult { .. })` - No matching models
+    /// - `Err(OrmadaError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1090,7 +1090,7 @@ where
     /// // Handle no results
     /// match Book::objects(db).first().await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(ErgormError::EmptyResult { .. }) => {
+    ///     Err(OrmadaError::EmptyResult { .. }) => {
     ///         println!("No books in database");
     ///     }
     ///     Err(e) => return Err(e),
@@ -1106,9 +1106,9 @@ where
     /// # Caching
     ///
     /// Uses the same cache as `.all()`. If cache exists, returns first element.
-    pub async fn first(&self) -> Result<E::Model, ErgormError>
+    pub async fn first(&self) -> Result<E::Model, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         // Try cache first
         {
@@ -1117,7 +1117,7 @@ where
                 return cached_results
                     .first()
                     .cloned()
-                    .ok_or_else(|| ErgormError::empty_result("first"));
+                    .ok_or_else(|| OrmadaError::empty_result("first"));
             }
         }
 
@@ -1128,7 +1128,7 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| ErgormError::empty_result("first"))
+            .ok_or_else(|| OrmadaError::empty_result("first"))
     }
 
     /// Execute query and return last result
@@ -1139,8 +1139,8 @@ where
     /// # Returns
     ///
     /// - `Ok(E::Model)` - Last matching model found
-    /// - `Err(ErgormError::NotFound { .. })` - No matching models
-    /// - `Err(ErgormError::Database(_))` - Database error occurred
+    /// - `Err(OrmadaError::NotFound { .. })` - No matching models
+    /// - `Err(OrmadaError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1152,7 +1152,7 @@ where
     /// // Handle no results
     /// match Book::objects(db).last().await {
     ///     Ok(book) => println!("Last: {}", book.title),
-    ///     Err(ErgormError::NotFound { .. }) => {
+    ///     Err(OrmadaError::NotFound { .. }) => {
     ///         println!("No books found");
     ///     }
     ///     Err(e) => return Err(e),
@@ -1164,9 +1164,9 @@ where
     /// This method orders by primary key descending to efficiently get the last record.
     /// If you need the last record based on a different ordering, use
     /// `.order_by_desc(field).first()` instead.
-    pub async fn last(&self) -> Result<E::Model, ErgormError>
+    pub async fn last(&self) -> Result<E::Model, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         use sea_orm::{Iterable, PrimaryKeyToColumn};
 
@@ -1185,19 +1185,19 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| ErgormError::not_found(E::default().table_name(), "last".to_string()))
+            .ok_or_else(|| OrmadaError::not_found(E::default().table_name(), "last".to_string()))
     }
 
-    /// Get a single record by primary key (Django's .get(pk=))
+    /// Get a single record by primary key (Ormada's .get(pk=))
     ///
-    /// Returns the model or error if not found. This matches Django's behavior
+    /// Returns the model or error if not found. This matches Ormada's behavior
     /// where `.get()` raises `DoesNotExist` if the record doesn't exist.
     ///
     /// # Returns
     ///
     /// - `Ok(E::Model)` - Record found
-    /// - `Err(ErgormError::NotFound { entity, id })` - No record with that ID
-    /// - `Err(ErgormError::Database(_))` - Database error occurred
+    /// - `Err(OrmadaError::NotFound { entity, id })` - No record with that ID
+    /// - `Err(OrmadaError::Database(_))` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1209,16 +1209,16 @@ where
     /// // Handle not found
     /// match Book::objects(db).get(999).await {
     ///     Ok(book) => println!("Found: {}", book.title),
-    ///     Err(ErgormError::NotFound { entity, id }) => {
+    ///     Err(OrmadaError::NotFound { entity, id }) => {
     ///         println!("{} with id {} doesn't exist", entity, id);
     ///     }
     ///     Err(e) => return Err(e),  // Other error
     /// }
     /// // Or use ? for early return on not found
-    pub async fn get<T>(&self, id: T) -> Result<E::Model, ErgormError>
+    pub async fn get<T>(&self, id: T) -> Result<E::Model, OrmadaError>
     where
         T: Into<<E::PrimaryKey as PrimaryKeyTrait>::ValueType> + Send + std::fmt::Display,
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         let id_str = format!("{}", &id);
 
@@ -1228,10 +1228,10 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| ErgormError::not_found(E::default().table_name(), id_str))
+            .ok_or_else(|| OrmadaError::not_found(E::default().table_name(), id_str))
     }
 
-    /// Get the earliest record by a field (Django's .`earliest()`)
+    /// Get the earliest record by a field (Ormada's .`earliest()`)
     ///
     /// Orders by the specified column ascending and returns the first record.
     /// Returns an error if no records exist.
@@ -1254,23 +1254,23 @@ where
     /// # Returns
     ///
     /// - `Ok(Model)` - The earliest record
-    /// - `Err(ErgormError::EmptyResult { .. })` - No records found
-    /// - `Err(ErgormError::Database)` - Database error
+    /// - `Err(OrmadaError::EmptyResult { .. })` - No records found
+    /// - `Err(OrmadaError::Database)` - Database error
     ///
     /// # Equivalent to
     ///
     /// `.order_by_asc(column).first()` but returns error on empty result
-    pub async fn earliest(&self, column: impl ColumnTrait) -> Result<E::Model, ErgormError> {
+    pub async fn earliest(&self, column: impl ColumnTrait) -> Result<E::Model, OrmadaError> {
         self.inner
             .select
             .clone()
             .order_by(column, Order::Asc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| ErgormError::empty_result("earliest"))
+            .ok_or_else(|| OrmadaError::empty_result("earliest"))
     }
 
-    /// Get the latest record by a field (Django's .`latest()`)
+    /// Get the latest record by a field (Ormada's .`latest()`)
     ///
     /// Orders by the specified column descending and returns the first record.
     /// Returns an error if no records exist.
@@ -1298,23 +1298,23 @@ where
     /// # Returns
     ///
     /// - `Ok(Model)` - The latest record
-    /// - `Err(ErgormError::EmptyResult { .. })` - No records found
-    /// - `Err(ErgormError::Database)` - Database error
+    /// - `Err(OrmadaError::EmptyResult { .. })` - No records found
+    /// - `Err(OrmadaError::Database)` - Database error
     ///
     /// # Equivalent to
     ///
     /// `.order_by_desc(column).first()` but returns error on empty result
-    pub async fn latest(&self, column: impl ColumnTrait) -> Result<E::Model, ErgormError> {
+    pub async fn latest(&self, column: impl ColumnTrait) -> Result<E::Model, OrmadaError> {
         self.inner
             .select
             .clone()
             .order_by(column, Order::Desc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| ErgormError::empty_result("latest"))
+            .ok_or_else(|| OrmadaError::empty_result("latest"))
     }
 
-    /// Count records matching the query (Django's .`count()`)
+    /// Count records matching the query (Ormada's .`count()`)
     ///
     /// Returns the number of records that match the query filters.
     /// Returns 0 if no records match (not an error).
@@ -1322,7 +1322,7 @@ where
     /// # Returns
     ///
     /// - `Ok(u64)` - Number of matching records (0 or more)
-    /// - `Err(ErgormError)` - Database error occurred
+    /// - `Err(OrmadaError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1357,9 +1357,9 @@ where
     ///
     /// This uses a SQL `COUNT(*)` query which is optimized by the database.
     /// Much faster than loading all records and counting in memory.
-    pub async fn count(&self) -> Result<u64, ErgormError>
+    pub async fn count(&self) -> Result<u64, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         // Apply soft delete filter first
         let filtered = self.apply_soft_delete_filter(self.inner.select.clone());
@@ -1376,7 +1376,7 @@ where
         Ok(result.unwrap_or(0) as u64)
     }
 
-    /// Check if any records exist matching the query (Django's .`exists()`)
+    /// Check if any records exist matching the query (Ormada's .`exists()`)
     ///
     /// Returns true if at least one record matches the query, false otherwise.
     /// More efficient than `.count() > 0` because it stops at the first match.
@@ -1385,7 +1385,7 @@ where
     ///
     /// - `Ok(true)` - At least one matching record exists
     /// - `Ok(false)` - No matching records (NOT an error)
-    /// - `Err(ErgormError)` - Database error occurred
+    /// - `Err(OrmadaError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1422,9 +1422,9 @@ where
     /// Uses `LIMIT 1` internally, so it stops as soon as it finds any match.
     /// This is much faster than counting all records when you just need to know
     /// if any exist.
-    pub async fn exists(&self) -> Result<bool, ErgormError>
+    pub async fn exists(&self) -> Result<bool, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         use sea_orm::QuerySelect;
 
@@ -1436,7 +1436,7 @@ where
         Ok(result.is_some())
     }
 
-    /// Update all records matching the query (Django's .`update()`)
+    /// Update all records matching the query (Ormada's .`update()`)
     ///
     /// Applies the same updates to all matching records using a closure.
     /// Returns the number of records updated.
@@ -1461,10 +1461,10 @@ where
     ///
     /// println!("Updated {} books", count);
     /// ```
-    pub async fn update<F>(self, updater: F) -> Result<u64, ErgormError>
+    pub async fn update<F>(self, updater: F) -> Result<u64, OrmadaError>
     where
         F: Fn(&mut E::Model) + Send + Sync,
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
         C: TransactionTrait,
     {
         use sea_orm::sea_query::LockType;
@@ -1492,7 +1492,7 @@ where
         Ok(count)
     }
 
-    /// Eager load related entities (Django's `prefetch_related`)
+    /// Eager load related entities (Ormada's `prefetch_related`)
     ///
     /// Transforms this `QuerySet` into a `QuerySetEager` that supports prefetching relations.
     /// This prevents N+1 queries by loading all relations in batched queries (1+M pattern).
@@ -1502,7 +1502,7 @@ where
     /// Use the `relations!` macro to specify which entity types to prefetch:
     ///
     /// ```rust,ignore
-    /// use seaorm_django::relations;
+    /// use ormada::relations;
     ///
     /// let books = Book::objects(db)
     ///     .prefetch_related(relations![Author, Publisher])
@@ -1516,7 +1516,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use seaorm_django::relations;
+    /// use ormada::relations;
     /// use entity::{
     ///     book::Entity as Book,
     ///     author::Entity as Author,
@@ -1632,7 +1632,7 @@ where
         eager.prefetch_related(relations)
     }
 
-    /// Eager load related entities using efficient batch queries (Django's `select_related`)
+    /// Eager load related entities using efficient batch queries (Ormada's `select_related`)
     ///
     /// Currently implemented using the same batched query strategy as `prefetch_related`.
     /// This prevents N+1 queries by loading all relations in separate queries (1+M pattern).
@@ -1643,7 +1643,7 @@ where
     /// # Usage
     ///
     /// ```rust,ignore
-    /// use seaorm_django::relations;
+    /// use ormada::relations;
     ///
     /// // Single relation
     /// let books = Book::objects(db)
@@ -1670,7 +1670,7 @@ where
         self.prefetch_related(relations)
     }
 
-    /// Create a new record (Django's .`create()`)
+    /// Create a new record (Ormada's .`create()`)
     ///
     /// Creates and saves a new record in the database.
     /// Auto-increment IDs and timestamps are handled automatically.
@@ -1683,9 +1683,9 @@ where
     ///     ..Default::default() // ID and timestamps handled automatically
     /// }).await?;
     /// ```
-    pub async fn create(self, mut model: E::Model) -> Result<E::Model, ErgormError>
+    pub async fn create(self, mut model: E::Model) -> Result<E::Model, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
         E::Model: IntoActiveModel<E::ActiveModel> + crate::hooks::LifecycleHooks,
         E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {
@@ -1707,7 +1707,7 @@ where
         Ok(result)
     }
 
-    /// Bulk create multiple records (Django's `bulk_create()`)
+    /// Bulk create multiple records (Ormada's `bulk_create()`)
     ///
     /// Creates multiple records in a single database operation for high performance.
     /// Much faster than creating records one-by-one.
@@ -1753,9 +1753,9 @@ where
     /// - Does not return generated IDs (for performance)
     /// - Does not trigger model hooks/signals
     /// - Check database limits (typically 1000-10000 records per operation)
-    pub async fn bulk_create(self, models: Vec<E::Model>) -> Result<u64, ErgormError>
+    pub async fn bulk_create(self, models: Vec<E::Model>) -> Result<u64, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + Send,
     {
@@ -1765,8 +1765,8 @@ where
 
         let count = models.len() as u64;
 
-        // Convert models to ActiveModels using DjangoEntity logic (handles IDs/timestamps)
-        let active_models: Result<Vec<E::ActiveModel>, ErgormError> =
+        // Convert models to ActiveModels using OrmadaEntity logic (handles IDs/timestamps)
+        let active_models: Result<Vec<E::ActiveModel>, OrmadaError> =
             models.into_iter().map(|model| E::to_active_model_for_create(model)).collect();
         let active_models = active_models?;
 
@@ -1841,7 +1841,7 @@ where
     /// # Returns
     ///
     /// - `Ok(u64)` - Number of records deleted (0 if no matches)
-    /// - `Err(ErgormError)` - Database error occurred
+    /// - `Err(OrmadaError)` - Database error occurred
     ///
     /// # Examples
     ///
@@ -1866,7 +1866,7 @@ where
     /// - Always use with a filter to avoid accidentally deleting all records
     /// - Uses bulk DELETE with primary key IN clause for performance
     /// - Check foreign key constraints (may fail if records are referenced)
-    pub async fn delete(self) -> Result<u64, ErgormError>
+    pub async fn delete(self) -> Result<u64, OrmadaError>
     where
         E::Model: ModelTrait,
     {
@@ -1916,7 +1916,7 @@ where
         Ok(count)
     }
 
-    /// Get existing record or create it (Django's .`get_or_create()`)
+    /// Get existing record or create it (Ormada's .`get_or_create()`)
     ///
     /// Attempts to retrieve a record matching the query. If not found, creates a new
     /// record using the provided creator function.
@@ -1976,9 +1976,9 @@ where
     /// # Performance
     ///
     /// Makes 1-2 queries within a transaction for safety.
-    pub async fn get_or_create<F>(self, creator: F) -> Result<(E::Model, bool), ErgormError>
+    pub async fn get_or_create<F>(self, creator: F) -> Result<(E::Model, bool), OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
         F: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
@@ -2026,10 +2026,10 @@ where
         }
 
         // All retries exhausted
-        Err(ErgormError::concurrency_conflict("get_or_create", 3))
+        Err(OrmadaError::concurrency_conflict("get_or_create", 3))
     }
 
-    /// Update existing record or create new one (Django's .`update_or_create()`)
+    /// Update existing record or create new one (Ormada's .`update_or_create()`)
     ///
     /// Attempts to retrieve a record matching the query.
     /// - If found, applies the updates from `updater` and saves.
@@ -2076,9 +2076,9 @@ where
         self,
         updater: U,
         creator: Creator,
-    ) -> Result<(E::Model, bool), ErgormError>
+    ) -> Result<(E::Model, bool), OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
         U: Fn(&mut E::Model), // Changed: Fn instead of FnOnce to allow retries
         Creator: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
         E::Model: IntoActiveModel<E::ActiveModel>,
@@ -2127,10 +2127,10 @@ where
         }
 
         // All retries exhausted
-        Err(ErgormError::concurrency_conflict("update_or_create", 3))
+        Err(OrmadaError::concurrency_conflict("update_or_create", 3))
     }
 
-    /// Get specific column values as JSON (Django's `values()`)
+    /// Get specific column values as JSON (Ormada's `values()`)
     ///
     /// Returns a Vec of JSON objects for small-medium datasets.
     /// For large datasets, automatically uses chunked fetching.
@@ -2138,7 +2138,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use seaorm_django::prelude::*;
+    /// use ormada::prelude::*;
     ///
     /// // Get only title and price fields
     /// let values = Book::objects(db)
@@ -2152,7 +2152,7 @@ where
     pub async fn values(
         &self,
         columns: Vec<E::Column>,
-    ) -> Result<Vec<serde_json::Value>, ErgormError> {
+    ) -> Result<Vec<serde_json::Value>, OrmadaError> {
         use sea_orm::{JsonValue, QuerySelect};
 
         if columns.is_empty() {
@@ -2169,7 +2169,7 @@ where
         Ok(results)
     }
 
-    /// Stream full model instances in chunks (Django's `.iterator()`).
+    /// Stream full model instances in chunks (Ormada's `.iterator()`).
     ///
     /// Memory-efficient alternative to `.all()` for large result sets.
     /// Fetches results in batches using LIMIT/OFFSET pagination.
@@ -2198,8 +2198,8 @@ where
         &self,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<E::Model, ErgormError>> + use<'a, E, C, S>,
-        ErgormError,
+        impl futures::Stream<Item = Result<E::Model, OrmadaError>> + use<'a, E, C, S>,
+        OrmadaError,
     > {
         use futures::stream::{self, StreamExt};
         use sea_orm::QuerySelect;
@@ -2219,7 +2219,7 @@ where
 
                 let results: Vec<E::Model> = match select.all(db).await {
                     Ok(r) => r,
-                    Err(e) => return Some((Err(ErgormError::from(e)), (offset, true))),
+                    Err(e) => return Some((Err(OrmadaError::from(e)), (offset, true))),
                 };
 
                 let is_done = results.len() < chunk_size as usize;
@@ -2236,7 +2236,7 @@ where
         Ok(stream.boxed())
     }
 
-    /// Get column values iterator (Django's `values().iterator()`)
+    /// Get column values iterator (Ormada's `values().iterator()`)
     ///
     /// Returns iterator that streams results in chunks, preventing OOM.
     /// Use this directly for very large datasets where you want control.
@@ -2261,8 +2261,8 @@ where
         columns: Vec<E::Column>,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<serde_json::Value, ErgormError>> + use<'a, E, C, S>,
-        ErgormError,
+        impl futures::Stream<Item = Result<serde_json::Value, OrmadaError>> + use<'a, E, C, S>,
+        OrmadaError,
     > {
         use futures::stream::{self, StreamExt};
         use sea_orm::QuerySelect;
@@ -2274,7 +2274,7 @@ where
         let chunk_size = chunk_size.unwrap_or(crate::batching::DEFAULT_CHUNK_SIZE) as u64;
 
         // Create stream that fetches in chunks using limit/offset
-        // This is Django's approach: paginate through results
+        // This is Ormada's approach: paginate through results
         let db = self.inner.db;
         // Use Arc to avoid cloning the Select on every iteration
         let base_select = Arc::new(self.inner.select.clone());
@@ -2296,7 +2296,7 @@ where
                 let results: Vec<serde_json::Value> =
                     match select.limit(chunk_size).offset(offset).into_json().all(db).await {
                         Ok(r) => r,
-                        Err(e) => return Some((Err(ErgormError::from(e)), (offset, true))),
+                        Err(e) => return Some((Err(OrmadaError::from(e)), (offset, true))),
                     };
 
                 let is_done = results.len() < chunk_size as usize;
@@ -2313,7 +2313,7 @@ where
         Ok(stream.boxed())
     }
 
-    /// Get column values iterator as tuples (Django's `values_list().iterator()`)
+    /// Get column values iterator as tuples (Ormada's `values_list().iterator()`)
     ///
     /// Returns iterator that streams results in chunks.
     /// For single column with `flat=true`, yields scalar values.
@@ -2349,8 +2349,8 @@ where
         flat: bool,
         chunk_size: Option<usize>,
     ) -> Result<
-        impl futures::Stream<Item = Result<serde_json::Value, ErgormError>> + use<'a, E, C, S>,
-        ErgormError,
+        impl futures::Stream<Item = Result<serde_json::Value, OrmadaError>> + use<'a, E, C, S>,
+        OrmadaError,
     > {
         use futures::stream::StreamExt;
 
@@ -2364,7 +2364,7 @@ where
                     result.and_then(|obj| {
                         obj.as_object().and_then(|map| map.values().next().cloned()).ok_or_else(
                             || {
-                                ErgormError::validation(
+                                OrmadaError::validation(
                                     "QuerySet",
                                     "values_list",
                                     "Invalid value format",
@@ -2397,7 +2397,7 @@ where
         }
     }
 
-    /// Get specific column values as tuples (Django's `values_list()`)
+    /// Get specific column values as tuples (Ormada's `values_list()`)
     ///
     /// Returns a Vec of tuples for small-medium datasets.
     /// For large datasets, automatically uses chunked fetching.
@@ -2424,7 +2424,7 @@ where
         &self,
         columns: Vec<E::Column>,
         flat: bool,
-    ) -> Result<Vec<serde_json::Value>, ErgormError> {
+    ) -> Result<Vec<serde_json::Value>, OrmadaError> {
         use sea_orm::{JsonValue, QuerySelect};
 
         if columns.is_empty() {
@@ -2490,7 +2490,7 @@ where
         stmt.to_string()
     }
 
-    /// Analyze query execution plan (Django-inspired .`explain()`)
+    /// Analyze query execution plan (Ormada-inspired .`explain()`)
     ///
     /// Returns the database query execution plan without running the query.
     /// Useful for understanding how the database will execute your query
@@ -2528,9 +2528,9 @@ where
     ///
     /// - `.explain_analyze()` - Runs query and provides actual timings
     /// - `.debug_sql()` - Shows the raw SQL query
-    pub async fn explain(&self) -> Result<String, ErgormError>
+    pub async fn explain(&self) -> Result<String, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         use sea_orm::QueryTrait;
 
@@ -2552,7 +2552,7 @@ where
         Ok(format!("EXPLAIN output for query:\n{sql}\n\nTo run: {explain_sql}"))
     }
 
-    /// Analyze query with actual execution (Django-inspired .explain(analyze=True))
+    /// Analyze query with actual execution (Ormada-inspired .explain(analyze=True))
     ///
     /// Runs the query and provides detailed execution statistics including
     /// actual row counts, execution time, and resource usage.
@@ -2594,9 +2594,9 @@ where
     /// - **`SQLite`**: Limited - same as `explain()`
     /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
     /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
-    pub async fn explain_analyze(&self) -> Result<String, ErgormError>
+    pub async fn explain_analyze(&self) -> Result<String, OrmadaError>
     where
-        E: crate::traits::ErgormEntity,
+        E: crate::traits::OrmadaEntity,
     {
         use sea_orm::QueryTrait;
 
@@ -2628,12 +2628,12 @@ where
     /// Type-safe projection query (alternative to JSON-based `values()`)
     ///
     /// Returns results as a custom type with compile-time validation.
-    /// Use `#[django_projection(model = YourModel)]` to define projection structs.
+    /// Use `#[ormada_projection(model = YourModel)]` to define projection structs.
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// #[django_projection(model = Book)]
+    /// #[ormada_projection(model = Book)]
     /// struct BookSummary {
     ///     title: String,
     ///     price: f64,
@@ -2648,7 +2648,7 @@ where
     ///     println!("{}: ${}", summary.title, summary.price);
     /// }
     /// ```
-    pub async fn project<T>(&self) -> Result<Vec<T>, ErgormError>
+    pub async fn project<T>(&self) -> Result<Vec<T>, OrmadaError>
     where
         T: FromQueryResult + Send,
     {
@@ -2657,7 +2657,7 @@ where
         Ok(self.inner.select.clone().into_model::<T>().all(self.inner.db).await?)
     }
 
-    /// Group query results by one or more columns (Django's .`group_by()`)
+    /// Group query results by one or more columns (Ormada's .`group_by()`)
     ///
     /// Used with `.annotate()` for aggregation queries.
     ///
@@ -2680,7 +2680,7 @@ where
         self.with_select_and_op(new_select, QueryOp::GroupBy(col_ref))
     }
 
-    /// Add computed/aggregated columns to the query (Django's .`annotate()`)
+    /// Add computed/aggregated columns to the query (Ormada's .`annotate()`)
     ///
     /// Adds aliased expressions for aggregations or computed values.
     /// Must be used with `.project::<T>()` where T has `#[computed]` fields
@@ -2691,9 +2691,9 @@ where
     /// ## Basic Aggregation
     ///
     /// ```rust,ignore
-    /// use seaorm_django::prelude::*;
+    /// use ormada::prelude::*;
     ///
-    /// #[django_projection(model = Book)]
+    /// #[ormada_projection(model = Book)]
     /// struct AuthorStats {
     ///     author_id: i32,
     ///     #[computed]
@@ -2738,7 +2738,7 @@ where
     /// ## Without GROUP BY (aggregate over entire result set)
     ///
     /// ```rust,ignore
-    /// #[django_projection(model = Book)]
+    /// #[ormada_projection(model = Book)]
     /// struct OverallStats {
     ///     #[computed]
     ///     total_books: i64,
@@ -2903,15 +2903,15 @@ impl Aggregation {
 // Q Objects - Complex Query Building
 // ============================================================================
 
-/// Q object for complex queries (Django's Q objects)
+/// Q object for complex queries (Ormada's Q objects)
 ///
 /// Q objects allow you to build complex queries with OR and NOT logic,
-/// similar to Django's Q objects. They can be nested and combined.
+/// similar to Ormada's Q objects. They can be nested and combined.
 ///
 /// # Basic Usage
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// // OR condition: title contains "Rust" OR "Python"
 /// let q = Q::any()
@@ -3032,7 +3032,7 @@ impl Q {
         self
     }
 
-    /// Negate this Q object (Django's ~`Q()`)
+    /// Negate this Q object (Ormada's ~`Q()`)
     ///
     /// Returns a Q object that matches the opposite of the current conditions.
     ///
@@ -3080,7 +3080,7 @@ impl From<Q> for Condition {
 /// # Example
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// // Using FilterExpr variants directly
 /// let filter = FilterExpr::And(vec![
@@ -3183,7 +3183,7 @@ impl FilterOp {
 /// # Example
 ///
 /// ```rust,ignore
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// // Create typed filter
 /// let filter = FilterExpr::eq(Book::Price, 100);
@@ -3409,13 +3409,13 @@ impl From<FilterExpr> for SimpleExpr {
 /// Extension trait to add `.objects()` method to entities
 ///
 /// This trait is automatically implemented for all `SeaORM` entities and provides
-/// the Django-like `.objects(db)` entry point for querying.
+/// the Ormada-like `.objects(db)` entry point for querying.
 ///
 /// # Basic Usage
 ///
 /// ```rust,ignore
 /// use entity::book::{Entity as Book, Column};
-/// use seaorm_django::prelude::*;
+/// use ormada::prelude::*;
 ///
 /// // Get all books
 /// let all_books = Book::objects(db).all().await?;
@@ -3488,7 +3488,7 @@ impl From<FilterExpr> for SimpleExpr {
 ///     .await?;
 /// ```
 pub trait QueryExt: EntityTrait {
-    /// Create a new `QuerySet` for this entity (Django's .objects)
+    /// Create a new `QuerySet` for this entity (Ormada's .objects)
     ///
     /// This is the entry point for all queries. Returns a `QuerySet` that you
     /// can chain methods on to build your query.

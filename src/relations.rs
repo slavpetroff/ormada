@@ -1,4 +1,4 @@
-//! Relation loading for Django-like ORM
+//! Relation loading for Ormada-like ORM
 //!
 //! This module provides eager loading of relations with zero N+1 queries.
 //!
@@ -8,11 +8,11 @@
 //! - All original model fields as direct properties
 //! - Relation fields as `Option<RelatedModel>`
 //!
-//! This is achieved via the `#[derive(DjangoModel)]` macro which reads `SeaORM`'s
+//! This is achieved via the `#[derive(OrmadaModel)]` macro which reads `SeaORM`'s
 //! Relation definitions and generates the extended struct at compile time.
 
 use crate::db::ConnectionTrait;
-use crate::error::ErgormError;
+use crate::error::OrmadaError;
 use crate::fields::{ColumnTrait, Condition};
 use crate::models::{EntityTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 use rustc_hash::FxHashMap;
@@ -33,7 +33,7 @@ use sea_orm::sea_query::{Asterisk, Expr, SimpleExpr};
 /// # Examples
 ///
 /// ```rust,ignore
-/// use seaorm_django::relations;
+/// use ormada::relations;
 ///
 /// // Single relation - just use the Model name!
 /// let books = Book::objects(db)
@@ -81,7 +81,7 @@ impl<E: EntityTrait> Default for RelationSpec<E> {
 
 /// Trait to extract Entity type from Model (for relations! macro)
 ///
-/// This is automatically implemented by the #[django_model] macro
+/// This is automatically implemented by the #[ormada_model] macro
 #[doc(hidden)]
 pub trait HasEntityType {
     /// The SeaORM Entity type for this Model
@@ -101,7 +101,7 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait {
     async fn load_related<C: ConnectionTrait>(
         models: &[Self::Model],
         db: &C,
-    ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, ErgormError>;
+    ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, OrmadaError>;
 
     /// Set the related model on the parent model
     fn set_related(model: &mut Self::Model, related: Option<Related::Model>);
@@ -116,7 +116,7 @@ pub trait LoadRelations<Parent: EntityTrait> {
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
-    ) -> Result<Self::Output, ErgormError>;
+    ) -> Result<Self::Output, OrmadaError>;
 
     /// Populate relations on models
     fn populate(models: &mut [Parent::Model], data: &Self::Output);
@@ -129,7 +129,7 @@ impl<E: EntityTrait> LoadRelations<E> for () {
     async fn load_all<C: ConnectionTrait>(
         _models: &[E::Model],
         _db: &C,
-    ) -> Result<(), ErgormError> {
+    ) -> Result<(), OrmadaError> {
         Ok(())
     }
 
@@ -147,7 +147,7 @@ where
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
-    ) -> Result<Self::Output, ErgormError> {
+    ) -> Result<Self::Output, OrmadaError> {
         <Parent as HasRelation<R1>>::load_related(models, db).await
     }
 
@@ -175,7 +175,7 @@ where
     async fn load_all<C: ConnectionTrait>(
         models: &[Parent::Model],
         db: &C,
-    ) -> Result<Self::Output, ErgormError> {
+    ) -> Result<Self::Output, OrmadaError> {
         let r1 = <Parent as HasRelation<R1>>::load_related(models, db).await?;
         let r2 = <Parent as HasRelation<R2>>::load_related(models, db).await?;
         Ok((r1, r2))
@@ -220,7 +220,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use seaorm_django::relations;
+    /// use ormada::relations;
     /// use entity::{author::Entity as Author, publisher::Entity as Publisher};
     ///
     /// // Using the relations! macro (recommended)
@@ -281,7 +281,7 @@ where
     ///     }
     /// }
     /// ```
-    pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, ErgormError> {
+    pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, OrmadaError> {
         // Execute main query
         let db = self.db;
         let mut models = self.select.all(db).await?;
@@ -312,7 +312,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use seaorm_django::relations;
+    /// use ormada::relations;
     ///
     /// // Get first book with author - DIRECT FIELD ACCESS!
     /// let book: BookWithRelations = Book::objects(db)
@@ -327,9 +327,9 @@ where
     ///     println!("Author: {}", author.name);
     /// }
     /// ```
-    pub async fn first(self) -> Result<E::ModelWithRelations, ErgormError> {
+    pub async fn first(self) -> Result<E::ModelWithRelations, OrmadaError> {
         let results = self.all().await?;
-        results.into_iter().next().ok_or_else(|| ErgormError::empty_result("first"))
+        results.into_iter().next().ok_or_else(|| OrmadaError::empty_result("first"))
     }
 
     /// Get the last record with prefetched relations
@@ -339,7 +339,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use seaorm_django::relations;
+    /// use ormada::relations;
     ///
     /// // Get last book with relations - DIRECT FIELD ACCESS!
     /// let book: BookWithRelations = Book::objects(db)
@@ -353,9 +353,9 @@ where
     ///     println!("Author: {}", author.name);
     /// }
     /// ```
-    pub async fn last(self) -> Result<E::ModelWithRelations, ErgormError> {
+    pub async fn last(self) -> Result<E::ModelWithRelations, OrmadaError> {
         let results = self.all().await?;
-        results.into_iter().last().ok_or_else(|| ErgormError::empty_result("last"))
+        results.into_iter().last().ok_or_else(|| OrmadaError::empty_result("last"))
     }
 
     /// Count records matching the query
@@ -373,7 +373,7 @@ where
     ///     .count()
     ///     .await?;
     /// ```
-    pub async fn count(self) -> Result<u64, ErgormError> {
+    pub async fn count(self) -> Result<u64, OrmadaError> {
         let count_select =
             self.select.select_only().column_as(Expr::col(Asterisk).count(), "count");
 
@@ -396,7 +396,7 @@ where
     ///     .exists()
     ///     .await?;
     /// ```
-    pub async fn exists(self) -> Result<bool, ErgormError> {
+    pub async fn exists(self) -> Result<bool, OrmadaError> {
         let result = self.select.limit(1).one(self.db).await?;
         Ok(result.is_some())
     }
