@@ -67,7 +67,6 @@ fn bench_query_all_sizes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
             b.to_async(&rt).iter(|| async {
-                use ormada::query::QueryExt;
                 let results = BenchmarkItem::objects(&db).all().await.expect("Query failed");
                 black_box(results)
             });
@@ -84,7 +83,6 @@ fn bench_query_filtered(c: &mut Criterion) {
 
     c.bench_function("query_filtered_10k", |b| {
         b.to_async(&rt).iter(|| async {
-            use ormada::query::QueryExt;
             let results = BenchmarkItem::objects(&db)
                 .filter(BenchmarkItem::Value.lt(500))
                 .all()
@@ -104,7 +102,6 @@ fn bench_aggregations(c: &mut Criterion) {
 
     group.bench_function("count", |b| {
         b.to_async(&rt).iter(|| async {
-            use ormada::query::QueryExt;
             let count = BenchmarkItem::objects(&db).count().await.expect("Count failed");
             black_box(count)
         });
@@ -113,7 +110,6 @@ fn bench_aggregations(c: &mut Criterion) {
     group.bench_function("sum_with_clone", |b| {
         b.to_async(&rt).iter(|| async {
             use ormada::aggregations::AggregateExt;
-            use ormada::query::QueryExt;
             let sum = BenchmarkItem::objects(&db)
                 .aggregate_sum(BenchmarkItem::Value)
                 .await
@@ -134,7 +130,6 @@ fn bench_values_vs_models(c: &mut Criterion) {
 
     group.bench_function("full_models", |b| {
         b.to_async(&rt).iter(|| async {
-            use ormada::query::QueryExt;
             let results = BenchmarkItem::objects(&db).all().await.expect("Query failed");
             black_box(results)
         });
@@ -142,7 +137,6 @@ fn bench_values_vs_models(c: &mut Criterion) {
 
     group.bench_function("values_json", |b| {
         b.to_async(&rt).iter(|| async {
-            use ormada::query::QueryExt;
             let results = BenchmarkItem::objects(&db)
                 .values(vec![BenchmarkItem::Name, BenchmarkItem::Value])
                 .await
@@ -163,7 +157,6 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
 
     group.bench_function("all_10k", |b| {
         b.to_async(&rt).iter(|| async {
-            use ormada::query::QueryExt;
             let results = BenchmarkItem::objects(&db).all().await.expect("Query failed");
             // Simulate processing
             let count = results.len();
@@ -174,7 +167,6 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
     group.bench_function("values_iter_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use futures::StreamExt;
-            use ormada::query::QueryExt;
 
             let mut stream = BenchmarkItem::objects(&db)
                 .values_iter(vec![BenchmarkItem::Id, BenchmarkItem::Name], Some(500))
@@ -193,7 +185,6 @@ fn bench_iterator_vs_all(c: &mut Criterion) {
     group.bench_function("model_iter_10k", |b| {
         b.to_async(&rt).iter(|| async {
             use futures::StreamExt;
-            use ormada::query::QueryExt;
 
             let mut stream =
                 BenchmarkItem::objects(&db).iterator(Some(500)).await.expect("Iterator failed");
