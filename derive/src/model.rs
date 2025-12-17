@@ -545,6 +545,23 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     Ok(expanded)
 }
 
+/// Extract the inner type from Option<T>, returning T
+/// Returns None if the type is not an Option
+fn extract_option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Option" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                        return Some(inner_ty.clone());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Convert PascalCase to snake_case
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
@@ -593,7 +610,12 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
 
     // Add SeaORM attributes based on config
     if config.is_primary_key {
-        new_attrs.push(syn::parse_quote! { #[sea_orm(primary_key)] });
+        // Handle auto_increment option for primary key
+        if config.auto_increment == Some(false) {
+            new_attrs.push(syn::parse_quote! { #[sea_orm(primary_key, auto_increment = false)] });
+        } else {
+            new_attrs.push(syn::parse_quote! { #[sea_orm(primary_key)] });
+        }
     }
     if config.index.is_some() {
         new_attrs.push(syn::parse_quote! { #[sea_orm(indexed)] });
@@ -782,20 +804,26 @@ fn generate_django_entity_impl(
         let field_name_str = field_name.to_string();
 
         // Foreign key validation for non-nullable FKs
-        // Check that FK value is not 0 (default) which would likely cause DB constraint violation
-        if let Some(ref fk) = config.foreign_key {
+        // Check that FK value is not the default value which would likely cause DB constraint violation
+        // This works for all types that implement Default + PartialEq:
+        // - i8, i16, i32, i64: default is 0
+        // - u8, u16, u32, u64: default is 0  
+        // - String: default is ""
+        // - Uuid: default is nil UUID (00000000-0000-0000-0000-000000000000)
+        if let Some(ref _fk) = config.foreign_key {
             let type_str = quote!(#field_type).to_string();
             let is_nullable_fk = type_str.contains("Option");
             
             if !is_nullable_fk {
-                // Non-nullable FK: validate that value is not 0
+                // Non-nullable FK: validate that value is not the default
+                // Use the field type explicitly to avoid type inference issues
                 validations.push(quote! {
-                    if model.#field_name == 0 {
+                    if model.#field_name == <#field_type as ::core::default::Default>::default() {
                         return ::core::result::Result::Err(
                             ::ormada::error::OrmadaError::validation_error(
                                 #table_name,
                                 #field_name_str,
-                                "foreign key cannot be 0 - did you forget to set this field? Using Default::default() on models with foreign keys will set FK fields to 0, which is likely not a valid reference."
+                                "foreign key cannot be the default value - did you forget to set this field? Using Default::default() on models with foreign keys will leave FK fields uninitialized."
                             )
                         );
                     }
@@ -874,10 +902,18 @@ fn generate_django_entity_impl(
                 #field_name: ::ormada::__internal::Set(now)
             });
         } else if config.is_primary_key {
-            create_assignments.push(quote! {
-                #field_name: ::ormada::__internal::NotSet
-            });
-        } else if let Some(ref fk) = config.foreign_key {
+            // For auto_increment = false PKs (like UUID), we need to Set the value
+            // For auto_increment PKs, we use NotSet to let the DB generate the value
+            if config.auto_increment == Some(false) {
+                create_assignments.push(quote! {
+                    #field_name: ::ormada::__internal::Set(model.#field_name.clone())
+                });
+            } else {
+                create_assignments.push(quote! {
+                    #field_name: ::ormada::__internal::NotSet
+                });
+            }
+        } else if let Some(ref _fk) = config.foreign_key {
             create_assignments.push(quote! {
                 #field_name: ::ormada::__internal::Set(model.#field_name)
             });
@@ -987,11 +1023,11 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConf
 
             // Generate get_foreign_key and load_related based on FK nullability
             let (get_fk_impl, load_related_impl) = if is_nullable_fk {
-                // Nullable FK: need to handle Option<i32>
+                // Nullable FK: need to handle Option<T> where T can be i32, i64, String, etc.
                 (
                     quote! {
                         fn get_foreign_key(model: &<Self as ::ormada::__internal::EntityTrait>::Model) -> Self::RelatedPK {
-                            model.#field_name.unwrap_or(0)
+                            model.#field_name.clone().unwrap_or_default()
                         }
                     },
                     quote! {
@@ -1083,9 +1119,20 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConf
                 )
             };
 
+            // Extract the inner type for nullable FKs (Option<T> -> T)
+            let related_pk_type = if is_nullable_fk {
+                // For Option<T>, extract T
+                // fk_field_type is like "Option < i32 >" or "Option<i64>"
+                // We need to extract the inner type
+                let inner_type = extract_option_inner_type(fk_field_type);
+                inner_type.unwrap_or_else(|| fk_field_type.clone())
+            } else {
+                fk_field_type.clone()
+            };
+
             quote! {
                 impl ::ormada::relations::HasRelation<#entity> for Entity {
-                    type RelatedPK = i32; // TODO: Detect actual type
+                    type RelatedPK = #related_pk_type;
 
                     #get_fk_impl
 

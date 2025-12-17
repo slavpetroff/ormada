@@ -776,7 +776,7 @@ async fn test_non_nullable_fk_validation_rejects_zero(#[future] db: DatabaseRout
     assert!(result.is_err());
     let err = result.unwrap_err();
     let err_str = format!("{:?}", err);
-    assert!(err_str.contains("foreign key cannot be 0"));
+    assert!(err_str.contains("foreign key cannot be the default value"));
     assert!(err_str.contains("author_id"));
 }
 
