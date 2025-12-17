@@ -71,7 +71,7 @@ async fn test_tx_macro_rollback_on_error(#[future] db: DatabaseRouter) {
             .await?;
 
         // Trigger error to test rollback
-        return Err(OrmadaError::validation("test", "rollback", "Intentional error"));
+        return Err(OrmadaError::validation_error("test", "rollback", "Intentional error"));
     })
     .await;
 
@@ -331,8 +331,9 @@ async fn test_transaction_with_bulk_update(
     let updated_count = tx!(db, |txn| async move {
         Author::objects(txn)
             .filter(Author::Age.lt(35))
-            .update(|author| {
+            .update(|mut author| async move {
                 author.age = 35;
+                Ok(author)
             })
             .await
     })
@@ -386,7 +387,7 @@ async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
             .await?;
 
         // Force error to test rollback
-        Err::<(), OrmadaError>(OrmadaError::validation("test", "rollback", "Intentional error"))
+        Err::<(), OrmadaError>(OrmadaError::validation_error("test", "rollback", "Intentional error"))
     })
     .await;
 
@@ -444,7 +445,7 @@ async fn test_nested_transaction_inner_rollback(#[future] db: DatabaseRouter) {
                 })
                 .await?;
 
-            Err::<(), OrmadaError>(OrmadaError::validation("test", "rollback", "Inner fail"))
+            Err::<(), OrmadaError>(OrmadaError::validation_error("test", "rollback", "Inner fail"))
         })
         .await;
 
@@ -493,8 +494,9 @@ async fn test_transaction_with_filter_and_update(
     let updated = tx!(db, |txn| async move {
         Author::objects(txn)
             .filter(Author::Name.eq("Alice"))
-            .update(|author| {
+            .update(|mut author| async move {
                 author.age = 100;
+                Ok(author)
             })
             .await
     })

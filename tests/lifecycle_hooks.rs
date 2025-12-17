@@ -105,7 +105,7 @@ pub mod blocking_author {
     #[async_trait]
     impl LifecycleHooks for Model {
         async fn before_delete(&self) -> Result<(), OrmadaError> {
-            Err(OrmadaError::validation("BlockingAuthor", "delete", "Deletion blocked"))
+            Err(OrmadaError::validation_error("BlockingAuthor", "delete", "Deletion blocked"))
         }
     }
 }

@@ -100,7 +100,7 @@ async fn test_get_by_id_success(#[future] db_with_author: (DatabaseRouter, Autho
 async fn test_get_by_id_not_found(#[future] db: DatabaseRouter) {
     let result = Author::objects(&db).get(999).await;
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("not found"));
+    assert!(result.unwrap_err().to_string().contains("does not exist"));
 }
 
 #[rstest]
@@ -1084,11 +1084,13 @@ async fn test_q_empty_any(#[future] db_with_sample_authors: (DatabaseRouter, Vec
 async fn test_get_or_create_creates_new(#[future] db: DatabaseRouter) {
     let (author, created) = Author::objects(&db)
         .filter(Author::Email.eq("new@test.com"))
-        .get_or_create(|| Author {
-            name: "New Author".to_string(),
-            email: "new@test.com".to_string(),
-            age: 30,
-            ..Default::default()
+        .get_or_create(|| async {
+            Ok(Author {
+                name: "New Author".to_string(),
+                email: "new@test.com".to_string(),
+                age: 30,
+                ..Default::default()
+            })
         })
         .await
         .unwrap();
@@ -1102,14 +1104,17 @@ async fn test_get_or_create_creates_new(#[future] db: DatabaseRouter) {
 #[tokio::test]
 async fn test_get_or_create_gets_existing(#[future] db_with_author: (DatabaseRouter, Author)) {
     let (db, existing) = db_with_author;
+    let existing_email = existing.email.clone();
 
     let (author, created) = Author::objects(&db)
         .filter(Author::Email.eq(&existing.email))
-        .get_or_create(|| Author {
-            name: "Should Not Create".to_string(),
-            email: existing.email.clone(),
-            age: 99,
-            ..Default::default()
+        .get_or_create(|| async {
+            Ok(Author {
+                name: "Should Not Create".to_string(),
+                email: existing_email.clone(),
+                age: 99,
+                ..Default::default()
+            })
         })
         .await
         .unwrap();
@@ -1126,18 +1131,22 @@ async fn test_update_or_create_updates_existing(
     #[future] db_with_author: (DatabaseRouter, Author),
 ) {
     let (db, existing) = db_with_author;
+    let existing_email = existing.email.clone();
 
     let (author, created) = Author::objects(&db)
         .filter(Author::Email.eq(&existing.email))
         .update_or_create(
-            |a| {
+            |mut a| async move {
                 a.age = 100;
+                Ok(a)
             },
-            || Author {
-                name: "Should Not Create".to_string(),
-                email: existing.email.clone(),
-                age: 50,
-                ..Default::default()
+            || async {
+                Ok(Author {
+                    name: "Should Not Create".to_string(),
+                    email: existing_email.clone(),
+                    age: 50,
+                    ..Default::default()
+                })
             },
         )
         .await
@@ -1155,14 +1164,17 @@ async fn test_update_or_create_creates_new(#[future] db: DatabaseRouter) {
     let (author, created) = Author::objects(&db)
         .filter(Author::Email.eq("new@test.com"))
         .update_or_create(
-            |a| {
+            |mut a| async move {
                 a.age = 100;
+                Ok(a)
             },
-            || Author {
-                name: "New Author".to_string(),
-                email: "new@test.com".to_string(),
-                age: 50,
-                ..Default::default()
+            || async {
+                Ok(Author {
+                    name: "New Author".to_string(),
+                    email: "new@test.com".to_string(),
+                    age: 50,
+                    ..Default::default()
+                })
             },
         )
         .await
@@ -1438,11 +1450,13 @@ async fn test_get_or_create_race_condition_retry(#[future] db: DatabaseRouter) {
             barrier.wait().await; // Sync start
             Author::objects(&*db)
                 .filter(Author::Email.eq("race@test.com"))
-                .get_or_create(|| Author {
-                    name: "Race Test 1".to_string(),
-                    email: "race@test.com".to_string(),
-                    age: 30,
-                    ..Default::default()
+                .get_or_create(|| async {
+                    Ok(Author {
+                        name: "Race Test 1".to_string(),
+                        email: "race@test.com".to_string(),
+                        age: 30,
+                        ..Default::default()
+                    })
                 })
                 .await
         })
@@ -1455,11 +1469,13 @@ async fn test_get_or_create_race_condition_retry(#[future] db: DatabaseRouter) {
             barrier.wait().await; // Sync start
             Author::objects(&*db)
                 .filter(Author::Email.eq("race@test.com"))
-                .get_or_create(|| Author {
-                    name: "Race Test 2".to_string(),
-                    email: "race@test.com".to_string(),
-                    age: 31,
-                    ..Default::default()
+                .get_or_create(|| async {
+                    Ok(Author {
+                        name: "Race Test 2".to_string(),
+                        email: "race@test.com".to_string(),
+                        age: 31,
+                        ..Default::default()
+                    })
                 })
                 .await
         })
@@ -1512,12 +1528,17 @@ async fn test_update_or_create_race_condition_retry(#[future] db: DatabaseRouter
             Author::objects(&*db)
                 .filter(Author::Email.eq("update_race@test.com"))
                 .update_or_create(
-                    |a| a.age = 30,
-                    || Author {
-                        name: "New 1".to_string(),
-                        email: "update_race@test.com".to_string(),
-                        age: 30,
-                        ..Default::default()
+                    |mut a| async move {
+                        a.age = 30;
+                        Ok(a)
+                    },
+                    || async {
+                        Ok(Author {
+                            name: "New 1".to_string(),
+                            email: "update_race@test.com".to_string(),
+                            age: 30,
+                            ..Default::default()
+                        })
                     },
                 )
                 .await
@@ -1532,12 +1553,17 @@ async fn test_update_or_create_race_condition_retry(#[future] db: DatabaseRouter
             Author::objects(&*db)
                 .filter(Author::Email.eq("update_race@test.com"))
                 .update_or_create(
-                    |a| a.age = 35,
-                    || Author {
-                        name: "New 2".to_string(),
-                        email: "update_race@test.com".to_string(),
-                        age: 35,
-                        ..Default::default()
+                    |mut a| async move {
+                        a.age = 35;
+                        Ok(a)
+                    },
+                    || async {
+                        Ok(Author {
+                            name: "New 2".to_string(),
+                            email: "update_race@test.com".to_string(),
+                            age: 35,
+                            ..Default::default()
+                        })
                     },
                 )
                 .await

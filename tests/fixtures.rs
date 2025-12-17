@@ -69,11 +69,35 @@ pub mod models {
             #[auto_now]
             pub updated_at: DateTimeWithTimeZone,
         }
-        // LifecycleHooks is auto-implemented by #[ormada_model] - no manual impl needed!
+    }
+
+    pub mod article {
+        use super::*;
+
+        #[ormada_model(table = "articles")]
+        pub struct Article {
+            #[primary_key]
+            pub id: i32,
+
+            #[foreign_key(Author, on_delete = SetNull)]
+            pub author_id: Option<i32>,
+
+            #[max_length(200)]
+            pub title: String,
+
+            pub content: String,
+
+            #[auto_now_add]
+            pub created_at: DateTimeWithTimeZone,
+
+            #[auto_now]
+            pub updated_at: DateTimeWithTimeZone,
+        }
     }
 }
 
 // Re-export for convenience
+pub use models::article::Article;
 pub use models::author::Author;
 pub use models::book::Book;
 
@@ -133,6 +157,7 @@ pub async fn db() -> DatabaseRouter {
     // Create tables using macro-generated methods
     Author::create_table(&db_router).await.expect("Failed to create authors table");
     Book::create_table(&db_router).await.expect("Failed to create books table");
+    Article::create_table(&db_router).await.expect("Failed to create articles table");
 
     db_router
 }
@@ -442,4 +467,123 @@ pub async fn authors_with_books(
     }
 
     result
+}
+
+// ============================================================================
+// Article Fixtures (Nullable FK)
+// ============================================================================
+
+/// Creates articles with nullable author FK
+#[fixture]
+#[awt]
+pub async fn db_with_articles_mixed_authors(
+    #[future] db: DatabaseRouter,
+) -> (DatabaseRouter, Author, Vec<Article>) {
+    let author = Author::objects(&db)
+        .create(Author {
+            name: "Article Author".to_string(),
+            email: "article.author@example.com".to_string(),
+            age: 40,
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create author");
+
+    let mut articles = Vec::new();
+
+    // Article with author
+    let article_with_author = Article::objects(&db)
+        .create(Article {
+            author_id: Some(author.id),
+            title: "Article with Author".to_string(),
+            content: "Content with author".to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create article with author");
+    articles.push(article_with_author);
+
+    // Article without author (nullable FK)
+    let article_without_author = Article::objects(&db)
+        .create(Article {
+            author_id: None,
+            title: "Article without Author".to_string(),
+            content: "Content without author".to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create article without author");
+    articles.push(article_without_author);
+
+    // Another article with author
+    let article_with_author2 = Article::objects(&db)
+        .create(Article {
+            author_id: Some(author.id),
+            title: "Another Article with Author".to_string(),
+            content: "More content with author".to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create second article with author");
+    articles.push(article_with_author2);
+
+    (db, author, articles)
+}
+
+/// Creates articles all with authors
+#[fixture]
+#[awt]
+pub async fn db_with_articles_all_with_authors(
+    #[future] db: DatabaseRouter,
+    #[default(3)] article_count: usize,
+) -> (DatabaseRouter, Author, Vec<Article>) {
+    let author = Author::objects(&db)
+        .create(Author {
+            name: "Article Author".to_string(),
+            email: "article.author@example.com".to_string(),
+            age: 40,
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to create author");
+
+    let mut articles = Vec::new();
+    for i in 0..article_count {
+        let article = Article::objects(&db)
+            .create(Article {
+                author_id: Some(author.id),
+                title: format!("Article {}", i + 1),
+                content: format!("Content {}", i + 1),
+                ..Default::default()
+            })
+            .await
+            .expect("Failed to create article");
+        articles.push(article);
+    }
+
+    (db, author, articles)
+}
+
+/// Creates articles all without authors (orphaned)
+#[fixture]
+#[awt]
+pub async fn db_with_orphan_articles(
+    #[future] db: DatabaseRouter,
+    #[default(3)] article_count: usize,
+) -> (DatabaseRouter, Vec<Article>) {
+    let mut articles = Vec::new();
+    for i in 0..article_count {
+        let article = Article::objects(&db)
+            .create(Article {
+                author_id: None,
+                title: format!("Orphan Article {}", i + 1),
+                content: format!("Orphan Content {}", i + 1),
+                ..Default::default()
+            })
+            .await
+            .expect("Failed to create orphan article");
+        articles.push(article);
+    }
+
+    (db, articles)
 }

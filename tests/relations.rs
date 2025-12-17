@@ -34,12 +34,10 @@ async fn test_prefetch_related_single_relation(
 
     assert_eq!(loaded_books.len(), 3);
 
-    // Verify relation is loaded
+    // Verify relation is loaded (non-nullable FK = direct field access)
     for book in &loaded_books {
-        assert!(book.author.is_some());
-        let book_author = book.author.as_ref().unwrap();
-        assert_eq!(book_author.id, author.id);
-        assert_eq!(book_author.name, author.name);
+        assert_eq!(book.author.id, author.id);
+        assert_eq!(book.author.name, author.name);
     }
 }
 
@@ -55,11 +53,9 @@ async fn test_prefetch_related_no_n_plus_one(
 
     assert_eq!(books.len(), 6); // 3 authors * 2 books each
 
-    // All books should have their author loaded
+    // All books should have their author loaded (non-nullable FK = direct access)
     for book in &books {
-        assert!(book.author.is_some());
-        let author = book.author.as_ref().unwrap();
-        assert_eq!(author.id, book.author_id);
+        assert_eq!(book.author.id, book.author_id);
     }
 }
 
@@ -81,9 +77,9 @@ async fn test_prefetch_related_with_filter(
     assert!(!books.is_empty());
     assert!(books.iter().all(|b| b.published));
 
-    // All should have author loaded
+    // All should have author loaded (non-nullable FK = direct access, just verify id > 0)
     for book in &books {
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 
@@ -106,9 +102,9 @@ async fn test_prefetch_related_with_ordering(
         assert!(books[i - 1].price >= books[i].price);
     }
 
-    // Verify relations loaded
+    // Verify relations loaded (non-nullable FK = direct access)
     for book in &books {
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 
@@ -144,8 +140,7 @@ async fn test_prefetch_related_first(
         .await
         .unwrap();
 
-    assert!(book.author.is_some());
-    assert_eq!(book.author.unwrap().id, book.author_id);
+    assert_eq!(book.author.id, book.author_id);
 }
 
 #[rstest]
@@ -162,7 +157,7 @@ async fn test_prefetch_related_last(
         .await
         .unwrap();
 
-    assert!(book.author.is_some());
+    assert!(book.author.id > 0);
 }
 
 #[rstest]
@@ -180,7 +175,7 @@ async fn test_prefetch_related_with_limit(
         .unwrap();
 
     assert_eq!(books.len(), 6); // Default fixture creates 6 books total
-    assert!(books.iter().all(|b| b.author.is_some()));
+    assert!(books.iter().all(|b| b.author.id > 0));
 }
 
 // ============================================================================
@@ -234,7 +229,7 @@ async fn test_prefetch_with_complex_filter_chain(
 
     assert!(books.len() <= 5);
     assert!(books.iter().all(|b| b.price >= 1000 && b.published));
-    assert!(books.iter().all(|b| b.author.is_some()));
+    assert!(books.iter().all(|b| b.author.id > 0));
 }
 
 #[rstest]
@@ -277,9 +272,8 @@ async fn test_prefetch_multiple_authors_parametrized(
 
     assert_eq!(books.len(), author_count * 3);
 
-    // All books should have their authors loaded
-    let authors_found: std::collections::HashSet<i32> =
-        books.iter().filter_map(|b| b.author.as_ref().map(|a| a.id)).collect();
+    // All books should have their authors loaded (non-nullable FK = direct access)
+    let authors_found: std::collections::HashSet<i32> = books.iter().map(|b| b.author.id).collect();
 
     assert_eq!(authors_found.len(), author_count);
 }
@@ -305,14 +299,10 @@ async fn test_relation_field_access(
         .unwrap();
 
     for book in &books {
-        // Direct field access pattern
-        if let Some(ref book_author) = book.author {
-            assert_eq!(book_author.name, author.name);
-            assert_eq!(book_author.email, author.email);
-            assert_eq!(book_author.age, author.age);
-        } else {
-            panic!("Author should be loaded");
-        }
+        // Direct field access pattern (non-nullable FK = direct access)
+        assert_eq!(book.author.name, author.name);
+        assert_eq!(book.author.email, author.email);
+        assert_eq!(book.author.age, author.age);
     }
 }
 
@@ -326,11 +316,10 @@ async fn test_multiple_books_same_author(
 
     let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
-    // All books should have same author loaded
+    // All books should have same author loaded (non-nullable FK = direct access)
     assert_eq!(books.len(), 3); // Default fixture creates 3 books
     for book in &books {
-        let book_author = book.author.as_ref().unwrap();
-        assert_eq!(book_author.id, author.id);
+        assert_eq!(book.author.id, author.id);
     }
 }
 
@@ -355,8 +344,7 @@ async fn test_select_related_single(
 
     assert_eq!(books.len(), 3);
     for book in &books {
-        assert!(book.author.is_some());
-        assert_eq!(book.author.as_ref().unwrap().id, author.id);
+        assert_eq!(book.author.id, author.id);
     }
 }
 
@@ -378,7 +366,7 @@ async fn test_select_related_with_filter(
     assert!(!books.is_empty());
     for book in &books {
         assert!(book.published);
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 
@@ -405,7 +393,7 @@ async fn test_select_related_first(
 
     let book = Book::objects(&db).select_related(relations![Author]).first().await.unwrap();
 
-    assert!(book.author.is_some());
+    assert!(book.author.id > 0);
 }
 
 // ============================================================================
@@ -447,7 +435,7 @@ async fn test_prefetch_with_limit(
 
     assert_eq!(books.len(), 3);
     for book in &books {
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 
@@ -469,7 +457,7 @@ async fn test_prefetch_with_limit_offset(
 
     assert_eq!(books.len(), 4); // 6 total - 2 offset
     for book in &books {
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 
@@ -491,7 +479,7 @@ async fn test_prefetch_with_filter_after(
     assert!(!books.is_empty());
     for book in &books {
         assert!(book.published);
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 
@@ -535,7 +523,7 @@ async fn test_prefetch_exclude(
     assert!(!books.is_empty());
     for book in &books {
         assert!(book.published);
-        assert!(book.author.is_some());
+        assert!(book.author.id > 0);
     }
 }
 

@@ -336,7 +336,7 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     let mut field_configs = Vec::new();
     let mut has_primary_key = false;
     let mut primary_key_fields = Vec::new();
-    let mut foreign_keys = Vec::new();
+    let mut foreign_keys: Vec<(Ident, syn::Type, ForeignKeyConfig)> = Vec::new();
     let mut soft_delete_field: Option<Ident> = None;
 
     for field in fields.named.iter_mut() {
@@ -356,7 +356,7 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
             primary_key_fields.push(field_ident.clone());
         }
         if let Some(ref fk) = config.foreign_key {
-            foreign_keys.push((field_ident.clone(), fk.clone()));
+            foreign_keys.push((field_ident.clone(), field_type.clone(), fk.clone()));
         }
         if config.soft_delete {
             if soft_delete_field.is_some() {
@@ -425,7 +425,7 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     // Inject relation fields
     if let syn::Data::Struct(ref mut data) = input.data {
         if let syn::Fields::Named(ref mut fields) = data.fields {
-            for (field_ident, fk) in &foreign_keys {
+            for (field_ident, fk_field_type, fk) in &foreign_keys {
                 let field_name_str = field_ident.to_string();
                 let relation_name_str = if field_name_str.ends_with("_id") {
                     &field_name_str[..field_name_str.len() - 3]
@@ -435,15 +435,25 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
                 let relation_name = format_ident!("{}", relation_name_str);
                 let relation_type = &fk.entity; // This is a Path to Entity
 
-                // Add field: pub relation_name: Option<Model>
-                // We use the Entity::Model type
+                // Check if FK field is nullable (Option<T>)
+                let fk_type_str = quote!(#fk_field_type).to_string();
+                let is_nullable_fk = fk_type_str.contains("Option");
+
+                // Non-nullable FK: relation field is direct Model (not Option)
+                // Nullable FK: relation field is Option<Model>
+                let field_ty: syn::Type = if is_nullable_fk {
+                    syn::parse_quote! { ::core::option::Option<<#relation_type as ::ormada::__internal::EntityTrait>::Model> }
+                } else {
+                    syn::parse_quote! { <#relation_type as ::ormada::__internal::EntityTrait>::Model }
+                };
+
                 fields.named.push(syn::Field {
                     attrs: vec![syn::parse_quote! { #[sea_orm(ignore)] }],
                     vis: syn::Visibility::Public(syn::token::Pub::default()),
                     mutability: syn::FieldMutability::None,
                     ident: Some(relation_name),
                     colon_token: Some(syn::token::Colon::default()),
-                    ty: syn::parse_quote! { ::core::option::Option<<#relation_type as ::ormada::__internal::EntityTrait>::Model> },
+                    ty: field_ty,
                 });
             }
         }
@@ -703,7 +713,7 @@ fn generate_primary_key_enum(primary_key_fields: &[Ident]) -> TokenStream {
     }
 }
 
-fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenStream {
+fn generate_relation_enum(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
     if foreign_keys.is_empty() {
         return quote! {
             #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DeriveRelation)]
@@ -713,7 +723,7 @@ fn generate_relation_enum(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenSt
 
     let variants: Vec<_> = foreign_keys
         .iter()
-        .map(|(field_name, fk)| {
+        .map(|(field_name, _fk_field_type, fk)| {
             // Extract meaningful name from the path
             // e.g., crate::author::author::Entity -> use second-to-last "author"
             // or super::author::Entity -> use "author"
@@ -798,7 +808,7 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() > #max {
                             return ::core::result::Result::Err(
-                                ::ormada::error::OrmadaError::validation(
+                                ::ormada::error::OrmadaError::validation_error(
                                     #table_name,
                                     #field_name_str,
                                     ::std::format!("exceeds max_length of {}", #max)
@@ -811,7 +821,7 @@ fn generate_django_entity_impl(
                     validations.push(quote! {
                         if model.#field_name.len() < #min {
                             return ::core::result::Result::Err(
-                                ::ormada::error::OrmadaError::validation(
+                                ::ormada::error::OrmadaError::validation_error(
                                     #table_name,
                                     #field_name_str,
                                     ::std::format!("is shorter than min_length of {}", #min)
@@ -830,7 +840,7 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) < #min {
                         return ::core::result::Result::Err(
-                            ::ormada::error::OrmadaError::validation(
+                            ::ormada::error::OrmadaError::validation_error(
                                 #table_name,
                                 #field_name_str,
                                 ::std::format!("value {} is less than minimum {}", model.#field_name, #min)
@@ -844,7 +854,7 @@ fn generate_django_entity_impl(
                 validations.push(quote! {
                     if (model.#field_name as i64) > #max {
                         return ::core::result::Result::Err(
-                            ::ormada::error::OrmadaError::validation(
+                            ::ormada::error::OrmadaError::validation_error(
                                 #table_name,
                                 #field_name_str,
                                 ::std::format!("value {} exceeds maximum {}", model.#field_name, #max)
@@ -916,7 +926,7 @@ fn generate_django_entity_impl(
 ///
 /// This trait is ALWAYS generated (even for entities without foreign keys)
 /// so that the relations system works properly.
-fn generate_with_relations_trait(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenStream {
+fn generate_with_relations_trait(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
     // For now, we generate a minimal implementation with no relations
     // In the future, this could be enhanced to support actual relation loading
     quote! {
@@ -934,10 +944,10 @@ fn generate_with_relations_trait(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> 
     }
 }
 
-fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> TokenStream {
+fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
     let impls: Vec<_> = foreign_keys
         .iter()
-        .map(|(field_name, fk)| {
+        .map(|(field_name, fk_field_type, fk)| {
             let entity = &fk.entity;
             let relation_name_str = if field_name.to_string().ends_with("_id") {
                 &field_name.to_string()[..field_name.to_string().len() - 3]
@@ -946,54 +956,137 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, ForeignKeyConfig)]) -> To
             };
             let relation_name = format_ident!("{}", relation_name_str);
 
+            // Check if FK field is nullable (Option<T>)
+            let fk_type_str = quote!(#fk_field_type).to_string();
+            let is_nullable_fk = fk_type_str.contains("Option");
+
+            // Generate set_related based on FK nullability
+            let set_related_impl = if is_nullable_fk {
+                // Nullable FK: relation field is Option<Model>
+                quote! {
+                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
+                        model.#relation_name = related;
+                    }
+                }
+            } else {
+                // Non-nullable FK: relation field is Model directly
+                // If related is None, we use Default (this shouldn't happen with proper prefetch)
+                quote! {
+                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
+                        if let Some(r) = related {
+                            model.#relation_name = r;
+                        }
+                    }
+                }
+            };
+
+            // Generate get_foreign_key and load_related based on FK nullability
+            let (get_fk_impl, load_related_impl) = if is_nullable_fk {
+                // Nullable FK: need to handle Option<i32>
+                (
+                    quote! {
+                        fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
+                            model.#field_name.unwrap_or(0)
+                        }
+                    },
+                    quote! {
+                        async fn load_related<C: ::ormada::__internal::ConnectionTrait>(
+                            models: &[Self::Model],
+                            db: &C,
+                        ) -> ::core::result::Result<
+                            ::ormada::prelude::FxHashMap<Self::RelatedPK, <#entity as ::ormada::__internal::EntityTrait>::Model>,
+                            ::ormada::error::OrmadaError
+                        > {
+                            use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
+
+                            // For nullable FKs, filter out None values
+                            let fk_values: ::std::vec::Vec<Self::RelatedPK> = models
+                                .iter()
+                                .filter_map(|m| m.#field_name)
+                                .collect();
+
+                            if fk_values.is_empty() {
+                                return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
+                            }
+
+                            let pk_cols: ::std::vec::Vec<_> = <#entity as ::ormada::__internal::EntityTrait>::PrimaryKey::iter()
+                                .map(|pk| pk.into_column())
+                                .collect();
+                            let id_column = pk_cols[0];
+
+                            let related_models = <#entity as ::ormada::__internal::EntityTrait>::find()
+                                .filter(id_column.is_in(fk_values))
+                                .all(db)
+                                .await?;
+
+                            let mut map = ::ormada::prelude::FxHashMap::default();
+                            for model in related_models {
+                                let key = model.id;
+                                map.insert(key, model);
+                            }
+
+                            ::core::result::Result::Ok(map)
+                        }
+                    }
+                )
+            } else {
+                // Non-nullable FK: direct i32 access
+                (
+                    quote! {
+                        fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
+                            model.#field_name
+                        }
+                    },
+                    quote! {
+                        async fn load_related<C: ::ormada::__internal::ConnectionTrait>(
+                            models: &[Self::Model],
+                            db: &C,
+                        ) -> ::core::result::Result<
+                            ::ormada::prelude::FxHashMap<Self::RelatedPK, <#entity as ::ormada::__internal::EntityTrait>::Model>,
+                            ::ormada::error::OrmadaError
+                        > {
+                            use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
+
+                            let fk_values: ::std::vec::Vec<Self::RelatedPK> = models
+                                .iter()
+                                .map(|m| m.#field_name)
+                                .collect();
+
+                            if fk_values.is_empty() {
+                                return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
+                            }
+
+                            let pk_cols: ::std::vec::Vec<_> = <#entity as ::ormada::__internal::EntityTrait>::PrimaryKey::iter()
+                                .map(|pk| pk.into_column())
+                                .collect();
+                            let id_column = pk_cols[0];
+
+                            let related_models = <#entity as ::ormada::__internal::EntityTrait>::find()
+                                .filter(id_column.is_in(fk_values))
+                                .all(db)
+                                .await?;
+
+                            let mut map = ::ormada::prelude::FxHashMap::default();
+                            for model in related_models {
+                                let key = model.id;
+                                map.insert(key, model);
+                            }
+
+                            ::core::result::Result::Ok(map)
+                        }
+                    }
+                )
+            };
+
             quote! {
                 impl ::ormada::relations::HasRelation<#entity> for Entity {
                     type RelatedPK = i32; // TODO: Detect actual type
 
-                    fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
-                        model.#field_name
-                    }
+                    #get_fk_impl
 
-                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
-                        model.#relation_name = related;
-                    }
+                    #set_related_impl
 
-                    async fn load_related<C: ::ormada::__internal::ConnectionTrait>(
-                        models: &[Self::Model],
-                        db: &C,
-                    ) -> ::core::result::Result<
-                        ::ormada::prelude::FxHashMap<Self::RelatedPK, <#entity as ::ormada::__internal::EntityTrait>::Model>,
-                        ::ormada::error::OrmadaError
-                    > {
-                        use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
-
-                        let fk_values: ::std::vec::Vec<Self::RelatedPK> = models
-                            .iter()
-                            .map(|m| m.#field_name)
-                            .collect();
-
-                        if fk_values.is_empty() {
-                            return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
-                        }
-
-                        let pk_cols: ::std::vec::Vec<_> = <#entity as ::ormada::__internal::EntityTrait>::PrimaryKey::iter()
-                            .map(|pk| pk.into_column())
-                            .collect();
-                        let id_column = pk_cols[0];
-
-                        let related_models = <#entity as ::ormada::__internal::EntityTrait>::find()
-                            .filter(id_column.is_in(fk_values))
-                            .all(db)
-                            .await?;
-
-                        let mut map = ::ormada::prelude::FxHashMap::default();
-                        for model in related_models {
-                            let key = model.id;
-                            map.insert(key, model);
-                        }
-
-                        ::core::result::Result::Ok(map)
-                    }
+                    #load_related_impl
                 }
             }
         })
@@ -1339,21 +1432,35 @@ fn to_pascal_case(s: &str) -> String {
 }
 
 /// Generate Default implementation for Model that handles injected relation fields
+/// 
+/// Default is always generated. For models with required FK fields, the FK will
+/// default to 0 which will fail at the database level if not overridden.
+/// Users should always explicitly provide FK values:
+/// 
+/// ```ignore
+/// Book {
+///     author_id: author.id,  // Required - must be provided
+///     title: "My Book".to_string(),
+///     price: 1999,
+///     published: true,
+///     ..Default::default()   // Fills id, created_at, updated_at, author (relation)
+/// }
+/// ```
 fn generate_default_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
-    foreign_keys: &[(Ident, ForeignKeyConfig)],
+    foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
 ) -> TokenStream {
     let mut field_defaults = Vec::new();
 
     // Generate defaults for all original fields
-    for (field_name, field_type, _config) in field_configs {
+    for (field_name, _field_type, _config) in field_configs {
         field_defaults.push(quote! {
             #field_name: ::core::default::Default::default()
         });
     }
 
     // Generate defaults for injected relation fields
-    for (field_ident, _fk) in foreign_keys {
+    for (field_ident, fk_field_type, _fk) in foreign_keys {
         let field_name_str = field_ident.to_string();
         let relation_name_str = if field_name_str.ends_with("_id") {
             &field_name_str[..field_name_str.len() - 3]
@@ -1361,9 +1468,22 @@ fn generate_default_impl(
             &field_name_str
         };
         let relation_name = format_ident!("{}", relation_name_str);
-        field_defaults.push(quote! {
-            #relation_name: ::core::option::Option::None
-        });
+
+        // Check if FK field is nullable (Option<T>)
+        let fk_type_str = quote!(#fk_field_type).to_string();
+        let is_nullable_fk = fk_type_str.contains("Option");
+
+        if is_nullable_fk {
+            // Nullable FK: relation field is Option<Model>
+            field_defaults.push(quote! {
+                #relation_name: ::core::option::Option::None
+            });
+        } else {
+            // Non-nullable FK: relation field is Model, use Default
+            field_defaults.push(quote! {
+                #relation_name: ::core::default::Default::default()
+            });
+        }
     }
 
     quote! {
@@ -1376,3 +1496,4 @@ fn generate_default_impl(
         }
     }
 }
+

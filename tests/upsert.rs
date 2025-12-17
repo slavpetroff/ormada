@@ -440,7 +440,7 @@ async fn test_upsert_rollback_on_error(#[future] db: DatabaseRouter, #[future] _
             .await?;
 
         // Force error to test rollback
-        Err(OrmadaError::validation("test", "rollback", "Intentional error"))
+        Err(OrmadaError::validation_error("test", "rollback", "Intentional error"))
     })
     .await;
 

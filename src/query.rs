@@ -1117,7 +1117,7 @@ where
                 return cached_results
                     .first()
                     .cloned()
-                    .ok_or_else(|| OrmadaError::empty_result("first"));
+                    .ok_or_else(|| OrmadaError::empty_result_set("first"));
             }
         }
 
@@ -1128,7 +1128,7 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| OrmadaError::empty_result("first"))
+            .ok_or_else(|| OrmadaError::empty_result_set("first"))
     }
 
     /// Execute query and return last result
@@ -1182,10 +1182,9 @@ where
         // Apply soft delete filter and get one record
         let query = self.apply_soft_delete_filter(query);
 
-        query
-            .one(self.inner.db)
-            .await?
-            .ok_or_else(|| OrmadaError::not_found(E::default().table_name(), "last".to_string()))
+        query.one(self.inner.db).await?.ok_or_else(|| {
+            OrmadaError::does_not_exist(E::default().table_name(), "last".to_string())
+        })
     }
 
     /// Get a single record by primary key (Ormada's .get(pk=))
@@ -1228,7 +1227,7 @@ where
         query
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| OrmadaError::not_found(E::default().table_name(), id_str))
+            .ok_or_else(|| OrmadaError::does_not_exist(E::default().table_name(), id_str))
     }
 
     /// Get the earliest record by a field (Ormada's .`earliest()`)
@@ -1267,7 +1266,7 @@ where
             .order_by(column, Order::Asc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| OrmadaError::empty_result("earliest"))
+            .ok_or_else(|| OrmadaError::empty_result_set("earliest"))
     }
 
     /// Get the latest record by a field (Ormada's .`latest()`)
@@ -1311,7 +1310,7 @@ where
             .order_by(column, Order::Desc)
             .one(self.inner.db)
             .await?
-            .ok_or_else(|| OrmadaError::empty_result("latest"))
+            .ok_or_else(|| OrmadaError::empty_result_set("latest"))
     }
 
     /// Count records matching the query (Ormada's .`count()`)
@@ -1438,32 +1437,50 @@ where
 
     /// Update all records matching the query (Ormada's .`update()`)
     ///
-    /// Applies the same updates to all matching records using a closure.
+    /// Applies the same updates to all matching records using an async closure.
     /// Returns the number of records updated.
+    ///
+    /// **Async Support:** The closure receives the model by value and returns a future
+    /// that produces the modified model. This allows async operations like FK lookups.
     ///
     /// **Concurrency Safe:** Uses SELECT FOR UPDATE to lock rows before modification,
     /// preventing lost updates in concurrent scenarios. All updates succeed or all fail
     /// together within a transaction.
     ///
-    /// **Batching:** Automatically chunks operations for large datasets. Default batch
-    /// size is 1000 records. TODO: Support for different sizes.
-    ///
     /// # Example
     ///
     /// ```rust,ignore
-    /// // Update all books by author - atomic operation
+    /// // Simple update - just modify fields
     /// let count = Book::objects(db)
-    ///     .filter(Column::AuthorId.eq(1))
-    ///     .update(|book| {
+    ///     .filter(Book::AuthorId.eq(1))
+    ///     .update(|mut book| async move {
     ///         book.status = "archived".to_string();
+    ///         Ok(book)
     ///     })
     ///     .await?;
     ///
-    /// println!("Updated {} books", count);
+    /// // Update with async FK lookup
+    /// let count = Book::objects(db)
+    ///     .filter(Book::Id.eq(book_id))
+    ///     .update(|mut book| async move {
+    ///         // Async operations supported!
+    ///         if let Some(author_name) = &update_dto.author_name {
+    ///             let (author, _) = Author::objects(db)
+    ///                 .filter(Author::Name.eq(author_name))
+    ///                 .get_or_create(|| async {
+    ///                     Ok(Author { name: author_name.clone(), ..Default::default() })
+    ///                 })
+    ///                 .await?;
+    ///             book.author_id = author.id;
+    ///         }
+    ///         Ok(book)
+    ///     })
+    ///     .await?;
     /// ```
-    pub async fn update<F>(self, updater: F) -> Result<u64, OrmadaError>
+    pub async fn update<F, Fut>(self, updater: F) -> Result<u64, OrmadaError>
     where
-        F: Fn(&mut E::Model) + Send + Sync,
+        F: Fn(E::Model) -> Fut,
+        Fut: std::future::Future<Output = Result<E::Model, OrmadaError>>,
         E: crate::traits::OrmadaEntity,
         C: TransactionTrait,
     {
@@ -1477,12 +1494,12 @@ where
         let models = self.inner.select.clone().lock(LockType::Update).all(&txn).await?;
         let mut count = 0u64;
 
-        for mut model in models {
-            // Apply the update
-            updater(&mut model);
+        for model in models {
+            // Apply the async update - closure takes ownership and returns modified model
+            let updated_model = updater(model).await?;
 
             // Use save_model to properly mark all fields as Set
-            E::save_model(&txn, model).await?;
+            E::save_model(&txn, updated_model).await?;
             count += 1;
         }
 
@@ -1976,10 +1993,32 @@ where
     /// # Performance
     ///
     /// Makes 1-2 queries within a transaction for safety.
-    pub async fn get_or_create<F>(self, creator: F) -> Result<(E::Model, bool), OrmadaError>
+    ///
+    /// # Async Closures
+    ///
+    /// The `creator` closure supports async operations, allowing you to
+    /// fetch or create related entities before creating the main record.
+    ///
+    /// ```rust,ignore
+    /// // Example: Create book with author lookup
+    /// let (book, created) = Book::objects(db)
+    ///     .filter(Book::Isbn.eq("1234567890"))
+    ///     .get_or_create(|| async {
+    ///         // Async operations supported!
+    ///         let author = Author::objects(db).get(author_id).await?;
+    ///         Ok(Book {
+    ///             isbn: "1234567890".into(),
+    ///             author_id: author.id,
+    ///             ..Default::default()
+    ///         })
+    ///     })
+    ///     .await?;
+    /// ```
+    pub async fn get_or_create<F, Fut>(self, creator: F) -> Result<(E::Model, bool), OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
-        F: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<E::Model, OrmadaError>>,
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
         C: TransactionTrait,
@@ -1995,8 +2034,8 @@ where
                 txn.commit().await?;
                 return Ok((model, false));
             } else {
-                // Try to create new record
-                let model = creator();
+                // Try to create new record (async)
+                let model = creator().await?;
                 let active_model = E::to_active_model_for_create(model)?;
 
                 match active_model.insert(&txn).await {
@@ -2026,7 +2065,7 @@ where
         }
 
         // All retries exhausted
-        Err(OrmadaError::concurrency_conflict("get_or_create", 3))
+        Err(OrmadaError::concurrency_error("get_or_create", 3))
     }
 
     /// Update existing record or create new one (Ormada's .`update_or_create()`)
@@ -2072,15 +2111,46 @@ where
     /// # Thread Safety
     ///
     /// Safe for concurrent use. Transaction ensures atomicity.
-    pub async fn update_or_create<U, Creator>(
+    ///
+    /// # Async Closures
+    ///
+    /// Both `updater` and `creator` support async operations, allowing you to
+    /// fetch or create related entities within the closures.
+    ///
+    /// ```rust,ignore
+    /// // Example: Update or create book with async author lookup
+    /// let (book, created) = Book::objects(db)
+    ///     .filter(Book::Isbn.eq("1234567890"))
+    ///     .update_or_create(
+    ///         |mut book| async move {
+    ///             // Async operations in updater!
+    ///             let author = Author::objects(db).get(author_id).await?;
+    ///             book.author_id = author.id;
+    ///             book.price = 2999;
+    ///             Ok(book)
+    ///         },
+    ///         || async {
+    ///             // Async operations in creator!
+    ///             let author = Author::objects(db).get(author_id).await?;
+    ///             Ok(Book {
+    ///                 isbn: "1234567890".into(),
+    ///                 author_id: author.id,
+    ///                 ..Default::default()
+    ///             })
+    ///         },
+    ///     ).await?;
+    /// ```
+    pub async fn update_or_create<U, UF, Creator, CF>(
         self,
         updater: U,
         creator: Creator,
     ) -> Result<(E::Model, bool), OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
-        U: Fn(&mut E::Model), // Changed: Fn instead of FnOnce to allow retries
-        Creator: Fn() -> E::Model, // Changed: Fn instead of FnOnce to allow retries
+        U: Fn(E::Model) -> UF,
+        UF: std::future::Future<Output = Result<E::Model, OrmadaError>>,
+        Creator: Fn() -> CF,
+        CF: std::future::Future<Output = Result<E::Model, OrmadaError>>,
         E::Model: IntoActiveModel<E::ActiveModel>,
         E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
         C: TransactionTrait,
@@ -2092,15 +2162,15 @@ where
             let txn = self.inner.db.begin().await?;
 
             // Try to get existing record
-            if let Some(mut model) = self.inner.select.clone().one(&txn).await? {
-                // Update existing record
-                updater(&mut model);
-                let model = E::save_model(&txn, model).await?;
+            if let Some(model) = self.inner.select.clone().one(&txn).await? {
+                // Update existing record (async - takes ownership, returns modified)
+                let updated_model = updater(model).await?;
+                let model = E::save_model(&txn, updated_model).await?;
                 txn.commit().await?;
                 return Ok((model, false));
             } else {
-                // Try to create new
-                let model = creator();
+                // Try to create new (async)
+                let model = creator().await?;
                 let active_model = E::to_active_model_for_create(model)?;
 
                 match active_model.insert(&txn).await {
@@ -2127,7 +2197,7 @@ where
         }
 
         // All retries exhausted
-        Err(OrmadaError::concurrency_conflict("update_or_create", 3))
+        Err(OrmadaError::concurrency_error("update_or_create", 3))
     }
 
     /// Get specific column values as JSON (Ormada's `values()`)
@@ -2364,7 +2434,7 @@ where
                     result.and_then(|obj| {
                         obj.as_object().and_then(|map| map.values().next().cloned()).ok_or_else(
                             || {
-                                OrmadaError::validation(
+                                OrmadaError::validation_error(
                                     "QuerySet",
                                     "values_list",
                                     "Invalid value format",

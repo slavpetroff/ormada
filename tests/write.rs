@@ -140,8 +140,9 @@ async fn test_update_bulk(#[future] db_with_sample_authors: (DatabaseRouter, Vec
     let (db, _sample_authors) = db_with_sample_authors;
     let count = Author::objects(&db)
         .filter(Author::Age.lt(35))
-        .update(|author| {
+        .update(|mut author| async move {
             author.age = 35;
+            Ok(author)
         })
         .await
         .unwrap();
@@ -159,8 +160,9 @@ async fn test_update_with_filter(#[future] db_with_sample_authors: (DatabaseRout
     let (db, _sample_authors) = db_with_sample_authors;
     let count = Author::objects(&db)
         .filter(Author::Name.eq("Bob"))
-        .update(|author| {
+        .update(|mut author| async move {
             author.email = "bob.updated@example.com".to_string();
+            Ok(author)
         })
         .await
         .unwrap();
@@ -178,8 +180,9 @@ async fn test_update_no_matches(#[future] db_with_sample_authors: (DatabaseRoute
     let (db, _sample_authors) = db_with_sample_authors;
     let count = Author::objects(&db)
         .filter(Author::Age.gt(100))
-        .update(|author| {
+        .update(|mut author| async move {
             author.age = 50;
+            Ok(author)
         })
         .await
         .unwrap();
@@ -358,8 +361,9 @@ async fn test_update_does_not_affect_other_records(
 
     Author::objects(&db)
         .filter(Author::Name.eq("Alice"))
-        .update(|author| {
+        .update(|mut author| async move {
             author.age = 50;
+            Ok(author)
         })
         .await
         .unwrap();
@@ -411,8 +415,9 @@ async fn test_update_with_no_filter_matches(
 
     let count = Author::objects(&db)
         .filter(Author::Name.eq("NonExistent"))
-        .update(|author| {
+        .update(|mut author| async move {
             author.age = 999;
+            Ok(author)
         })
         .await
         .unwrap();
@@ -543,8 +548,9 @@ async fn test_update_chained_filters(
     let count = Author::objects(&db)
         .filter(Author::Age.gt(25))
         .filter(Author::Age.lt(35))
-        .update(|author| {
+        .update(|mut author| async move {
             author.age = 99;
+            Ok(author)
         })
         .await
         .unwrap();
@@ -630,8 +636,9 @@ async fn test_update_all_records(#[future] db_with_sample_authors: (DatabaseRout
 
     // Update all without filter
     let count = Author::objects(&db)
-        .update(|author| {
+        .update(|mut author| async move {
             author.age = 100;
+            Ok(author)
         })
         .await
         .unwrap();

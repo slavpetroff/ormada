@@ -329,7 +329,7 @@ where
     /// ```
     pub async fn first(self) -> Result<E::ModelWithRelations, OrmadaError> {
         let results = self.all().await?;
-        results.into_iter().next().ok_or_else(|| OrmadaError::empty_result("first"))
+        results.into_iter().next().ok_or_else(|| OrmadaError::empty_result_set("first"))
     }
 
     /// Get the last record with prefetched relations
@@ -355,7 +355,7 @@ where
     /// ```
     pub async fn last(self) -> Result<E::ModelWithRelations, OrmadaError> {
         let results = self.all().await?;
-        results.into_iter().last().ok_or_else(|| OrmadaError::empty_result("last"))
+        results.into_iter().last().ok_or_else(|| OrmadaError::empty_result_set("last"))
     }
 
     /// Count records matching the query
