@@ -89,71 +89,73 @@ pub trait HasEntityType {
 }
 
 /// Trait for entities that can load a specific relation
-pub trait HasRelation<Related: EntityTrait>: EntityTrait {
+pub trait HasRelation<Related: EntityTrait>: EntityTrait + crate::traits::WithRelationsTrait {
     /// The type of the foreign key (usually i32, but can be other types)
     type RelatedPK: std::cmp::Eq + std::hash::Hash + Clone;
 
     /// Extract the foreign key from a model
-    fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK;
+    fn get_foreign_key(model: &<Self as EntityTrait>::Model) -> Self::RelatedPK;
 
     /// Load related models for a batch of parent models
     /// This must be implemented by the macro since we need access to the specific Column enum
     async fn load_related<C: ConnectionTrait>(
-        models: &[Self::Model],
+        models: &[<Self as EntityTrait>::Model],
         db: &C,
     ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, OrmadaError>;
 
-    /// Set the related model on the parent model
-    fn set_related(model: &mut Self::Model, related: Option<Related::Model>);
+    /// Set the related model on the ModelWithRelations wrapper
+    /// This is called during prefetch_related to populate relation fields
+    fn set_related(model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations, related: Option<Related::Model>);
 }
 
 /// Trait for loading relations at compile time
-pub trait LoadRelations<Parent: EntityTrait> {
+pub trait LoadRelations<Parent: EntityTrait + crate::traits::WithRelationsTrait> {
     /// The type of data loaded (tuple of `HashMaps`)
     type Output;
 
     /// Load all relations
     async fn load_all<C: ConnectionTrait>(
-        models: &[Parent::Model],
+        models: &[<Parent as EntityTrait>::Model],
         db: &C,
     ) -> Result<Self::Output, OrmadaError>;
 
-    /// Populate relations on models
-    fn populate(models: &mut [Parent::Model], data: &Self::Output);
+    /// Populate relations on ModelWithRelations
+    fn populate(models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations], data: &Self::Output);
 }
 
 // Base case: no relations to load
-impl<E: EntityTrait> LoadRelations<E> for () {
+impl<E: EntityTrait + crate::traits::WithRelationsTrait> LoadRelations<E> for () {
     type Output = ();
 
     async fn load_all<C: ConnectionTrait>(
-        _models: &[E::Model],
+        _models: &[<E as EntityTrait>::Model],
         _db: &C,
     ) -> Result<(), OrmadaError> {
         Ok(())
     }
 
-    fn populate(_models: &mut [E::Model], _data: &()) {}
+    fn populate(_models: &mut [<E as crate::traits::WithRelationsTrait>::ModelWithRelations], _data: &()) {}
 }
 
 // Single relation
 impl<Parent, R1> LoadRelations<Parent> for RelationSpec<R1>
 where
-    Parent: EntityTrait + HasRelation<R1>,
+    Parent: EntityTrait + HasRelation<R1> + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
     R1: EntityTrait,
 {
     type Output = FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>;
 
     async fn load_all<C: ConnectionTrait>(
-        models: &[Parent::Model],
+        models: &[<Parent as EntityTrait>::Model],
         db: &C,
     ) -> Result<Self::Output, OrmadaError> {
         <Parent as HasRelation<R1>>::load_related(models, db).await
     }
 
-    fn populate(models: &mut [Parent::Model], data: &Self::Output) {
+    fn populate(models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations], data: &Self::Output) {
         for model in models {
-            let pk = <Parent as HasRelation<R1>>::get_foreign_key(model);
+            // Use Deref to access the base Model for get_foreign_key
+            let pk = <Parent as HasRelation<R1>>::get_foreign_key(&**model);
             let related = data.get(&pk).cloned();
             <Parent as HasRelation<R1>>::set_related(model, related);
         }
@@ -163,7 +165,7 @@ where
 // Two relations (tuple)
 impl<Parent, R1, R2> LoadRelations<Parent> for (RelationSpec<R1>, RelationSpec<R2>)
 where
-    Parent: EntityTrait + HasRelation<R1> + HasRelation<R2>,
+    Parent: EntityTrait + HasRelation<R1> + HasRelation<R2> + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
     R1: EntityTrait,
     R2: EntityTrait,
 {
@@ -173,7 +175,7 @@ where
     );
 
     async fn load_all<C: ConnectionTrait>(
-        models: &[Parent::Model],
+        models: &[<Parent as EntityTrait>::Model],
         db: &C,
     ) -> Result<Self::Output, OrmadaError> {
         let r1 = <Parent as HasRelation<R1>>::load_related(models, db).await?;
@@ -181,7 +183,7 @@ where
         Ok((r1, r2))
     }
 
-    fn populate(models: &mut [Parent::Model], data: &Self::Output) {
+    fn populate(models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations], data: &Self::Output) {
         <RelationSpec<R1> as LoadRelations<Parent>>::populate(models, &data.0);
         <RelationSpec<R2> as LoadRelations<Parent>>::populate(models, &data.1);
     }
@@ -259,6 +261,7 @@ impl<E, C, Relations> QuerySetEager<'_, E, C, Relations>
 where
     E: EntityTrait + crate::traits::WithRelationsTrait<Model = <E as EntityTrait>::Model>,
     <E as EntityTrait>::Model: Sync + Clone,
+    <E as crate::traits::WithRelationsTrait>::ModelWithRelations: Clone,
     C: ConnectionTrait,
     Relations: LoadRelations<E>,
 {
@@ -275,16 +278,14 @@ where
     ///     .await?;
     ///
     /// for book in books {
-    ///     println!("Title: {}", book.title);  // Direct access
-    ///     if let Some(author) = book.author {  // Direct relation access!
-    ///         println!("Author: {}", author.name);
-    ///     }
+    ///     println!("Title: {}", book.title);  // Direct access via Deref
+    ///     println!("Author: {}", book.author.name);  // Direct relation access!
     /// }
     /// ```
     pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, OrmadaError> {
         // Execute main query
         let db = self.db;
-        let mut models = self.select.all(db).await?;
+        let models = self.select.all(db).await?;
 
         if models.is_empty() {
             return Ok(Vec::new());
@@ -293,16 +294,16 @@ where
         // Load all relations using compile-time typed system
         let relation_data = Relations::load_all(&models, db).await?;
 
-        // Populate relations on models
-        Relations::populate(&mut models, &relation_data);
-
-        // Build results (identity transform now)
-        let results = models
+        // Convert Model -> ModelWithRelations, then populate relations
+        let mut models_with_relations: Vec<E::ModelWithRelations> = models
             .into_iter()
             .map(|model| E::from_model_and_relations(model, &()))
             .collect();
 
-        Ok(results)
+        // Populate relations on ModelWithRelations
+        Relations::populate(&mut models_with_relations, &relation_data);
+
+        Ok(models_with_relations)
     }
 
     /// Get the first record with prefetched relations

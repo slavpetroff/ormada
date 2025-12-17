@@ -273,8 +273,12 @@ async fn test_non_nullable_fk_default_value_before_prefetch(#[future] db: Databa
         .await
         .unwrap();
 
-    assert_eq!(book.author.id, 0);
+    // After create(), book is a Model which does NOT have relation fields
+    // This is the key type safety feature - you can't accidentally access unloaded relations
+    assert_eq!(book.author_id, author.id); // FK is available
+    // book.author would be a compile error! (no such field on Model)
 
+    // To get relations, must use prefetch_related which returns ModelWithRelations
     let book_with_author = Book::objects(&db)
         .filter(Book::Id.eq(book.id))
         .prefetch_related(relations![Author])
@@ -282,6 +286,7 @@ async fn test_non_nullable_fk_default_value_before_prefetch(#[future] db: Databa
         .await
         .unwrap();
 
+    // Now we have ModelWithRelations which HAS the author field
     assert_eq!(book_with_author.author.id, author.id);
     assert_eq!(book_with_author.author.name, author.name);
 }

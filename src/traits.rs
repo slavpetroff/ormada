@@ -102,8 +102,9 @@ pub trait WithRelationsTrait {
     /// The base model type (same as `EntityTrait::Model`)
     type Model: Clone;
 
-    /// The extended model type with relation accessor methods  
-    type ModelWithRelations: Clone;
+    /// The extended model type with relation accessor methods
+    /// Must implement Deref to Model for accessing base fields
+    type ModelWithRelations: Clone + std::ops::Deref<Target = Self::Model>;
 
     /// Convert a base model and typed relation data into the extended model
     ///

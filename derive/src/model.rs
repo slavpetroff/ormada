@@ -401,10 +401,11 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
 
     // Add necessary derives to the struct
     // Note: DeriveEntityModel generates Entity, Column, PrimaryKey, ActiveModel
-    // Note: We don't derive Default here because we inject relation fields later
+    // Note: We don't derive Default here because we generate it manually
     // Use the sea_orm derive through our internal module
+    // Include Serialize/Deserialize for ModelWithRelations compatibility
     input.attrs.push(syn::parse_quote! {
-        #[derive(Clone, Debug, PartialEq, Eq, ::ormada::__internal::sea_orm::DeriveEntityModel)]
+        #[derive(Clone, Debug, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize, ::ormada::__internal::sea_orm::DeriveEntityModel)]
     });
 
     // Add sea_orm table_name attribute
@@ -422,42 +423,14 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     input.ident = format_ident!("Model");
     input.vis = syn::Visibility::Public(syn::token::Pub::default());
 
-    // Inject relation fields
-    if let syn::Data::Struct(ref mut data) = input.data {
-        if let syn::Fields::Named(ref mut fields) = data.fields {
-            for (field_ident, fk_field_type, fk) in &foreign_keys {
-                let field_name_str = field_ident.to_string();
-                let relation_name_str = if field_name_str.ends_with("_id") {
-                    &field_name_str[..field_name_str.len() - 3]
-                } else {
-                    &field_name_str
-                };
-                let relation_name = format_ident!("{}", relation_name_str);
-                let relation_type = &fk.entity; // This is a Path to Entity
-
-                // Check if FK field is nullable (Option<T>)
-                let fk_type_str = quote!(#fk_field_type).to_string();
-                let is_nullable_fk = fk_type_str.contains("Option");
-
-                // Non-nullable FK: relation field is direct Model (not Option)
-                // Nullable FK: relation field is Option<Model>
-                let field_ty: syn::Type = if is_nullable_fk {
-                    syn::parse_quote! { ::core::option::Option<<#relation_type as ::ormada::__internal::EntityTrait>::Model> }
-                } else {
-                    syn::parse_quote! { <#relation_type as ::ormada::__internal::EntityTrait>::Model }
-                };
-
-                fields.named.push(syn::Field {
-                    attrs: vec![syn::parse_quote! { #[sea_orm(ignore)] }],
-                    vis: syn::Visibility::Public(syn::token::Pub::default()),
-                    mutability: syn::FieldMutability::None,
-                    ident: Some(relation_name),
-                    colon_token: Some(syn::token::Colon::default()),
-                    ty: field_ty,
-                });
-            }
-        }
-    }
+    // NOTE: We NO LONGER inject relation fields into the base Model.
+    // Instead, we generate a separate ModelWithRelations struct that wraps Model
+    // and adds relation fields. This provides compile-time safety:
+    // - Model (from create/update) has no relation fields -> can't accidentally access unloaded relations
+    // - ModelWithRelations (from prefetch_related) has relation fields -> safe to access
+    
+    // Generate ModelWithRelations struct with relation fields
+    let model_with_relations = generate_model_with_relations_struct(&foreign_keys);
 
     // Generate additional components
     let relation_enum = generate_relation_enum(&foreign_keys);
@@ -501,6 +474,7 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
             use ::ormada::types::OnDelete;
 
             // The Model struct with DeriveEntityModel (this generates Entity internally)
+            // NOTE: Base Model has NO relation fields - only DB columns
             #input
 
             // Relation enum
@@ -518,12 +492,19 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
             // WithRelationsTrait implementation (required for relations system)
             #with_relations_trait_impl
 
-            // Default implementation that handles injected relation fields
+            // Default implementation for base Model (no relation fields)
             #default_impl
+
+            // ModelWithRelations struct - wraps Model and adds relation fields
+            // This is returned by prefetch_related() queries
+            #model_with_relations
         }
 
         // Export Model as the primary type - this is what users work with!
         pub use _internal::Model;
+
+        // Export ModelWithRelations for prefetch_related() queries
+        pub use _internal::ModelWithRelations;
 
         // Internal types are pub(crate) so other models can reference Entity for relations
         // but end users never see them directly
@@ -800,6 +781,28 @@ fn generate_django_entity_impl(
         // Generate validation code
         let field_name_str = field_name.to_string();
 
+        // Foreign key validation for non-nullable FKs
+        // Check that FK value is not 0 (default) which would likely cause DB constraint violation
+        if let Some(ref fk) = config.foreign_key {
+            let type_str = quote!(#field_type).to_string();
+            let is_nullable_fk = type_str.contains("Option");
+            
+            if !is_nullable_fk {
+                // Non-nullable FK: validate that value is not 0
+                validations.push(quote! {
+                    if model.#field_name == 0 {
+                        return ::core::result::Result::Err(
+                            ::ormada::error::OrmadaError::validation_error(
+                                #table_name,
+                                #field_name_str,
+                                "foreign key cannot be 0 - did you forget to set this field? Using Default::default() on models with foreign keys will set FK fields to 0, which is likely not a valid reference."
+                            )
+                        );
+                    }
+                });
+            }
+        }
+
         // String length validations
         if config.max_length.is_some() || config.min_length.is_some() {
             let type_str = quote!(#field_type).to_string();
@@ -926,19 +929,20 @@ fn generate_django_entity_impl(
 ///
 /// This trait is ALWAYS generated (even for entities without foreign keys)
 /// so that the relations system works properly.
-fn generate_with_relations_trait(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
-    // For now, we generate a minimal implementation with no relations
-    // In the future, this could be enhanced to support actual relation loading
+fn generate_with_relations_trait(_foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
+    // ModelWithRelations is now a separate struct that wraps Model
+    // from_model_and_relations converts Model -> ModelWithRelations
     quote! {
         impl ::ormada::traits::WithRelationsTrait for Entity {
             type Model = Model;
-            type ModelWithRelations = Model; // For now, same as Model
+            type ModelWithRelations = ModelWithRelations;
 
             fn from_model_and_relations<R>(
                 model: Self::Model,
                 _relations: &R,
             ) -> Self::ModelWithRelations {
-                model // Just return the model as-is
+                // Convert Model to ModelWithRelations using From impl
+                ::core::convert::From::from(model)
             }
         }
     }
@@ -961,10 +965,11 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConf
             let is_nullable_fk = fk_type_str.contains("Option");
 
             // Generate set_related based on FK nullability
+            // NOTE: set_related now works on ModelWithRelations, not Model
             let set_related_impl = if is_nullable_fk {
                 // Nullable FK: relation field is Option<Model>
                 quote! {
-                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
+                    fn set_related(model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
                         model.#relation_name = related;
                     }
                 }
@@ -972,7 +977,7 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConf
                 // Non-nullable FK: relation field is Model directly
                 // If related is None, we use Default (this shouldn't happen with proper prefetch)
                 quote! {
-                    fn set_related(model: &mut Self::Model, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
+                    fn set_related(model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
                         if let Some(r) = related {
                             model.#relation_name = r;
                         }
@@ -985,13 +990,13 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConf
                 // Nullable FK: need to handle Option<i32>
                 (
                     quote! {
-                        fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
+                        fn get_foreign_key(model: &<Self as ::ormada::__internal::EntityTrait>::Model) -> Self::RelatedPK {
                             model.#field_name.unwrap_or(0)
                         }
                     },
                     quote! {
                         async fn load_related<C: ::ormada::__internal::ConnectionTrait>(
-                            models: &[Self::Model],
+                            models: &[<Self as ::ormada::__internal::EntityTrait>::Model],
                             db: &C,
                         ) -> ::core::result::Result<
                             ::ormada::prelude::FxHashMap<Self::RelatedPK, <#entity as ::ormada::__internal::EntityTrait>::Model>,
@@ -1033,13 +1038,13 @@ fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConf
                 // Non-nullable FK: direct i32 access
                 (
                     quote! {
-                        fn get_foreign_key(model: &Self::Model) -> Self::RelatedPK {
+                        fn get_foreign_key(model: &<Self as ::ormada::__internal::EntityTrait>::Model) -> Self::RelatedPK {
                             model.#field_name
                         }
                     },
                     quote! {
                         async fn load_related<C: ::ormada::__internal::ConnectionTrait>(
-                            models: &[Self::Model],
+                            models: &[<Self as ::ormada::__internal::EntityTrait>::Model],
                             db: &C,
                         ) -> ::core::result::Result<
                             ::ormada::prelude::FxHashMap<Self::RelatedPK, <#entity as ::ormada::__internal::EntityTrait>::Model>,
@@ -1431,7 +1436,7 @@ fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-/// Generate Default implementation for Model that handles injected relation fields
+/// Generate Default implementation for Model (base model without relation fields)
 /// 
 /// Default is always generated. For models with required FK fields, the FK will
 /// default to 0 which will fail at the database level if not overridden.
@@ -1443,47 +1448,20 @@ fn to_pascal_case(s: &str) -> String {
 ///     title: "My Book".to_string(),
 ///     price: 1999,
 ///     published: true,
-///     ..Default::default()   // Fills id, created_at, updated_at, author (relation)
+///     ..Default::default()   // Fills id, created_at, updated_at
 /// }
 /// ```
 fn generate_default_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
-    foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
+    _foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
 ) -> TokenStream {
     let mut field_defaults = Vec::new();
 
-    // Generate defaults for all original fields
+    // Generate defaults for all original fields (no relation fields on base Model)
     for (field_name, _field_type, _config) in field_configs {
         field_defaults.push(quote! {
             #field_name: ::core::default::Default::default()
         });
-    }
-
-    // Generate defaults for injected relation fields
-    for (field_ident, fk_field_type, _fk) in foreign_keys {
-        let field_name_str = field_ident.to_string();
-        let relation_name_str = if field_name_str.ends_with("_id") {
-            &field_name_str[..field_name_str.len() - 3]
-        } else {
-            &field_name_str
-        };
-        let relation_name = format_ident!("{}", relation_name_str);
-
-        // Check if FK field is nullable (Option<T>)
-        let fk_type_str = quote!(#fk_field_type).to_string();
-        let is_nullable_fk = fk_type_str.contains("Option");
-
-        if is_nullable_fk {
-            // Nullable FK: relation field is Option<Model>
-            field_defaults.push(quote! {
-                #relation_name: ::core::option::Option::None
-            });
-        } else {
-            // Non-nullable FK: relation field is Model, use Default
-            field_defaults.push(quote! {
-                #relation_name: ::core::default::Default::default()
-            });
-        }
     }
 
     quote! {
@@ -1491,6 +1469,155 @@ fn generate_default_impl(
             fn default() -> Self {
                 Self {
                     #(#field_defaults,)*
+                }
+            }
+        }
+    }
+}
+
+/// Generate ModelWithRelations struct that wraps Model and adds relation fields
+/// 
+/// This struct is returned by prefetch_related() queries and provides type-safe
+/// access to loaded relations. The base Model (from create/update) does NOT have
+/// relation fields, preventing accidental access to unloaded relations.
+fn generate_model_with_relations_struct(
+    foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
+) -> TokenStream {
+    if foreign_keys.is_empty() {
+        // No relations - ModelWithRelations is a newtype wrapper around Model
+        // This ensures Deref<Target = Model> is always available
+        return quote! {
+            /// Model with loaded relations (wrapper for Model when no relations exist)
+            #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+            #[serde(transparent)]
+            pub struct ModelWithRelations(pub Model);
+
+            impl ::core::default::Default for ModelWithRelations {
+                fn default() -> Self {
+                    Self(::core::default::Default::default())
+                }
+            }
+
+            impl ::core::ops::Deref for ModelWithRelations {
+                type Target = Model;
+                
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+
+            impl ::core::ops::DerefMut for ModelWithRelations {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.0
+                }
+            }
+            
+            impl ::core::convert::From<Model> for ModelWithRelations {
+                fn from(model: Model) -> Self {
+                    Self(model)
+                }
+            }
+        };
+    }
+
+    // Generate relation fields for ModelWithRelations
+    let relation_fields: Vec<_> = foreign_keys
+        .iter()
+        .map(|(field_ident, fk_field_type, fk)| {
+            let field_name_str = field_ident.to_string();
+            let relation_name_str = if field_name_str.ends_with("_id") {
+                &field_name_str[..field_name_str.len() - 3]
+            } else {
+                &field_name_str
+            };
+            let relation_name = format_ident!("{}", relation_name_str);
+            let relation_type = &fk.entity;
+
+            // Check if FK field is nullable (Option<T>)
+            let fk_type_str = quote!(#fk_field_type).to_string();
+            let is_nullable_fk = fk_type_str.contains("Option");
+
+            if is_nullable_fk {
+                quote! {
+                    pub #relation_name: ::core::option::Option<<#relation_type as ::ormada::__internal::EntityTrait>::Model>
+                }
+            } else {
+                quote! {
+                    pub #relation_name: <#relation_type as ::ormada::__internal::EntityTrait>::Model
+                }
+            }
+        })
+        .collect();
+
+    // Generate Default for relation fields
+    let relation_defaults: Vec<_> = foreign_keys
+        .iter()
+        .map(|(field_ident, fk_field_type, _fk)| {
+            let field_name_str = field_ident.to_string();
+            let relation_name_str = if field_name_str.ends_with("_id") {
+                &field_name_str[..field_name_str.len() - 3]
+            } else {
+                &field_name_str
+            };
+            let relation_name = format_ident!("{}", relation_name_str);
+
+            let fk_type_str = quote!(#fk_field_type).to_string();
+            let is_nullable_fk = fk_type_str.contains("Option");
+
+            if is_nullable_fk {
+                quote! { #relation_name: ::core::option::Option::None }
+            } else {
+                quote! { #relation_name: ::core::default::Default::default() }
+            }
+        })
+        .collect();
+
+    quote! {
+        /// Model with loaded relations
+        /// 
+        /// This struct is returned by `prefetch_related()` and `select_related()` queries.
+        /// It contains the base model fields plus loaded relation fields.
+        /// 
+        /// The base `Model` type (returned by `create()`, `update()`, queries without prefetch)
+        /// does NOT have relation fields, providing compile-time safety against accessing
+        /// unloaded relations.
+        #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+        pub struct ModelWithRelations {
+            /// The base model with all database fields
+            #[serde(flatten)]
+            pub inner: Model,
+            /// Loaded relation fields
+            #(#relation_fields,)*
+        }
+
+        impl ::core::default::Default for ModelWithRelations {
+            fn default() -> Self {
+                Self {
+                    inner: ::core::default::Default::default(),
+                    #(#relation_defaults,)*
+                }
+            }
+        }
+
+        impl ::core::ops::Deref for ModelWithRelations {
+            type Target = Model;
+            
+            fn deref(&self) -> &Self::Target {
+                &self.inner
+            }
+        }
+
+        impl ::core::ops::DerefMut for ModelWithRelations {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.inner
+            }
+        }
+
+        impl ::core::convert::From<Model> for ModelWithRelations {
+            fn from(model: Model) -> Self {
+                Self {
+                    inner: model,
+                    #(#relation_defaults,)*
                 }
             }
         }

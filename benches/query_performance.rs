@@ -15,7 +15,6 @@ use ormada::router::DatabaseRouter;
 // Test entity for benchmarks - using ORM's ormada_model macro
 
 #[ormada_model(table = "benchmark_items")]
-#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkItem {
     #[primary_key]
     #[serde(skip_deserializing)]
