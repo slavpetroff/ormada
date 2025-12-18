@@ -1,7 +1,4 @@
-///! Implementation of the `#[ormada_model]` attribute macro
-///!
-///! This module provides the core functionality for transforming clean model definitions
-///! into SeaORM-compatible code with ergonomic APIs.
+use heck::{ToSnakeCase, ToUpperCamelCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
@@ -726,23 +723,8 @@ fn extract_option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
     None
 }
 
-/// Convert PascalCase to snake_case
 fn to_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    let mut chars = s.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c.is_uppercase() {
-            if !result.is_empty() {
-                result.push('_');
-            }
-            result.push(c.to_lowercase().next().unwrap());
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
+    s.to_snake_case()
 }
 
 /// Strip ormada-specific attributes from a field, keeping only SeaORM/serde ones
@@ -801,93 +783,6 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     field.attrs = new_attrs;
 }
 
-fn generate_model_struct(
-    field_configs: &[(&syn::Field, FieldConfig)],
-    table_name: &str,
-) -> syn::Result<TokenStream> {
-    let mut fields = Vec::new();
-
-    for (field, config) in field_configs {
-        // Skip many_to_many fields - they're not actual database columns
-        if config.many_to_many.is_some() {
-            continue;
-        }
-
-        let field_name = &field.ident;
-        let field_type = &field.ty;
-
-        // Only include attributes that SeaORM and serde understand
-        // Our custom attributes (max_length, etc.) are stripped
-        let mut field_attrs = Vec::new();
-
-        // Primary key attribute for SeaORM
-        if config.is_primary_key {
-            field_attrs.push(quote! { #[sea_orm(primary_key)] });
-        }
-
-        // Serialization attributes for serde
-        if config.skip_deserializing {
-            field_attrs.push(quote! { #[serde(skip_deserializing)] });
-        }
-        if config.skip_serializing {
-            field_attrs.push(quote! { #[serde(skip_serializing)] });
-        }
-
-        fields.push(quote! {
-            #(#field_attrs)*
-            pub #field_name: #field_type,
-        });
-    }
-
-    Ok(quote! {
-        #[derive(Clone, Debug, PartialEq, Eq, ::ormada::__internal::sea_orm::DeriveEntityModel, ::serde::Serialize, ::serde::Deserialize, Default)]
-        #[sea_orm(table_name = #table_name)]
-        pub struct Model {
-            #(#fields)*
-        }
-    })
-}
-
-fn generate_column_enum(field_configs: &[(&syn::Field, FieldConfig)]) -> TokenStream {
-    let variants: Vec<_> = field_configs
-        .iter()
-        .filter(|(_, config)| config.many_to_many.is_none()) // Skip M:N fields
-        .map(|(field, _)| {
-            let name = field.ident.as_ref().unwrap();
-            let variant_name = format_ident!("{}", to_pascal_case(&name.to_string()));
-            variant_name
-        })
-        .collect();
-
-    quote! {
-        #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DeriveColumn)]
-        pub enum Column {
-            #(#variants,)*
-        }
-    }
-}
-
-fn generate_primary_key_enum(primary_key_fields: &[Ident]) -> TokenStream {
-    let variants: Vec<_> = primary_key_fields
-        .iter()
-        .map(|name| {
-            let variant_name = format_ident!("{}", to_pascal_case(&name.to_string()));
-            variant_name
-        })
-        .collect();
-
-    quote! {
-        #[derive(Copy, Clone, Debug, ::ormada::__internal::sea_orm::EnumIter, ::ormada::__internal::sea_orm::DerivePrimaryKey)]
-        pub enum PrimaryKey {
-            #(#variants,)*
-        }
-
-        impl ::ormada::__internal::PrimaryKeyTrait for PrimaryKey {
-            type ValueType = i32; // TODO: Detect actual type
-        }
-    }
-}
-
 fn generate_relation_enum(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
     if foreign_keys.is_empty() {
         return quote! {
@@ -903,7 +798,7 @@ fn generate_relation_enum(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)])
             // Path is like: super::super::author::_internal::Entity
             // We want "author" (the module name before _internal)
             let segments: Vec<_> = fk.entity.segments.iter().collect();
-            
+
             // Find the module name by looking for the segment before "_internal"
             let variant_name = segments
                 .iter()
@@ -913,7 +808,7 @@ fn generate_relation_enum(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)])
                     // Fallback: use last segment
                     &segments.last().unwrap().ident
                 });
-            
+
             let variant_ident = format_ident!("{}", to_pascal_case(&variant_name.to_string()));
 
             // Generate Column name (PascalCase from field_name)
@@ -1802,17 +1697,8 @@ fn generate_model_convenience_methods(
     })
 }
 
-// Helper function to convert snake_case to PascalCase
 fn to_pascal_case(s: &str) -> String {
-    s.split('_')
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect()
+    s.to_upper_camel_case()
 }
 
 /// Generate Default implementation for Model (base model without relation fields)

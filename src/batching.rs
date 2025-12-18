@@ -18,8 +18,8 @@ pub fn validate_batch_size(size: Option<usize>) -> usize {
     match size {
         Some(0) | None => DEFAULT_BATCH_SIZE,
         Some(s) if s > MAX_BATCH_SIZE => {
-            eprintln!(
-                "Warning: batch_size {s} exceeds maximum {MAX_BATCH_SIZE}. Using {MAX_BATCH_SIZE}"
+            tracing::warn!(
+                "batch_size {s} exceeds maximum {MAX_BATCH_SIZE}, using {MAX_BATCH_SIZE}"
             );
             MAX_BATCH_SIZE
         }
