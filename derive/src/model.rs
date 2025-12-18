@@ -34,8 +34,14 @@ struct FieldConfig {
     is_primary_key: bool,
     auto_increment: Option<bool>,
 
-    // Foreign key
+    // Foreign key (Many-to-One)
     foreign_key: Option<ForeignKeyConfig>,
+
+    // One-to-One relationship
+    one_to_one: Option<OneToOneConfig>,
+
+    // Many-to-Many relationship
+    many_to_many: Option<ManyToManyConfig>,
 
     // Indexing
     index: Option<IndexConfig>,
@@ -61,9 +67,21 @@ struct FieldConfig {
 
 #[derive(Clone)]
 struct ForeignKeyConfig {
-    entity: syn::Path, // Can be Author or super::author::Entity
+    entity: syn::Path,
     on_delete: Option<Ident>,
     default: Option<Expr>,
+}
+
+#[derive(Clone)]
+struct OneToOneConfig {
+    entity: syn::Path,
+    on_delete: Option<Ident>,
+}
+
+#[derive(Clone)]
+struct ManyToManyConfig {
+    entity: syn::Path,
+    through: syn::Path,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +156,8 @@ fn parse_field_attributes(attrs: &[Attribute]) -> syn::Result<FieldConfig> {
     for attr in attrs {
         if !attr.path().is_ident("primary_key")
             && !attr.path().is_ident("foreign_key")
+            && !attr.path().is_ident("one_to_one")
+            && !attr.path().is_ident("many_to_many")
             && !attr.path().is_ident("index")
             && !attr.path().is_ident("unique")
             && !attr.path().is_ident("max_length")
@@ -194,8 +214,14 @@ fn parse_field_attributes(attrs: &[Attribute]) -> syn::Result<FieldConfig> {
                         Ok(())
                     })?;
                 } else if path.is_ident("foreign_key") {
-                    // Parse foreign_key(Entity, on_delete = Cascade)
+                    // Parse foreign_key(Model, on_delete = Cascade)
                     config.foreign_key = Some(parse_foreign_key(meta_list)?);
+                } else if path.is_ident("one_to_one") {
+                    // Parse one_to_one(Model, on_delete = Cascade)
+                    config.one_to_one = Some(parse_one_to_one(meta_list)?);
+                } else if path.is_ident("many_to_many") {
+                    // Parse many_to_many(Model, through = JoinModel)
+                    config.many_to_many = Some(parse_many_to_many(meta_list)?);
                 } else if path.is_ident("max_length") {
                     // Parse #[max_length(50)] - direct literal argument
                     let lit: Lit = meta_list.parse_args()?;
@@ -308,6 +334,103 @@ fn parse_foreign_key(meta_list: &syn::MetaList) -> syn::Result<ForeignKeyConfig>
     })
 }
 
+fn parse_one_to_one(meta_list: &syn::MetaList) -> syn::Result<OneToOneConfig> {
+    let mut model_type = None;
+    let mut on_delete = None;
+
+    meta_list.parse_nested_meta(|meta| {
+        if model_type.is_none() {
+            let path = meta.path.clone();
+            let entity_path = if path.segments.len() == 1 {
+                let model_name = &path.segments[0].ident;
+                let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
+                syn::parse_quote! { super::super::#module_name::_internal::Entity }
+            } else {
+                let model_name =
+                    &path.segments.last().map(|seg| &seg.ident).expect("Path must have segments");
+                let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
+                syn::parse_quote! { super::super::#module_name::_internal::Entity }
+            };
+            model_type = Some(entity_path);
+        } else if meta.path.is_ident("on_delete") {
+            let _: Token![=] = meta.input.parse()?;
+            on_delete = Some(meta.input.parse::<Ident>()?);
+        }
+        Ok(())
+    })?;
+
+    Ok(OneToOneConfig {
+        entity: model_type.ok_or_else(|| {
+            syn::Error::new_spanned(meta_list, "one_to_one requires a Model type")
+        })?,
+        on_delete,
+    })
+}
+
+fn parse_many_to_many(meta_list: &syn::MetaList) -> syn::Result<ManyToManyConfig> {
+    let mut model_type = None;
+    let mut through_type = None;
+
+    meta_list.parse_nested_meta(|meta| {
+        if model_type.is_none() {
+            let path = meta.path.clone();
+            // For M:N, the user provides a path like `Tag` or `super::tag::Tag`
+            // The M:N helpers are generated OUTSIDE _internal, so we only need one super
+            // From article module, super gets us to models, then tag::_internal::Entity
+            let entity_path = if path.segments.len() == 1 {
+                // Simple name like `Tag` - assume sibling module
+                let model_name = &path.segments[0].ident;
+                let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
+                syn::parse_quote! { super::#module_name::_internal::Entity }
+            } else {
+                // Full path provided - use it directly but append _internal::Entity
+                let mut new_path = path.clone();
+                new_path.segments.push(syn::PathSegment {
+                    ident: format_ident!("_internal"),
+                    arguments: syn::PathArguments::None,
+                });
+                new_path.segments.push(syn::PathSegment {
+                    ident: format_ident!("Entity"),
+                    arguments: syn::PathArguments::None,
+                });
+                new_path
+            };
+            model_type = Some(entity_path);
+        } else if meta.path.is_ident("through") {
+            let _: Token![=] = meta.input.parse()?;
+            let through_path: syn::Path = meta.input.parse()?;
+            // Same logic for through table
+            let entity_path = if through_path.segments.len() == 1 {
+                let model_name = &through_path.segments[0].ident;
+                let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
+                syn::parse_quote! { super::#module_name::_internal::Entity }
+            } else {
+                let mut new_path = through_path.clone();
+                new_path.segments.push(syn::PathSegment {
+                    ident: format_ident!("_internal"),
+                    arguments: syn::PathArguments::None,
+                });
+                new_path.segments.push(syn::PathSegment {
+                    ident: format_ident!("Entity"),
+                    arguments: syn::PathArguments::None,
+                });
+                new_path
+            };
+            through_type = Some(entity_path);
+        }
+        Ok(())
+    })?;
+
+    Ok(ManyToManyConfig {
+        entity: model_type.ok_or_else(|| {
+            syn::Error::new_spanned(meta_list, "many_to_many requires a Model type")
+        })?,
+        through: through_type.ok_or_else(|| {
+            syn::Error::new_spanned(meta_list, "many_to_many requires 'through = JoinModel'")
+        })?,
+    })
+}
+
 /// Main implementation of the ormada_model attribute macro
 pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
     let config: ModelConfig = syn::parse2(attr)?;
@@ -337,7 +460,12 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     let mut has_primary_key = false;
     let mut primary_key_fields = Vec::new();
     let mut foreign_keys: Vec<(Ident, syn::Type, ForeignKeyConfig)> = Vec::new();
+    let mut one_to_one_relations: Vec<(Ident, syn::Type, OneToOneConfig)> = Vec::new();
+    let mut many_to_many_relations: Vec<(Ident, syn::Type, ManyToManyConfig)> = Vec::new();
     let mut soft_delete_field: Option<Ident> = None;
+
+    // Track which fields to remove (M:N fields are metadata only, not DB columns)
+    let mut m2m_field_names = Vec::new();
 
     for field in fields.named.iter_mut() {
         let config = parse_field_attributes(&field.attrs)?;
@@ -358,6 +486,23 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         if let Some(ref fk) = config.foreign_key {
             foreign_keys.push((field_ident.clone(), field_type.clone(), fk.clone()));
         }
+        if let Some(ref o2o) = config.one_to_one {
+            one_to_one_relations.push((field_ident.clone(), field_type.clone(), o2o.clone()));
+            // one_to_one also creates a FK relation for the column
+            foreign_keys.push((
+                field_ident.clone(),
+                field_type.clone(),
+                ForeignKeyConfig {
+                    entity: o2o.entity.clone(),
+                    on_delete: o2o.on_delete.clone(),
+                    default: None,
+                },
+            ));
+        }
+        if let Some(ref m2m) = config.many_to_many {
+            many_to_many_relations.push((field_ident.clone(), field_type.clone(), m2m.clone()));
+            m2m_field_names.push(field_ident.to_string());
+        }
         if config.soft_delete {
             if soft_delete_field.is_some() {
                 return Err(syn::Error::new(
@@ -374,6 +519,19 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
         // Strip our custom attributes, keep only SeaORM/serde ones
         strip_django_attributes(field, &config);
     }
+
+    // Remove M:N fields from the struct - they're metadata only, not DB columns
+    fields.named = fields
+        .named
+        .clone()
+        .into_iter()
+        .filter(|f| {
+            f.ident
+                .as_ref()
+                .map(|i| !m2m_field_names.contains(&i.to_string()))
+                .unwrap_or(true)
+        })
+        .collect();
 
     if !has_primary_key {
         return Err(syn::Error::new_spanned(
@@ -428,9 +586,12 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     // and adds relation fields. This provides compile-time safety:
     // - Model (from create/update) has no relation fields -> can't accidentally access unloaded relations
     // - ModelWithRelations (from prefetch_related) has relation fields -> safe to access
-    
+
     // Generate ModelWithRelations struct with relation fields
     let model_with_relations = generate_model_with_relations_struct(&foreign_keys);
+
+    // Generate M:N helper methods
+    let m2m_helpers = generate_many_to_many_helpers(&many_to_many_relations);
 
     // Generate additional components
     let relation_enum = generate_relation_enum(&foreign_keys);
@@ -538,6 +699,9 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
             }
         }
 
+        // M:N relationship helper methods
+        #m2m_helpers
+
         // Main export: Author = Model (the data struct users work with)
         pub type #original_name = Model;
     };
@@ -593,6 +757,8 @@ fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
         // Keep doc comments and other non-ormada attributes
         if !attr.path().is_ident("primary_key")
             && !attr.path().is_ident("foreign_key")
+            && !attr.path().is_ident("one_to_one")
+            && !attr.path().is_ident("many_to_many")
             && !attr.path().is_ident("index")
             && !attr.path().is_ident("unique")
             && !attr.path().is_ident("max_length")
@@ -642,6 +808,11 @@ fn generate_model_struct(
     let mut fields = Vec::new();
 
     for (field, config) in field_configs {
+        // Skip many_to_many fields - they're not actual database columns
+        if config.many_to_many.is_some() {
+            continue;
+        }
+
         let field_name = &field.ident;
         let field_type = &field.ty;
 
@@ -680,6 +851,7 @@ fn generate_model_struct(
 fn generate_column_enum(field_configs: &[(&syn::Field, FieldConfig)]) -> TokenStream {
     let variants: Vec<_> = field_configs
         .iter()
+        .filter(|(_, config)| config.many_to_many.is_none()) // Skip M:N fields
         .map(|(field, _)| {
             let name = field.ident.as_ref().unwrap();
             let variant_name = format_ident!("{}", to_pascal_case(&name.to_string()));
@@ -728,17 +900,21 @@ fn generate_relation_enum(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)])
         .iter()
         .map(|(field_name, _fk_field_type, fk)| {
             // Extract meaningful name from the path
-            // e.g., crate::author::author::Entity -> use second-to-last "author"
-            // or super::author::Entity -> use "author"
+            // Path is like: super::super::author::_internal::Entity
+            // We want "author" (the module name before _internal)
             let segments: Vec<_> = fk.entity.segments.iter().collect();
-            let variant_name = if segments.len() >= 2 && segments.last().unwrap().ident == "Entity"
-            {
-                // Path ends with ::Entity, use the segment before it
-                &segments[segments.len() - 2].ident
-            } else {
-                // Otherwise use last segment
-                &segments.last().unwrap().ident
-            };
+            
+            // Find the module name by looking for the segment before "_internal"
+            let variant_name = segments
+                .iter()
+                .position(|s| s.ident == "_internal")
+                .and_then(|pos| if pos > 0 { Some(&segments[pos - 1].ident) } else { None })
+                .unwrap_or_else(|| {
+                    // Fallback: use last segment
+                    &segments.last().unwrap().ident
+                });
+            
+            let variant_ident = format_ident!("{}", to_pascal_case(&variant_name.to_string()));
 
             // Generate Column name (PascalCase from field_name)
             let column_name_str = to_pascal_case(&field_name.to_string());
@@ -772,7 +948,7 @@ fn generate_relation_enum(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)])
                     from = #from_path,
                     to = #to_path
                 )]
-                #variant_name
+                #variant_ident
             }
         })
         .collect();
@@ -791,6 +967,145 @@ fn generate_entity_impl() -> TokenStream {
     }
 }
 
+/// Generate helper methods for M:N relationships defined with #[many_to_many(Model, through = JoinModel)]
+fn generate_many_to_many_helpers(
+    m2m_relations: &[(Ident, syn::Type, ManyToManyConfig)],
+) -> TokenStream {
+    if m2m_relations.is_empty() {
+        return quote! {};
+    }
+
+    let methods: Vec<_> = m2m_relations
+        .iter()
+        .map(|(field_name, _field_type, config)| {
+            // Extract model names from paths
+            // config.entity is like: super::tag::_internal::Entity
+            // config.through is like: super::article_tag::_internal::Entity
+            let entity_segments: Vec<_> = config.entity.segments.iter().collect();
+            let through_segments: Vec<_> = config.through.segments.iter().collect();
+
+            // Find the module name before _internal for the related model
+            let related_module = entity_segments
+                .iter()
+                .position(|s| s.ident == "_internal")
+                .and_then(|pos| {
+                    if pos > 0 {
+                        Some(&entity_segments[pos - 1].ident)
+                    } else {
+                        None
+                    }
+                })
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "related".to_string());
+
+            // Find the module name before _internal for the through table
+            let through_module = through_segments
+                .iter()
+                .position(|s| s.ident == "_internal")
+                .and_then(|pos| {
+                    if pos > 0 {
+                        Some(&through_segments[pos - 1].ident)
+                    } else {
+                        None
+                    }
+                })
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "through".to_string());
+
+            // Generate method name
+            let get_method_name = format_ident!("get_{}", field_name);
+
+            // Build paths to the Model types (not Entity)
+            // From super::tag::_internal::Entity, we want super::tag::Model
+            let related_model_path = {
+                let mut segments: Vec<_> = config.entity.segments.iter().cloned().collect();
+                // Remove _internal and Entity, keep up to module name
+                while segments.last().map(|s| s.ident == "Entity" || s.ident == "_internal").unwrap_or(false) {
+                    segments.pop();
+                }
+                // Add Model
+                segments.push(syn::PathSegment {
+                    ident: format_ident!("Model"),
+                    arguments: syn::PathArguments::None,
+                });
+                let mut path = syn::Path { leading_colon: None, segments: syn::punctuated::Punctuated::new() };
+                for seg in segments {
+                    path.segments.push(seg);
+                }
+                path
+            };
+
+            let through_model_path = {
+                let mut segments: Vec<_> = config.through.segments.iter().cloned().collect();
+                while segments.last().map(|s| s.ident == "Entity" || s.ident == "_internal").unwrap_or(false) {
+                    segments.pop();
+                }
+                segments.push(syn::PathSegment {
+                    ident: format_ident!("Model"),
+                    arguments: syn::PathArguments::None,
+                });
+                let mut path = syn::Path { leading_colon: None, segments: syn::punctuated::Punctuated::new() };
+                for seg in segments {
+                    path.segments.push(seg);
+                }
+                path
+            };
+
+            // Column names for the through table (PascalCase)
+            // The through table has article_id and tag_id columns
+            // We need ArticleId (for self) and TagId (for related)
+            let self_column_name = format_ident!("{}Id", to_pascal_case(&through_module.trim_end_matches("_tag").trim_end_matches("_article")));
+            let related_column_name = format_ident!("{}Id", to_pascal_case(&related_module));
+
+            // Field names for accessing the through record (snake_case)
+            let related_fk_field = format_ident!("{}_id", to_snake_case(&related_module));
+
+            quote! {
+                /// Get all related models through the M:N relationship
+                ///
+                /// This method queries the through table and returns all related models.
+                /// Uses Ormada's QuerySet API for type-safe queries.
+                pub async fn #get_method_name<C: ::ormada::db::ConnectionTrait>(
+                    &self,
+                    db: &C,
+                ) -> ::core::result::Result<Vec<#related_model_path>, ::ormada::error::OrmadaError> {
+                    use ::ormada::prelude::*;
+
+                    // Query through table filtered by self.id
+                    let through_records = #through_model_path::objects(db)
+                        .filter(#through_model_path::#self_column_name.eq(self.id))
+                        .all()
+                        .await?;
+
+                    if through_records.is_empty() {
+                        return Ok(Vec::new());
+                    }
+
+                    // Extract related IDs
+                    let related_ids: Vec<_> = through_records
+                        .iter()
+                        .map(|r| r.#related_fk_field)
+                        .collect();
+
+                    // Query related models
+                    let related = #related_model_path::objects(db)
+                        .filter(#related_model_path::Id.is_in(related_ids))
+                        .all()
+                        .await?;
+
+                    Ok(related)
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        impl Model {
+            #(#methods)*
+        }
+    }
+}
+
 fn generate_django_entity_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
     table_name: &str,
@@ -800,6 +1115,11 @@ fn generate_django_entity_impl(
     let mut validations = Vec::new();
 
     for (field_name, field_type, config) in field_configs {
+        // Skip M:N fields - they're not actual DB columns
+        if config.many_to_many.is_some() {
+            continue;
+        }
+
         // Generate validation code
         let field_name_str = field_name.to_string();
 
@@ -807,13 +1127,13 @@ fn generate_django_entity_impl(
         // Check that FK value is not the default value which would likely cause DB constraint violation
         // This works for all types that implement Default + PartialEq:
         // - i8, i16, i32, i64: default is 0
-        // - u8, u16, u32, u64: default is 0  
+        // - u8, u16, u32, u64: default is 0
         // - String: default is ""
         // - Uuid: default is nil UUID (00000000-0000-0000-0000-000000000000)
         if let Some(ref _fk) = config.foreign_key {
             let type_str = quote!(#field_type).to_string();
             let is_nullable_fk = type_str.contains("Option");
-            
+
             if !is_nullable_fk {
                 // Non-nullable FK: validate that value is not the default
                 // Use the field type explicitly to avoid type inference issues
@@ -965,7 +1285,9 @@ fn generate_django_entity_impl(
 ///
 /// This trait is ALWAYS generated (even for entities without foreign keys)
 /// so that the relations system works properly.
-fn generate_with_relations_trait(_foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
+fn generate_with_relations_trait(
+    _foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
+) -> TokenStream {
     // ModelWithRelations is now a separate struct that wraps Model
     // from_model_and_relations converts Model -> ModelWithRelations
     quote! {
@@ -984,7 +1306,9 @@ fn generate_with_relations_trait(_foreign_keys: &[(Ident, syn::Type, ForeignKeyC
     }
 }
 
-fn generate_has_relation_impls(foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)]) -> TokenStream {
+fn generate_has_relation_impls(
+    foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
+) -> TokenStream {
     let impls: Vec<_> = foreign_keys
         .iter()
         .map(|(field_name, fk_field_type, fk)| {
@@ -1152,6 +1476,10 @@ fn generate_model_save_impl(
     field_configs: &[(Ident, syn::Type, FieldConfig)],
 ) -> syn::Result<TokenStream> {
     let auto_now_updates = field_configs.iter().filter_map(|(ident, _, config)| {
+        // Skip M:N fields
+        if config.many_to_many.is_some() {
+            return None;
+        }
         if config.auto_now {
             Some(quote! {
                 active_model.#ident = ::ormada::__internal::Set(::ormada::__internal::Utc::now().fixed_offset());
@@ -1164,6 +1492,10 @@ fn generate_model_save_impl(
     // Force all fields to Set to ensure they are updated
     // ActiveModel::from() sets them to Unchanged, which causes save() to skip updating them
     let force_set_updates = field_configs.iter().filter_map(|(ident, _, config)| {
+        // Skip M:N fields - they're not actual DB columns
+        if config.many_to_many.is_some() {
+            return None;
+        }
         if !config.is_primary_key && !config.auto_now {
             Some(quote! {
                 active_model.#ident = ::ormada::__internal::Set(active_model.#ident.unwrap());
@@ -1484,11 +1816,11 @@ fn to_pascal_case(s: &str) -> String {
 }
 
 /// Generate Default implementation for Model (base model without relation fields)
-/// 
+///
 /// Default is always generated. For models with required FK fields, the FK will
 /// default to 0 which will fail at the database level if not overridden.
 /// Users should always explicitly provide FK values:
-/// 
+///
 /// ```ignore
 /// Book {
 ///     author_id: author.id,  // Required - must be provided
@@ -1505,7 +1837,11 @@ fn generate_default_impl(
     let mut field_defaults = Vec::new();
 
     // Generate defaults for all original fields (no relation fields on base Model)
-    for (field_name, _field_type, _config) in field_configs {
+    // Skip M:N fields - they're not actual DB columns
+    for (field_name, _field_type, config) in field_configs {
+        if config.many_to_many.is_some() {
+            continue;
+        }
         field_defaults.push(quote! {
             #field_name: ::core::default::Default::default()
         });
@@ -1523,7 +1859,7 @@ fn generate_default_impl(
 }
 
 /// Generate ModelWithRelations struct that wraps Model and adds relation fields
-/// 
+///
 /// This struct is returned by prefetch_related() queries and provides type-safe
 /// access to loaded relations. The base Model (from create/update) does NOT have
 /// relation fields, preventing accidental access to unloaded relations.
@@ -1547,7 +1883,7 @@ fn generate_model_with_relations_struct(
 
             impl ::core::ops::Deref for ModelWithRelations {
                 type Target = Model;
-                
+
                 fn deref(&self) -> &Self::Target {
                     &self.0
                 }
@@ -1558,7 +1894,7 @@ fn generate_model_with_relations_struct(
                     &mut self.0
                 }
             }
-            
+
             impl ::core::convert::From<Model> for ModelWithRelations {
                 fn from(model: Model) -> Self {
                     Self(model)
@@ -1621,10 +1957,10 @@ fn generate_model_with_relations_struct(
 
     quote! {
         /// Model with loaded relations
-        /// 
+        ///
         /// This struct is returned by `prefetch_related()` and `select_related()` queries.
         /// It contains the base model fields plus loaded relation fields.
-        /// 
+        ///
         /// The base `Model` type (returned by `create()`, `update()`, queries without prefetch)
         /// does NOT have relation fields, providing compile-time safety against accessing
         /// unloaded relations.
@@ -1648,7 +1984,7 @@ fn generate_model_with_relations_struct(
 
         impl ::core::ops::Deref for ModelWithRelations {
             type Target = Model;
-            
+
             fn deref(&self) -> &Self::Target {
                 &self.inner
             }
@@ -1670,4 +2006,3 @@ fn generate_model_with_relations_struct(
         }
     }
 }
-

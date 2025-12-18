@@ -50,6 +50,7 @@ where
     C: ConnectionTrait,
 {
     /// Create a new `UpsertBuilder`
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(db: &'a C, models: Vec<E::Model>) -> Self {
         Self {
             db,
@@ -109,7 +110,7 @@ where
     }
 }
 
-impl<'a, E, C> UpsertBuilder<'a, E, C, Ready>
+impl<E, C> UpsertBuilder<'_, E, C, Ready>
 where
     E: EntityTrait,
     C: ConnectionTrait,

@@ -1,3 +1,5 @@
+#![allow(clippy::indexing_slicing)]
+
 //! Batching utilities for memory-efficient operations
 //!
 //! Provides Ormada-style batching for large querysets to prevent OOM errors.
@@ -14,7 +16,7 @@ pub const DEFAULT_CHUNK_SIZE: usize = 100;
 /// Validates batch size and returns safe value
 pub fn validate_batch_size(size: Option<usize>) -> usize {
     match size {
-        Some(0) => DEFAULT_BATCH_SIZE,
+        Some(0) | None => DEFAULT_BATCH_SIZE,
         Some(s) if s > MAX_BATCH_SIZE => {
             eprintln!(
                 "Warning: batch_size {s} exceeds maximum {MAX_BATCH_SIZE}. Using {MAX_BATCH_SIZE}"
@@ -22,7 +24,6 @@ pub fn validate_batch_size(size: Option<usize>) -> usize {
             MAX_BATCH_SIZE
         }
         Some(s) => s,
-        None => DEFAULT_BATCH_SIZE,
     }
 }
 

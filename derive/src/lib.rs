@@ -346,17 +346,31 @@ pub fn atomic(args: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// # Field Attributes
 ///
+/// ## Primary Key
 /// - `#[primary_key]` - Mark field as primary key
 /// - `#[primary_key(auto_increment = false)]` - Control auto-increment
-/// - `#[foreign_key(Model)]` - Define foreign key relationship (use Model type, not Entity)
+///
+/// ## Relationships
+/// - `#[foreign_key(Model)]` - Many-to-One relationship (use Model type, not Entity)
 /// - `#[foreign_key(Model, on_delete = Cascade)]` - FK with ON DELETE behavior
+/// - `#[one_to_one(Model)]` - One-to-One relationship
+/// - `#[one_to_one(Model, on_delete = Cascade)]` - 1:1 with ON DELETE behavior
+/// - `#[many_to_many(Model, through = JoinModel)]` - Many-to-Many with intermediate table
+///
+/// ## Indexing
 /// - `#[index]` / `#[index(name = "idx_name")]` - Create index
 /// - `#[unique]` / `#[unique(name = "uniq_name")]` - Unique constraint
+///
+/// ## Validation
 /// - `#[max_length(n)]` - String max length validation
 /// - `#[min_length(n)]` - String min length validation
 /// - `#[range(min = n, max = m)]` - Numeric range validation
+///
+/// ## Timestamps
 /// - `#[auto_now]` - Auto-update timestamp on save
 /// - `#[auto_now_add]` - Auto-set timestamp on creation
+///
+/// ## Other
 /// - `#[soft_delete]` - Mark field for soft delete (must be `Option<DateTimeWithTimeZone>`)
 /// - `#[skip_serializing]` - Skip field when serializing
 /// - `#[skip_deserializing]` - Skip field when deserializing

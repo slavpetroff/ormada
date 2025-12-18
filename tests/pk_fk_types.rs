@@ -127,7 +127,6 @@ pub mod pk_types {
     // Model with UUID PK
     pub mod category_uuid {
         use super::*;
-        use uuid::Uuid;
 
         #[ormada_model(table = "categories_uuid")]
         pub struct CategoryUuid {
@@ -142,7 +141,6 @@ pub mod pk_types {
     // Model with FK to UUID PK
     pub mod item_uuid {
         use super::*;
-        use uuid::Uuid;
 
         #[ormada_model(table = "items_uuid")]
         pub struct ItemUuid {
@@ -160,7 +158,6 @@ pub mod pk_types {
     // Model with nullable FK to UUID PK
     pub mod item_nullable_uuid {
         use super::*;
-        use uuid::Uuid;
 
         #[ormada_model(table = "items_nullable_uuid")]
         pub struct ItemNullableUuid {
@@ -235,13 +232,13 @@ pub use pk_types::category_i64::CategoryI64;
 pub use pk_types::category_uuid::CategoryUuid;
 pub use pk_types::item_i32::ItemI32;
 pub use pk_types::item_i64::ItemI64;
-pub use pk_types::item_uuid::ItemUuid;
 pub use pk_types::item_nullable_i32::ItemNullableI32;
 pub use pk_types::item_nullable_i64::ItemNullableI64;
 pub use pk_types::item_nullable_uuid::ItemNullableUuid;
+pub use pk_types::item_uuid::ItemUuid;
 pub use pk_types::order::Order;
-pub use pk_types::simple_item::SimpleItem;
 pub use pk_types::order_item::OrderItem;
+pub use pk_types::simple_item::SimpleItem;
 
 // ============================================================================
 // Database Fixtures
@@ -261,23 +258,37 @@ pub async fn db_pk_types(#[future] db_empty: DatabaseRouter) -> DatabaseRouter {
     let db = db_empty;
 
     // Create tables for i32 PK/FK
-    CategoryI32::create_table(&db).await.expect("Failed to create categories_i32 table");
+    CategoryI32::create_table(&db)
+        .await
+        .expect("Failed to create categories_i32 table");
     ItemI32::create_table(&db).await.expect("Failed to create items_i32 table");
-    ItemNullableI32::create_table(&db).await.expect("Failed to create items_nullable_i32 table");
+    ItemNullableI32::create_table(&db)
+        .await
+        .expect("Failed to create items_nullable_i32 table");
 
     // Create tables for i64 PK/FK
-    CategoryI64::create_table(&db).await.expect("Failed to create categories_i64 table");
+    CategoryI64::create_table(&db)
+        .await
+        .expect("Failed to create categories_i64 table");
     ItemI64::create_table(&db).await.expect("Failed to create items_i64 table");
-    ItemNullableI64::create_table(&db).await.expect("Failed to create items_nullable_i64 table");
+    ItemNullableI64::create_table(&db)
+        .await
+        .expect("Failed to create items_nullable_i64 table");
 
     // Create tables for UUID PK/FK
-    CategoryUuid::create_table(&db).await.expect("Failed to create categories_uuid table");
+    CategoryUuid::create_table(&db)
+        .await
+        .expect("Failed to create categories_uuid table");
     ItemUuid::create_table(&db).await.expect("Failed to create items_uuid table");
-    ItemNullableUuid::create_table(&db).await.expect("Failed to create items_nullable_uuid table");
+    ItemNullableUuid::create_table(&db)
+        .await
+        .expect("Failed to create items_nullable_uuid table");
 
     // Create tables for composite PK
     Order::create_table(&db).await.expect("Failed to create orders table");
-    SimpleItem::create_table(&db).await.expect("Failed to create simple_items table");
+    SimpleItem::create_table(&db)
+        .await
+        .expect("Failed to create simple_items table");
     OrderItem::create_table(&db).await.expect("Failed to create order_items table");
 
     db
@@ -306,10 +317,7 @@ async fn test_i32_pk_create_and_read(#[future] db_pk_types: DatabaseRouter) {
     assert_eq!(category.name, "Electronics");
 
     // Read it back
-    let fetched = CategoryI32::objects(&db)
-        .get(category.id)
-        .await
-        .unwrap();
+    let fetched = CategoryI32::objects(&db).get(category.id).await.unwrap();
 
     assert_eq!(fetched.id, category.id);
     assert_eq!(fetched.name, "Electronics");
@@ -622,10 +630,7 @@ async fn test_update_fk_to_different_category(#[future] db_pk_types: DatabaseRou
         .unwrap();
 
     // Verify update
-    let updated = ItemI32::objects(&db)
-        .get(item.id)
-        .await
-        .unwrap();
+    let updated = ItemI32::objects(&db).get(item.id).await.unwrap();
 
     assert_eq!(updated.category_id, cat2.id);
 }

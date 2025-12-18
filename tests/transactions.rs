@@ -387,7 +387,11 @@ async fn test_transaction_rollback_on_panic(#[future] db: DatabaseRouter) {
             .await?;
 
         // Force error to test rollback
-        Err::<(), OrmadaError>(OrmadaError::validation_error("test", "rollback", "Intentional error"))
+        Err::<(), OrmadaError>(OrmadaError::validation_error(
+            "test",
+            "rollback",
+            "Intentional error",
+        ))
     })
     .await;
 

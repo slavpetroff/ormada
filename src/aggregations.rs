@@ -1,3 +1,5 @@
+#![allow(clippy::uninlined_format_args)]
+
 //! Aggregation functions for database operations (Ormada's aggregate/annotate)
 //!
 //! This module provides Ormada-style aggregation functions like COUNT, SUM, AVG, MAX, MIN.
@@ -129,7 +131,7 @@ pub enum AggregateValue {
 
 impl AggregateValue {
     /// Create a Count result
-    pub fn count(value: u64) -> Self {
+    pub const fn count(value: u64) -> Self {
         Self::Count(value)
     }
 
@@ -178,19 +180,20 @@ impl AggregateValue {
         matches!(self, Self::Min { .. })
     }
 
-    /// Get the numeric value if present (returns None for Count, use as_count() instead)
-    pub fn value(&self) -> Option<f64> {
+    /// Get the numeric value if present (returns None for Count, use `as_count()` instead)
+    #[allow(clippy::cast_precision_loss)]
+    pub const fn value(&self) -> Option<f64> {
         match self {
             Self::Count(n) => Some(*n as f64),
-            Self::Sum { value, .. } => *value,
-            Self::Avg { value, .. } => *value,
-            Self::Max { value, .. } => *value,
-            Self::Min { value, .. } => *value,
+            Self::Sum { value, .. }
+            | Self::Avg { value, .. }
+            | Self::Max { value, .. }
+            | Self::Min { value, .. } => *value,
         }
     }
 
     /// Get the count value if this is a Count
-    pub fn as_count(&self) -> Option<u64> {
+    pub const fn as_count(&self) -> Option<u64> {
         match self {
             Self::Count(n) => Some(*n),
             _ => None,
@@ -201,10 +204,10 @@ impl AggregateValue {
     pub fn column(&self) -> Option<&str> {
         match self {
             Self::Count(_) => None,
-            Self::Sum { column, .. } => Some(column),
-            Self::Avg { column, .. } => Some(column),
-            Self::Max { column, .. } => Some(column),
-            Self::Min { column, .. } => Some(column),
+            Self::Sum { column, .. }
+            | Self::Avg { column, .. }
+            | Self::Max { column, .. }
+            | Self::Min { column, .. } => Some(column),
         }
     }
 }
@@ -307,6 +310,7 @@ struct AggregateValueFloat {
     value: Option<f64>,
 }
 
+#[allow(clippy::future_not_send)]
 impl<
         E: EntityTrait + crate::traits::OrmadaEntity,
         C: ConnectionTrait,
@@ -314,37 +318,33 @@ impl<
     > AggregateExt<E> for QuerySet<'_, E, C, S>
 {
     async fn aggregate_count(self) -> Result<u64, OrmadaError> {
-        // Use the existing count() method
         self.count().await
     }
 
+    #[allow(clippy::cast_precision_loss)]
     async fn aggregate_sum(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
 
-        // Build SUM query - store column ref for potential reuse
         let column_ref = column.as_column_ref();
         let column_expr = Expr::col(column_ref.clone());
         let sum_expr = Func::sum(column_expr);
 
         let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
 
-        // Try integer type first (more common for sum), fallback to float
         match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
-            // Only catch type conversion errors - propagate real DB errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
-                // If int parsing failed, rebuild query for float (reuse column_ref, cheaper than cloning Select)
                 let sum_expr = Func::sum(Expr::col(column_ref));
                 let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
 
-                match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
-                    Some(result) => Ok(result.value),
-                    None => Ok(None),
-                }
+                query
+                    .into_model::<AggregateValueFloat>()
+                    .one(self.inner.db)
+                    .await?
+                    .map_or(Ok(None), |result| Ok(result.value))
             }
-            // Propagate connection errors, constraint violations, etc.
             Err(e) => Err(e.into()),
         }
     }
@@ -357,13 +357,14 @@ impl<
 
         let query = self.inner.select.clone().select_only().expr_as(avg_expr, "value");
 
-        // AVG always returns float
-        match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
-            Some(result) => Ok(result.value),
-            None => Ok(None),
-        }
+        query
+            .into_model::<AggregateValueFloat>()
+            .one(self.inner.db)
+            .await?
+            .map_or(Ok(None), |result| Ok(result.value))
     }
 
+    #[allow(clippy::cast_precision_loss)]
     async fn aggregate_max(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
@@ -374,26 +375,24 @@ impl<
 
         let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
 
-        // Try integer type first, fallback to float
         match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
-            // Only catch type conversion errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
-                // Rebuild query for float type only if int failed (reuse column_ref)
                 let max_expr = Func::max(Expr::col(column_ref));
                 let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
 
-                match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
-                    Some(result) => Ok(result.value),
-                    None => Ok(None),
-                }
+                query
+                    .into_model::<AggregateValueFloat>()
+                    .one(self.inner.db)
+                    .await?
+                    .map_or(Ok(None), |result| Ok(result.value))
             }
-            // Propagate connection errors, constraint violations, etc.
             Err(e) => Err(e.into()),
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
     async fn aggregate_min(self, column: impl ColumnTrait) -> Result<Option<f64>, OrmadaError> {
         use sea_orm::sea_query::{Expr, Func};
         use sea_orm::DbErr;
@@ -404,22 +403,19 @@ impl<
 
         let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
 
-        // Try integer type first, fallback to float
         match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
-            // Only catch type conversion errors
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
-                // Rebuild query for float type only if int failed (reuse column_ref)
                 let min_expr = Func::min(Expr::col(column_ref));
                 let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
 
-                match query.into_model::<AggregateValueFloat>().one(self.inner.db).await? {
-                    Some(result) => Ok(result.value),
-                    None => Ok(None),
-                }
+                query
+                    .into_model::<AggregateValueFloat>()
+                    .one(self.inner.db)
+                    .await?
+                    .map_or(Ok(None), |result| Ok(result.value))
             }
-            // Propagate connection errors, constraint violations, etc.
             Err(e) => Err(e.into()),
         }
     }

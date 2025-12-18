@@ -1,0 +1,21 @@
+warning: unused import: `ormada::prelude::*`
+ --> tests/ui/access_relation_on_model.rs:6:5
+  |
+6 | use ormada::prelude::*;
+  |     ^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `models::author::Author`
+  --> tests/ui/access_relation_on_model.rs:48:5
+   |
+48 | use models::author::Author;
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0609]: no field `author` on type `book::_internal::Model`
+  --> tests/ui/access_relation_on_model.rs:64:27
+   |
+64 |     let _author_id = book.author.id;
+   |                           ^^^^^^ unknown field
+   |
+   = note: available fields are: `id`, `author_id`, `title`, `price`, `published` ... and 2 others

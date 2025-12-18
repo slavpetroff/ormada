@@ -157,7 +157,9 @@ pub async fn db() -> DatabaseRouter {
     // Create tables using macro-generated methods
     Author::create_table(&db_router).await.expect("Failed to create authors table");
     Book::create_table(&db_router).await.expect("Failed to create books table");
-    Article::create_table(&db_router).await.expect("Failed to create articles table");
+    Article::create_table(&db_router)
+        .await
+        .expect("Failed to create articles table");
 
     db_router
 }

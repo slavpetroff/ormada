@@ -1,3 +1,5 @@
+#![allow(clippy::indexing_slicing)]
+
 //! Database routing for read replicas
 //!
 //! Provides automatic routing between primary (write) and replica (read) databases

@@ -306,10 +306,7 @@ pub use internal as __internal;
 ///
 /// Import everything you need with: `use ormada::prelude::*;`
 pub mod prelude {
-    //! Commonly used imports for ormada
-    //!
-    //! This prelude provides all the types you need to work with the ORM.
-    //! Users should ONLY need to import from here - no direct `sea_orm` imports needed.
+    #![allow(clippy::mixed_attributes_style)]
 
     // =========================================================================
     // Database (ormada.db equivalent)

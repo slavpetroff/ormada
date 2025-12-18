@@ -83,11 +83,7 @@ async fn test_model_from_query_without_prefetch_has_only_db_fields(
     let (db, (author, _books)) = db_with_author_with_books;
 
     // Query without prefetch_related returns Model
-    let book = Book::objects(&db)
-        .filter(Book::AuthorId.eq(author.id))
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).filter(Book::AuthorId.eq(author.id)).first().await.unwrap();
 
     // Book Model has all DB fields
     assert!(book.id > 0);
@@ -189,11 +185,7 @@ async fn test_model_with_relations_from_prefetch_has_relation_fields(
     let (db, (author, _books)) = db_with_author_with_books;
 
     // prefetch_related returns ModelWithRelations
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // ModelWithRelations has relation fields
     assert_eq!(book.author.id, author.id);
@@ -215,11 +207,7 @@ async fn test_model_with_relations_all_query(
     let (db, (author, _books)) = db_with_author_with_books;
 
     // all() with prefetch_related returns Vec<ModelWithRelations>
-    let books = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert!(!books.is_empty());
 
@@ -243,11 +231,7 @@ async fn test_model_with_relations_last_query(
     let (db, (author, _books)) = db_with_author_with_books;
 
     // last() with prefetch_related returns ModelWithRelations
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .last()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).last().await.unwrap();
 
     assert_eq!(book.author.id, author.id);
     assert!(book.id > 0);
@@ -287,11 +271,7 @@ async fn test_model_with_relations_deref_to_model(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // Access base Model fields via Deref (no explicit .inner needed)
     assert!(book.id > 0);
@@ -311,11 +291,7 @@ async fn test_model_with_relations_inner_field_access(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // Can also access inner Model directly
     assert_eq!(book.inner.id, book.id);
@@ -476,11 +452,7 @@ async fn test_multiple_books_same_author_with_prefetch(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let books = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // All books have the same author
     for book in &books {
@@ -545,11 +517,7 @@ async fn test_prefetch_with_limit_and_offset(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let all_books = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let all_books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     // SQLite requires LIMIT when using OFFSET
     let offset_books = Book::objects(&db)
@@ -583,11 +551,8 @@ async fn test_model_and_model_with_relations_are_different_types(
     let book_model = Book::objects(&db).first().await.unwrap();
 
     // Get ModelWithRelations
-    let book_with_relations = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book_with_relations =
+        Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // They have the same base data
     assert_eq!(book_model.id, book_with_relations.id);
@@ -663,11 +628,7 @@ async fn test_model_with_relations_serialization(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     // ModelWithRelations can be serialized
     let json = serde_json::to_string(&book).unwrap();
@@ -706,11 +667,7 @@ async fn test_model_with_relations_clone(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     let cloned = book.clone();
 

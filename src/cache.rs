@@ -114,12 +114,10 @@ impl CachedConnection {
     ///
     /// Returns `false` if the cache lock is poisoned.
     pub fn clear_cache(&self) -> bool {
-        if let Ok(mut cache) = self.cache.write() {
+        self.cache.write().is_ok_and(|mut cache| {
             cache.clear();
             true
-        } else {
-            false
-        }
+        })
     }
 
     fn hash_query(query: &str) -> u64 {

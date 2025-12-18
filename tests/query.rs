@@ -1840,7 +1840,7 @@ async fn test_debug_sql(#[future] db_with_sample_authors: (DatabaseRouter, Vec<A
 async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain().await.unwrap();
+    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain().unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());
@@ -1854,11 +1854,7 @@ async fn test_explain_analyze_query(
 ) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    let explain = Author::objects(&db)
-        .filter(Author::Age.gte(25))
-        .explain_analyze()
-        .await
-        .unwrap();
+    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain_analyze().unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());

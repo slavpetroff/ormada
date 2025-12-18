@@ -1,3 +1,9 @@
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::single_char_pattern)]
+
 //! Error types for ormada - Django-style naming
 //!
 //! This module provides comprehensive error types for all ORM operations,
@@ -130,7 +136,7 @@ pub enum OrmadaError {
         id: String,
     },
 
-    /// Empty query result (variant of DoesNotExist)
+    /// Empty query result (variant of `DoesNotExist`)
     ///
     /// Raised when `first()`, `last()`, etc. find no records.
     ///
@@ -581,9 +587,9 @@ impl OrmadaError {
     /// Check if this error is retryable
     ///
     /// Returns `true` for transient errors that might succeed on retry:
-    /// - OperationalError (connection might recover)
-    /// - ConcurrencyError (might succeed after other transaction commits)
-    /// - TransactionError (deadlocks might resolve)
+    /// - `OperationalError` (connection might recover)
+    /// - `ConcurrencyError` (might succeed after other transaction commits)
+    /// - `TransactionError` (deadlocks might resolve)
     ///
     /// # Examples
     ///

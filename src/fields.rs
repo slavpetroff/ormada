@@ -46,4 +46,5 @@ pub use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc
 
 /// Type alias for datetime with timezone (`DateTime<FixedOffset>`)
 /// This matches SeaORM's `DateTimeWithTimeZone` type and Ormada's `DateTimeField`
+#[allow(clippy::doc_markdown)]
 pub type DateTimeWithTimeZone = DateTime<FixedOffset>;

@@ -1,3 +1,7 @@
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::cast_sign_loss)]
+
 //! Relation loading for Ormada-like ORM
 //!
 //! This module provides eager loading of relations with zero N+1 queries.
@@ -89,7 +93,9 @@ pub trait HasEntityType {
 }
 
 /// Trait for entities that can load a specific relation
-pub trait HasRelation<Related: EntityTrait>: EntityTrait + crate::traits::WithRelationsTrait {
+pub trait HasRelation<Related: EntityTrait>:
+    EntityTrait + crate::traits::WithRelationsTrait
+{
     /// The type of the foreign key (usually i32, but can be other types)
     type RelatedPK: std::cmp::Eq + std::hash::Hash + Clone;
 
@@ -105,7 +111,10 @@ pub trait HasRelation<Related: EntityTrait>: EntityTrait + crate::traits::WithRe
 
     /// Set the related model on the ModelWithRelations wrapper
     /// This is called during prefetch_related to populate relation fields
-    fn set_related(model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations, related: Option<Related::Model>);
+    fn set_related(
+        model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations,
+        related: Option<Related::Model>,
+    );
 }
 
 /// Trait for loading relations at compile time
@@ -120,7 +129,10 @@ pub trait LoadRelations<Parent: EntityTrait + crate::traits::WithRelationsTrait>
     ) -> Result<Self::Output, OrmadaError>;
 
     /// Populate relations on ModelWithRelations
-    fn populate(models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations], data: &Self::Output);
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    );
 }
 
 // Base case: no relations to load
@@ -134,13 +146,19 @@ impl<E: EntityTrait + crate::traits::WithRelationsTrait> LoadRelations<E> for ()
         Ok(())
     }
 
-    fn populate(_models: &mut [<E as crate::traits::WithRelationsTrait>::ModelWithRelations], _data: &()) {}
+    fn populate(
+        _models: &mut [<E as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        _data: &(),
+    ) {
+    }
 }
 
 // Single relation
 impl<Parent, R1> LoadRelations<Parent> for RelationSpec<R1>
 where
-    Parent: EntityTrait + HasRelation<R1> + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    Parent: EntityTrait
+        + HasRelation<R1>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
     R1: EntityTrait,
 {
     type Output = FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>;
@@ -152,7 +170,10 @@ where
         <Parent as HasRelation<R1>>::load_related(models, db).await
     }
 
-    fn populate(models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations], data: &Self::Output) {
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    ) {
         for model in models {
             // Use Deref to access the base Model for get_foreign_key
             let pk = <Parent as HasRelation<R1>>::get_foreign_key(&**model);
@@ -165,7 +186,10 @@ where
 // Two relations (tuple)
 impl<Parent, R1, R2> LoadRelations<Parent> for (RelationSpec<R1>, RelationSpec<R2>)
 where
-    Parent: EntityTrait + HasRelation<R1> + HasRelation<R2> + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    Parent: EntityTrait
+        + HasRelation<R1>
+        + HasRelation<R2>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
     R1: EntityTrait,
     R2: EntityTrait,
 {
@@ -183,7 +207,10 @@ where
         Ok((r1, r2))
     }
 
-    fn populate(models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations], data: &Self::Output) {
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    ) {
         <RelationSpec<R1> as LoadRelations<Parent>>::populate(models, &data.0);
         <RelationSpec<R2> as LoadRelations<Parent>>::populate(models, &data.1);
     }

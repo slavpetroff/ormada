@@ -29,11 +29,7 @@ async fn test_non_nullable_fk_direct_field_access(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let books = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(books.len(), 3);
 
@@ -52,11 +48,7 @@ async fn test_non_nullable_fk_field_is_not_option(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     let author_name: String = book.author.name.clone();
     assert_eq!(author_name, author.name);
@@ -73,11 +65,7 @@ async fn test_non_nullable_fk_multiple_books_same_author(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let books = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     let unique_author_ids: std::collections::HashSet<i32> =
         books.iter().map(|b| b.author.id).collect();
@@ -94,11 +82,7 @@ async fn test_non_nullable_fk_with_select_related(
 ) {
     let (db, (author, _books)) = db_with_author_with_books;
 
-    let books = Book::objects(&db)
-        .select_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let books = Book::objects(&db).select_related(relations![Author]).all().await.unwrap();
 
     for book in &books {
         assert_eq!(book.author.id, author.id);
@@ -117,11 +101,7 @@ async fn test_nullable_fk_with_author_is_some(
 ) {
     let (db, author, _articles) = db_with_articles_all_with_authors;
 
-    let articles = Article::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let articles = Article::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(articles.len(), 3);
 
@@ -141,11 +121,7 @@ async fn test_nullable_fk_without_author_is_none(
 ) {
     let (db, _articles) = db_with_orphan_articles;
 
-    let articles = Article::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let articles = Article::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(articles.len(), 3);
 
@@ -163,11 +139,7 @@ async fn test_nullable_fk_mixed_some_and_none(
 ) {
     let (db, author, _articles) = db_with_articles_mixed_authors;
 
-    let articles = Article::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let articles = Article::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(articles.len(), 3);
 
@@ -194,11 +166,7 @@ async fn test_nullable_fk_option_methods_work(
 ) {
     let (db, author, _articles) = db_with_articles_mixed_authors;
 
-    let articles = Article::objects(&db)
-        .prefetch_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let articles = Article::objects(&db).prefetch_related(relations![Author]).all().await.unwrap();
 
     for article in &articles {
         if let Some(article_author) = &article.author {
@@ -222,11 +190,7 @@ async fn test_nullable_fk_with_select_related(
 ) {
     let (db, author, _articles) = db_with_articles_mixed_authors;
 
-    let articles = Article::objects(&db)
-        .select_related(relations![Author])
-        .all()
-        .await
-        .unwrap();
+    let articles = Article::objects(&db).select_related(relations![Author]).all().await.unwrap();
 
     assert_eq!(articles.len(), 3);
 
@@ -276,7 +240,7 @@ async fn test_non_nullable_fk_default_value_before_prefetch(#[future] db: Databa
     // After create(), book is a Model which does NOT have relation fields
     // This is the key type safety feature - you can't accidentally access unloaded relations
     assert_eq!(book.author_id, author.id); // FK is available
-    // book.author would be a compile error! (no such field on Model)
+                                           // book.author would be a compile error! (no such field on Model)
 
     // To get relations, must use prefetch_related which returns ModelWithRelations
     let book_with_author = Book::objects(&db)
@@ -366,11 +330,7 @@ async fn test_non_nullable_fk_type_is_model_not_option(
 ) {
     let (db, (_author, _books)) = db_with_author_with_books;
 
-    let book = Book::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
+    let book = Book::objects(&db).prefetch_related(relations![Author]).first().await.unwrap();
 
     fn accepts_author(_author: &Author) {}
     accepts_author(&book.author);

@@ -39,7 +39,7 @@ pub enum SoftDeleteConfig {
     Disabled,
     /// Soft delete is enabled - records are marked with a timestamp
     Enabled {
-        /// Column name storing the deletion timestamp (e.g., "deleted_at")
+        /// Column name storing the deletion timestamp (e.g., `deleted_at`)
         column: &'static str,
     },
 }

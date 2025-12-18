@@ -1,3 +1,23 @@
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::redundant_closure_for_method_calls)]
+#![allow(clippy::elidable_lifetime_names)]
+#![allow(clippy::type_repetition_in_bounds)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![allow(clippy::use_self)]
+#![allow(clippy::should_implement_trait)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::useless_conversion)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::clone_on_copy)]
+#![allow(clippy::no_effect_underscore_binding)]
+
 //! Core Ormada-like Query API for `SeaORM`
 //!
 //! This module provides ergonomic query building with zero duplication.
@@ -204,27 +224,32 @@ pub enum SoftDeleteMode {
 pub trait QuerySetState: Clone + Copy + Default + std::fmt::Debug {}
 
 /// Fresh state - initial QuerySet, no operations applied
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Fresh;
 impl QuerySetState for Fresh {}
 
 /// Filtered state - has filter/exclude operations
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Filtered;
 impl QuerySetState for Filtered {}
 
 /// Ordered state - has ordering applied
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ordered;
 impl QuerySetState for Ordered {}
 
 /// Paginated state - has limit/offset applied
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Paginated;
 impl QuerySetState for Paginated {}
 
+/// Grouped state - has GROUP BY applied, ready for annotations
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Grouped;
+impl QuerySetState for Grouped {}
+
 /// Aggregated state - has aggregations/annotations
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Aggregated;
 impl QuerySetState for Aggregated {}
 
@@ -246,12 +271,24 @@ impl CanPaginate for Filtered {}
 impl CanPaginate for Ordered {}
 impl CanPaginate for Paginated {}
 
+/// Marker trait for states that can add GROUP BY
+pub trait CanGroup: QuerySetState {}
+impl CanGroup for Fresh {}
+impl CanGroup for Filtered {}
+
+/// Marker trait for states that can add annotations (aggregations)
+pub trait CanAnnotate: QuerySetState {}
+impl CanAnnotate for Fresh {}
+impl CanAnnotate for Filtered {}
+impl CanAnnotate for Grouped {}
+
 /// Marker trait for states that can execute queries
 pub trait CanExecute: QuerySetState {}
 impl CanExecute for Fresh {}
 impl CanExecute for Filtered {}
 impl CanExecute for Ordered {}
 impl CanExecute for Paginated {}
+impl CanExecute for Grouped {}
 impl CanExecute for Aggregated {}
 
 /// Query building state for introspection
@@ -2033,33 +2070,32 @@ where
             if let Some(model) = self.inner.select.clone().one(&txn).await? {
                 txn.commit().await?;
                 return Ok((model, false));
-            } else {
-                // Try to create new record (async)
-                let model = creator().await?;
-                let active_model = E::to_active_model_for_create(model)?;
+            }
 
-                match active_model.insert(&txn).await {
-                    Ok(model) => {
-                        txn.commit().await?;
-                        return Ok((model, true));
+            // Try to create new record (async)
+            let model = creator().await?;
+            let active_model = E::to_active_model_for_create(model)?;
+
+            match active_model.insert(&txn).await {
+                Ok(model) => {
+                    txn.commit().await?;
+                    return Ok((model, true));
+                }
+                Err(e) if is_unique_violation(&e) && attempt < 2 => {
+                    // Race condition detected - another transaction inserted the row
+                    // Roll back and retry. Rollback errors are logged but not fatal
+                    // since the transaction will be dropped anyway.
+                    if let Err(rollback_err) = txn.rollback().await {
+                        eprintln!("Warning: Failed to rollback transaction after unique violation: {rollback_err}");
                     }
-                    Err(e) if is_unique_violation(&e) && attempt < 2 => {
-                        // Race condition detected - another transaction inserted the row
-                        // Roll back and retry. Rollback errors are logged but not fatal
-                        // since the transaction will be dropped anyway.
-                        if let Err(rollback_err) = txn.rollback().await {
-                            eprintln!("Warning: Failed to rollback transaction after unique violation: {rollback_err}");
-                        }
-                        continue;
+                }
+                Err(e) => {
+                    // Attempt rollback on error. Rollback failure is logged but doesn't
+                    // change the error we return since transaction drop also rolls back.
+                    if let Err(rollback_err) = txn.rollback().await {
+                        eprintln!("Warning: Failed to rollback transaction: {rollback_err}");
                     }
-                    Err(e) => {
-                        // Attempt rollback on error. Rollback failure is logged but doesn't
-                        // change the error we return since transaction drop also rolls back.
-                        if let Err(rollback_err) = txn.rollback().await {
-                            eprintln!("Warning: Failed to rollback transaction: {rollback_err}");
-                        }
-                        return Err(e.into());
-                    }
+                    return Err(e.into());
                 }
             }
         }
@@ -2168,30 +2204,29 @@ where
                 let model = E::save_model(&txn, updated_model).await?;
                 txn.commit().await?;
                 return Ok((model, false));
-            } else {
-                // Try to create new (async)
-                let model = creator().await?;
-                let active_model = E::to_active_model_for_create(model)?;
+            }
 
-                match active_model.insert(&txn).await {
-                    Ok(model) => {
-                        txn.commit().await?;
-                        return Ok((model, true));
+            // Try to create new (async)
+            let model = creator().await?;
+            let active_model = E::to_active_model_for_create(model)?;
+
+            match active_model.insert(&txn).await {
+                Ok(model) => {
+                    txn.commit().await?;
+                    return Ok((model, true));
+                }
+                Err(e) if is_unique_violation(&e) && attempt < 2 => {
+                    // Race condition detected - another transaction inserted the row
+                    // Roll back and retry (next iteration will find and update it)
+                    if let Err(rollback_err) = txn.rollback().await {
+                        eprintln!("Warning: Failed to rollback transaction after unique violation: {rollback_err}");
                     }
-                    Err(e) if is_unique_violation(&e) && attempt < 2 => {
-                        // Race condition detected - another transaction inserted the row
-                        // Roll back and retry (next iteration will find and update it)
-                        if let Err(rollback_err) = txn.rollback().await {
-                            eprintln!("Warning: Failed to rollback transaction after unique violation: {rollback_err}");
-                        }
-                        continue;
+                }
+                Err(e) => {
+                    if let Err(rollback_err) = txn.rollback().await {
+                        eprintln!("Warning: Failed to rollback transaction: {rollback_err}");
                     }
-                    Err(e) => {
-                        if let Err(rollback_err) = txn.rollback().await {
-                            eprintln!("Warning: Failed to rollback transaction: {rollback_err}");
-                        }
-                        return Err(e.into());
-                    }
+                    return Err(e.into());
                 }
             }
         }
@@ -2264,6 +2299,7 @@ where
     ///     process_book(book).await?;
     /// }
     /// ```
+    #[allow(clippy::unused_async)]
     pub async fn iterator(
         &self,
         chunk_size: Option<usize>,
@@ -2326,6 +2362,7 @@ where
     ///     println!("Title: {}, Price: {}", value["title"], value["price"]);
     /// }
     /// ```
+    #[allow(clippy::unused_async)]
     pub async fn values_iter(
         &self,
         columns: Vec<E::Column>,
@@ -2598,7 +2635,7 @@ where
     ///
     /// - `.explain_analyze()` - Runs query and provides actual timings
     /// - `.debug_sql()` - Shows the raw SQL query
-    pub async fn explain(&self) -> Result<String, OrmadaError>
+    pub fn explain(&self) -> Result<String, OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
     {
@@ -2664,7 +2701,7 @@ where
     /// - **`SQLite`**: Limited - same as `explain()`
     /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
     /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
-    pub async fn explain_analyze(&self) -> Result<String, OrmadaError>
+    pub fn explain_analyze(&self) -> Result<String, OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
     {
@@ -2722,9 +2759,42 @@ where
     where
         T: FromQueryResult + Send,
     {
-        // Simply use into_model without select_only()
-        // SeaORM's FromQueryResult will map the available columns to T's fields
         Ok(self.inner.select.clone().into_model::<T>().all(self.inner.db).await?)
+    }
+
+    /// Project to a custom DTO with explicit column selection for optimization.
+    ///
+    /// Unlike `project<T>()` which selects all columns, this method only selects
+    /// the specified columns, reducing database load for large tables.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use ormada::prelude::*;
+    /// use sea_orm::FromQueryResult;
+    ///
+    /// #[derive(Debug, FromQueryResult)]
+    /// struct BookSummary {
+    ///     title: String,
+    ///     price: i32,
+    /// }
+    ///
+    /// // Only SELECT title, price instead of all columns
+    /// let summaries: Vec<BookSummary> = Book::objects(&db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .project_columns::<BookSummary>(&[Book::Title, Book::Price])
+    ///     .await?;
+    /// ```
+    pub async fn project_columns<T>(&self, columns: &[E::Column]) -> Result<Vec<T>, OrmadaError>
+    where
+        T: FromQueryResult + Send,
+    {
+        use sea_orm::QuerySelect;
+        let mut select = self.inner.select.clone().select_only();
+        for col in columns {
+            select = select.column(*col);
+        }
+        Ok(select.into_model::<T>().all(self.inner.db).await?)
     }
 
     /// Group query results by one or more columns (Ormada's .`group_by()`)
@@ -3641,21 +3711,21 @@ mod tests {
     fn test_q_all_constructor() {
         let q = Q::all();
         // Should create an all() condition
-        assert!(matches!(q.condition, Condition));
+        assert!(matches!(q.condition, _Condition));
     }
 
     #[test]
     fn test_q_any_constructor() {
         let q = Q::any();
         // Should create an any() condition
-        assert!(matches!(q.condition, Condition));
+        assert!(matches!(q.condition, _Condition));
     }
 
     #[test]
     fn test_q_not_transformation() {
         let q = Q::all().not();
         // Should wrap condition in not()
-        assert!(matches!(q.condition, Condition));
+        assert!(matches!(q.condition, _Condition));
     }
 
     #[test]
@@ -3663,7 +3733,7 @@ mod tests {
         use sea_orm::sea_query::Expr;
         let q = Q::all().add(Expr::value(true)).add(Expr::value(false));
         // Should allow chaining multiple add calls
-        assert!(matches!(q.condition, Condition));
+        assert!(matches!(q.condition, _Condition));
     }
 
     // ========================================================================
@@ -3703,7 +3773,7 @@ mod tests {
 
         for agg in aggregations {
             match agg {
-                Aggregation::CountAll => assert!(true),
+                Aggregation::CountAll => {}
                 Aggregation::Count(_) => panic!("Expected CountAll"),
                 Aggregation::Sum(_) => panic!("Expected CountAll"),
                 Aggregation::Avg(_) => panic!("Expected CountAll"),
@@ -4308,9 +4378,9 @@ mod tests {
                 column: "id".to_string(),
                 op: FilterOp::Gt,
                 value_repr: "10".to_string(),
-                expr: Expr::value(10).into(),
+                expr: Expr::value(10),
             },
-            FilterExpr::Raw(Expr::value(true).into()),
+            FilterExpr::Raw(Expr::value(true)),
         ];
 
         for filter in filters {
@@ -4333,37 +4403,36 @@ mod tests {
 
     #[test]
     fn test_typestate_fresh_default() {
-        let _fresh: Fresh = Fresh::default();
-        // Should compile - Fresh implements QuerySetState
         fn assert_state<S: QuerySetState>() {}
+        let _fresh: Fresh = Fresh;
         assert_state::<Fresh>();
     }
 
     #[test]
     fn test_typestate_filtered_default() {
-        let _filtered: Filtered = Filtered::default();
         fn assert_state<S: QuerySetState>() {}
+        let _filtered: Filtered = Filtered;
         assert_state::<Filtered>();
     }
 
     #[test]
     fn test_typestate_ordered_default() {
-        let _ordered: Ordered = Ordered::default();
         fn assert_state<S: QuerySetState>() {}
+        let _ordered: Ordered = Ordered;
         assert_state::<Ordered>();
     }
 
     #[test]
     fn test_typestate_paginated_default() {
-        let _paginated: Paginated = Paginated::default();
         fn assert_state<S: QuerySetState>() {}
+        let _paginated: Paginated = Paginated;
         assert_state::<Paginated>();
     }
 
     #[test]
     fn test_typestate_aggregated_default() {
-        let _aggregated: Aggregated = Aggregated::default();
         fn assert_state<S: QuerySetState>() {}
+        let _aggregated: Aggregated = Aggregated;
         assert_state::<Aggregated>();
     }
 
@@ -4411,20 +4480,20 @@ mod tests {
     #[test]
     fn test_typestate_clone_copy() {
         let fresh = Fresh;
-        let _cloned = fresh.clone();
-        let _copied = fresh; // Copy
+        let cloned = fresh;
+        assert_eq!(fresh, cloned);
 
         let filtered = Filtered;
-        let _cloned = filtered.clone();
-        let _copied = filtered; // Copy
+        let copied = filtered;
+        assert_eq!(filtered, copied);
     }
 
     #[test]
     fn test_typestate_debug() {
-        assert!(format!("{:?}", Fresh).contains("Fresh"));
-        assert!(format!("{:?}", Filtered).contains("Filtered"));
-        assert!(format!("{:?}", Ordered).contains("Ordered"));
-        assert!(format!("{:?}", Paginated).contains("Paginated"));
-        assert!(format!("{:?}", Aggregated).contains("Aggregated"));
+        assert!(format!("{Fresh:?}").contains("Fresh"));
+        assert!(format!("{Filtered:?}").contains("Filtered"));
+        assert!(format!("{Ordered:?}").contains("Ordered"));
+        assert!(format!("{Paginated:?}").contains("Paginated"));
+        assert!(format!("{Aggregated:?}").contains("Aggregated"));
     }
 }
