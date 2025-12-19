@@ -266,6 +266,9 @@ pub mod cache;
 /// Error types for the ORM
 pub mod error;
 
+/// SQL formatting utilities for pretty-printing queries
+pub mod format;
+
 /// Lifecycle hooks (before_save, after_create, etc.)
 pub mod hooks;
 

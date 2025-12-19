@@ -956,24 +956,28 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
     /// Get query execution plan (Django-inspired .`explain()`)
     ///
     /// Executes the EXPLAIN query and returns the database query execution plan.
+    /// SQL is pretty-printed by default for readability.
     /// Useful for understanding how the database will execute your query
     /// and identifying performance bottlenecks.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL (default: true). Set to false for single-line output.
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // Check query plan for a complex filter
+    /// // Check query plan for a complex filter (pretty-printed)
     /// let plan = User::objects(&db)
     ///     .filter(User::Email.contains("@gmail.com"))
     ///     .filter(User::Age.gte(18))
-    ///     .explain()
+    ///     .explain(true)
     ///     .await?;
     ///
     /// println!("Execution Plan:\n{}", plan);
     /// ```
     ///
     /// # Performance Analysis
-    /// 
+    ///
     /// Look for these indicators in the plan:
     /// - **Index Scan**: Good - using an index
     /// - **Sequential Scan**: Bad - scanning entire table
@@ -990,7 +994,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
     ///
     /// - `.explain_analyze()` - Runs query and provides actual timings
     /// - `.debug_sql()` - Shows the raw SQL query without executing
-    pub async fn explain(&self) -> Result<String, OrmadaError>
+    pub async fn explain(&self, pretty: bool) -> Result<String, OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
     {
@@ -998,19 +1002,22 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
 
         let backend = self.inner.db.get_database_backend();
         let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
-        let sql = stmt.to_string();
+        let raw_sql = stmt.to_string();
+
+        let formatted_sql =
+            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
 
         let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
-            _ => format!("EXPLAIN {sql}"),
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {raw_sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {raw_sql}"),
+            _ => format!("EXPLAIN {raw_sql}"),
         };
 
         let results = self.inner.db.execute_unprepared(&explain_sql).await?;
 
         Ok(format!(
-            "EXPLAIN output for query:\n{sql}\n\nRows affected: {}",
+            "EXPLAIN output for query:\n{formatted_sql}\n\nRows affected: {}",
             results.rows_affected()
         ))
     }
@@ -1019,17 +1026,21 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
     ///
     /// Executes the EXPLAIN ANALYZE query and returns detailed execution statistics
     /// including actual row counts, execution time, and resource usage.
+    /// SQL is pretty-printed by default for readability.
     ///
     /// **⚠️ WARNING**: This actually EXECUTES the query, so use carefully
     /// on production databases with large datasets.
     ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL (default: true). Set to false for single-line output.
+    ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// // Analyze actual query performance
+    /// // Analyze actual query performance (pretty-printed)
     /// let analysis = Book::objects(&db)
     ///     .filter(Book::Published.eq(true))
-    ///     .explain_analyze()
+    ///     .explain_analyze(true)
     ///     .await?;
     ///
     /// println!("Execution Analysis:\n{}", analysis);
@@ -1055,7 +1066,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
     /// - **`SQLite`**: Limited - returns EXPLAIN QUERY PLAN (no ANALYZE support)
     /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
     /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
-    pub async fn explain_analyze(&self) -> Result<String, OrmadaError>
+    pub async fn explain_analyze(&self, pretty: bool) -> Result<String, OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
     {
@@ -1063,19 +1074,22 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
 
         let backend = self.inner.db.get_database_backend();
         let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
-        let sql = stmt.to_string();
+        let raw_sql = stmt.to_string();
+
+        let formatted_sql =
+            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
 
         let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {sql}"),
-            _ => format!("EXPLAIN ANALYZE {sql}"),
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {raw_sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {raw_sql}"),
+            _ => format!("EXPLAIN ANALYZE {raw_sql}"),
         };
 
         let results = self.inner.db.execute_unprepared(&explain_sql).await?;
 
         Ok(format!(
-            "EXPLAIN ANALYZE output for query:\n{sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
+            "EXPLAIN ANALYZE output for query:\n{formatted_sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
             results.rows_affected()
         ))
     }
@@ -2640,24 +2654,47 @@ where
 
     /// Print the SQL query that would be executed (for debugging).
     ///
-    /// Returns the SQL string and query parameters.
+    /// Returns the pretty-printed SQL string by default.
     /// Useful for debugging slow queries or understanding what SQL is generated.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL (default: true). Set to false for single-line output.
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// let (sql, params) = Book::objects(db)
+    /// // Pretty-printed (default)
+    /// let sql = Book::objects(db)
     ///     .filter(Book::Published.eq(true))
     ///     .order_by_desc(Book::CreatedAt)
-    ///     .debug_sql();
+    ///     .debug_sql(true);
     ///
-    /// println!("SQL: {}", sql);
-    /// println!("Params: {:?}", params);
+    /// println!("SQL:\n{}", sql);
+    /// // Output:
+    /// // SELECT
+    /// //   ...
+    /// // FROM
+    /// //   books
+    /// // WHERE
+    /// //   published = true
+    /// // ORDER BY
+    /// //   created_at DESC
+    ///
+    /// // Compact (single-line)
+    /// let sql = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .debug_sql(false);
     /// ```
-    pub fn debug_sql(&self) -> String {
+    pub fn debug_sql(&self, pretty: bool) -> String {
         use sea_orm::QueryTrait;
         let stmt = self.inner.select.build(self.inner.db.get_database_backend());
-        stmt.to_string()
+        let sql = stmt.to_string();
+
+        if pretty {
+            crate::format::format_sql_pretty(&sql)
+        } else {
+            sql
+        }
     }
 
     /// Type-safe projection query (alternative to JSON-based `values()`)
@@ -3029,6 +3066,7 @@ impl Aggregation {
 ///
 /// let books = Book::objects(db).filter(combined).all().await?;
 /// ```
+#[derive(Debug, Clone)]
 pub struct Q {
     condition: Condition,
 }

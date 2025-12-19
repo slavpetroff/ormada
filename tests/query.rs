@@ -1316,7 +1316,7 @@ async fn test_group_by_basic(#[future] db_with_sample_authors: (DatabaseRouter, 
     let qs = Author::objects(&db).group_by(Author::Age);
 
     // Verify it's still queryable (implementation detail - group_by just modifies select)
-    let sql = qs.debug_sql();
+    let sql = qs.debug_sql(true);
     assert!(sql.contains("GROUP BY") || sql.contains("group by"));
 }
 
@@ -1332,7 +1332,7 @@ async fn test_annotate_basic(#[future] db_with_sample_authors: (DatabaseRouter, 
         ("max_age", Aggregation::max(Author::Age)),
     ]);
 
-    let sql = qs.debug_sql();
+    let sql = qs.debug_sql(true);
     assert!(!sql.is_empty());
 }
 
@@ -1828,7 +1828,7 @@ async fn test_debug_sql(#[future] db_with_sample_authors: (DatabaseRouter, Vec<A
     let sql = Author::objects(&db)
         .filter(Author::Age.gte(25))
         .order_by_desc(Author::Name)
-        .debug_sql();
+        .debug_sql(true);
 
     assert!(sql.contains("SELECT") || sql.contains("select"));
     assert!(!sql.is_empty());
@@ -1840,14 +1840,25 @@ async fn test_debug_sql(#[future] db_with_sample_authors: (DatabaseRouter, Vec<A
 async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
 
+    // Test with pretty-printing enabled (default)
     let explain = Author::objects(&db)
         .filter(Author::Age.gte(25))
-        .explain()
+        .explain(true)
         .await
         .unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());
+
+    // Test with pretty-printing disabled
+    let explain_compact = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .explain(false)
+        .await
+        .unwrap();
+
+    assert!(explain_compact.contains("EXPLAIN"));
+    assert!(!explain_compact.is_empty());
 }
 
 #[rstest]
@@ -1858,9 +1869,10 @@ async fn test_explain_analyze_query(
 ) {
     let (db, _sample_authors) = db_with_sample_authors;
 
+    // Test with pretty-printing enabled (default)
     let explain = Author::objects(&db)
         .filter(Author::Age.gte(25))
-        .explain_analyze()
+        .explain_analyze(true)
         .await
         .unwrap();
 

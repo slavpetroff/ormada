@@ -32,6 +32,7 @@ tokio = { version = "1", features = ["sync"] }
 async-trait = "0.1"
 rustc-hash = "2.1.1"
 tracing = "0.1"
+sqlformat = "0.3"
 
 # Optional dependencies
 ormada-derive = { path = "./derive", optional = true }

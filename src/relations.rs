@@ -481,18 +481,22 @@ where
     /// Get query execution plan
     ///
     /// Executes the EXPLAIN query and returns the database query execution plan.
+    /// SQL is pretty-printed by default for readability.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL (default: true). Set to false for single-line output.
     ///
     /// # Examples
     ///
     /// ```rust,ignore
     /// let plan = Book::objects(&db)
     ///     .prefetch_related(relations![Author])
-    ///     .explain()
+    ///     .explain(true)
     ///     .await?;
     ///
     /// println!("Query Plan:\n{}", plan);
     /// ```
-    pub async fn explain(&self) -> Result<String, OrmadaError>
+    pub async fn explain(&self, pretty: bool) -> Result<String, OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
     {
@@ -500,19 +504,22 @@ where
 
         let backend = self.db.get_database_backend();
         let stmt = self.select.clone().build(backend);
-        let sql = stmt.to_string();
+        let raw_sql = stmt.to_string();
+
+        let formatted_sql =
+            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
 
         let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
-            _ => format!("EXPLAIN {sql}"),
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {raw_sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {raw_sql}"),
+            _ => format!("EXPLAIN {raw_sql}"),
         };
 
         let results = self.db.execute_unprepared(&explain_sql).await?;
 
         Ok(format!(
-            "EXPLAIN output for query:\n{sql}\n\nRows affected: {}",
+            "EXPLAIN output for query:\n{formatted_sql}\n\nRows affected: {}",
             results.rows_affected()
         ))
     }
@@ -520,20 +527,24 @@ where
     /// Analyze query with actual execution
     ///
     /// Executes the EXPLAIN ANALYZE query and returns detailed execution statistics.
+    /// SQL is pretty-printed by default for readability.
     ///
     /// **⚠️ WARNING**: This actually EXECUTES the query.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL (default: true). Set to false for single-line output.
     ///
     /// # Examples
     ///
     /// ```rust,ignore
     /// let analysis = Book::objects(&db)
     ///     .prefetch_related(relations![Author])
-    ///     .explain_analyze()
+    ///     .explain_analyze(true)
     ///     .await?;
     ///
     /// println!("Execution Analysis:\n{}", analysis);
     /// ```
-    pub async fn explain_analyze(&self) -> Result<String, OrmadaError>
+    pub async fn explain_analyze(&self, pretty: bool) -> Result<String, OrmadaError>
     where
         E: crate::traits::OrmadaEntity,
     {
@@ -541,23 +552,25 @@ where
 
         let backend = self.db.get_database_backend();
         let stmt = self.select.clone().build(backend);
-        let sql = stmt.to_string();
+        let raw_sql = stmt.to_string();
+
+        let formatted_sql =
+            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
 
         let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {sql}"),
-            _ => format!("EXPLAIN ANALYZE {sql}"),
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {raw_sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {raw_sql}"),
+            _ => format!("EXPLAIN ANALYZE {raw_sql}"),
         };
 
         let results = self.db.execute_unprepared(&explain_sql).await?;
 
         Ok(format!(
-            "EXPLAIN ANALYZE output for query:\n{sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
+            "EXPLAIN ANALYZE output for query:\n{formatted_sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
             results.rows_affected()
         ))
     }
-
 }
 
 // Note: WithRelations struct removed - replaced by macro-generated ModelWithRelations

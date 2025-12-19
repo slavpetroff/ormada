@@ -1137,24 +1137,37 @@ Debug and analyze your queries for performance optimization.
 ### Debug SQL
 
 ```rust
-// See the generated SQL
+// See the generated SQL (pretty-printed by default)
 let sql = Book::objects(&db)
     .filter(Book::Published.eq(true))
     .order_by_desc(Book::CreatedAt)
-    .debug_sql();
+    .debug_sql(true);  // true = pretty-print, false = single-line
 
-println!("SQL: {}", sql);
-// Output: SELECT ... FROM books WHERE published = true ORDER BY created_at DESC
+println!("SQL:\n{}", sql);
+// Output:
+// SELECT
+//   ...
+// FROM
+//   books
+// WHERE
+//   published = true
+// ORDER BY
+//   created_at DESC
+
+// Compact single-line output
+let sql_compact = Book::objects(&db)
+    .filter(Book::Published.eq(true))
+    .debug_sql(false);
 ```
 
 ### Explain Query Plan
 
 ```rust
-// Get query execution plan by running EXPLAIN
+// Get query execution plan by running EXPLAIN (pretty-printed)
 let plan = Book::objects(&db)
     .filter(Book::Price.lt(5000))
     .filter(Book::Published.eq(true))
-    .explain()
+    .explain(true)  // true = pretty-print, false = single-line
     .await?;
 
 println!("{}", plan);
@@ -1164,11 +1177,11 @@ println!("{}", plan);
 ### Explain Analyze
 
 ```rust
-// Run EXPLAIN ANALYZE and get actual execution statistics
+// Run EXPLAIN ANALYZE and get actual execution statistics (pretty-printed)
 // ⚠️ WARNING: Actually executes the query!
 let analysis = Book::objects(&db)
     .filter(Book::AuthorId.eq(author_id))
-    .explain_analyze()
+    .explain_analyze(true)  // true = pretty-print, false = single-line
     .await?;
 
 println!("{}", analysis);

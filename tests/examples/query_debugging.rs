@@ -44,14 +44,14 @@ async fn seed_books(db: &DatabaseRouter) -> Result<(), OrmadaError> {
 ///
 /// Use this to verify your query logic and debug issues.
 pub async fn example_debug_sql(db: &DatabaseRouter) -> Result<(), OrmadaError> {
-    // Complex query with multiple conditions
+    // Complex query with multiple conditions (pretty-printed)
     let sql = Book::objects(db)
         .filter(Book::Published.eq(true))
-        .filter(Book::Price.gte(2000))
+        .filter(Book::Price.lt(5000))
         .filter(Book::Category.eq("Technical"))
         .order_by_desc(Book::Price)
         .limit(10)
-        .debug_sql();
+        .debug_sql(true);
 
     // Verify SQL structure
     assert!(sql.contains("SELECT"), "Should be a SELECT query");
@@ -74,12 +74,12 @@ pub async fn example_debug_sql(db: &DatabaseRouter) -> Result<(), OrmadaError> {
 pub async fn example_explain(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_books(db).await?;
 
-    // Get execution plan for a filtered query
+    // Get execution plan for a filtered query (pretty-printed)
     let plan = Book::objects(db)
         .filter(Book::Category.eq("Technical"))
         .filter(Book::Price.gt(3000))
         .order_by_asc(Book::Title)
-        .explain()
+        .explain(true)
         .await?;
 
     // Plan should contain query strategy info
@@ -99,12 +99,12 @@ pub async fn example_explain(db: &DatabaseRouter) -> Result<(), OrmadaError> {
 pub async fn example_explain_analyze(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_books(db).await?;
 
-    // Analyze a query that might be slow
+    // Analyze a query that might be slow (pretty-printed)
     let analysis = Book::objects(db)
         .filter(Book::Published.eq(true))
         .filter(Book::Price.between(2000, 4000))
         .order_by_desc(Book::Price)
-        .explain_analyze()
+        .explain_analyze(true)
         .await?;
 
     assert!(!analysis.is_empty(), "Analysis should not be empty");
