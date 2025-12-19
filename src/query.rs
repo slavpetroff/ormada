@@ -1761,42 +1761,57 @@ where
         eager.prefetch_related(relations)
     }
 
-    /// Eager load related entities using efficient batch queries (Ormada's `select_related`)
+    /// Eager load related entities using SQL JOIN (Django's `select_related`)
     ///
-    /// Currently implemented using the same batched query strategy as `prefetch_related`.
-    /// This prevents N+1 queries by loading all relations in separate queries (1+M pattern).
+    /// Uses a single SQL query with LEFT JOIN to fetch the parent entity and its
+    /// related entities together. This is more efficient than `prefetch_related` for
+    /// many-to-one (FK) and one-to-one relations.
     ///
-    /// **Note:** Future versions may use SQL JOINs for 1:1 and FK relationships for even better
-    /// performance, while continuing to use separate queries for 1:N and M:N.
+    /// # Returns
+    ///
+    /// Returns `Vec<ModelWithRelations>` - same as `prefetch_related` for unified UX.
     ///
     /// # Usage
     ///
     /// ```rust,ignore
     /// use ormada::relations;
     ///
-    /// // Single relation
+    /// // Single query with JOIN - same UX as prefetch_related!
     /// let books = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
     ///     .select_related(relations![Author])
     ///     .all()
     ///     .await?;
     ///
-    /// // Multiple relations
-    /// let books = Book::objects(db)
-    ///     .filter(Column::Published.eq(true))
-    ///     .select_related(relations![Author, Publisher])
-    ///     .all()
-    ///     .await?;
+    /// // SQL: SELECT books.*, authors.* FROM books LEFT JOIN authors ON ...
+    /// for book in books {
+    ///     println!("{} by {}", book.title, book.author.name);
+    /// }
     /// ```
     ///
     /// # Performance
     ///
-    /// For N books with M unique authors:
-    /// - Without eager loading: 1 + N queries (N+1 problem)
-    /// - With `select_related`: 1 + M queries (1+M pattern)
+    /// - **Single query**: No additional round trips to the database
+    /// - **Efficient for FK/1:1**: Fetches related data in the same query
+    /// - **Use `prefetch_related` for 1:N/M:N**: To avoid row duplication
     ///
-    /// Example: 100 books by 5 authors = 2 queries instead of 101!
-    pub fn select_related<R>(self, relations: R) -> crate::relations::QuerySetEager<'a, E, C, R> {
-        self.prefetch_related(relations)
+    /// # When to Use
+    ///
+    /// | Relation Type | Recommended Method |
+    /// |---------------|-------------------|
+    /// | Many-to-One (FK) | `select_related` |
+    /// | One-to-One | `select_related` |
+    /// | One-to-Many | `prefetch_related` |
+    /// | Many-to-Many | `prefetch_related` |
+    pub fn select_related<R>(
+        self,
+        _relations: R,
+    ) -> crate::relations::QuerySetJoined<'a, E, C, R> {
+        crate::relations::QuerySetJoined {
+            db: self.inner.db,
+            select: self.inner.select.clone(),
+            _relations: std::marker::PhantomData,
+        }
     }
 
     /// Create a new record (Ormada's .`create()`)

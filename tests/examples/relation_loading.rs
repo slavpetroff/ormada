@@ -36,7 +36,7 @@ pub mod models {
     }
 
     pub mod book {
-        use super::author::Author;
+        
         use ormada::prelude::*;
 
         #[ormada_model(table = "rl_books")]

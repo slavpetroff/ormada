@@ -18,7 +18,7 @@ pub mod models {
     }
 
     pub mod book {
-        use super::author::Author;
+        
         use ormada::prelude::*;
 
         #[ormada_model(table = "rel_books")]
@@ -34,7 +34,7 @@ pub mod models {
     }
 
     pub mod article {
-        use super::author::Author;
+        
         use ormada::prelude::*;
 
         #[ormada_model(table = "rel_articles")]

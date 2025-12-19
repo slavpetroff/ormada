@@ -34,7 +34,7 @@ Ormada brings Django-like ergonomics to Rust while maintaining full type safety.
 - 🐍 **Ergonomic API** — Django-inspired `Model.objects()` pattern
 - ⚡ **High performance** — Bulk operations (10-100x faster), streaming iterators, query caching
 - 🔒 **Transaction support** — `tx!` macro and `#[atomic]` decorator with automatic rollback
-- 🔗 **Relations** — Eager loading with `prefetch_related()` to prevent N+1 queries
+- 🔗 **Relations** — Eager loading with `select_related()` (JOIN) and `prefetch_related()` to prevent N+1 queries
 - 📊 **Aggregations** — COUNT, SUM, AVG, MIN, MAX at database level
 - 🗄️ **Database routing** — Primary/replica with read-your-writes consistency
 - 🔍 **Query debugging** — `explain()`, `explain_analyze()`, `debug_sql()`
@@ -668,34 +668,37 @@ pub struct Book {
 
 Ormada provides two methods for eager loading relations:
 
-| Method | Best For | Use When |
-|--------|----------|----------|
-| `select_related` | FK, 1:1 relations | Loading parent from child (Book → Author) |
-| `prefetch_related` | 1:N, M:N relations | Loading children from parent |
+| Method | Query Pattern | Best For | Use When |
+|--------|---------------|----------|----------|
+| `select_related` | Single query with JOIN | FK, 1:1 relations | Loading parent from child (Book → Author) |
+| `prefetch_related` | Separate queries (1+M) | 1:N, M:N relations | Loading children from parent |
 
-Both methods use batched queries (1+M pattern) to prevent N+1 queries.
+Both methods prevent N+1 queries and share the same `relations![]` syntax.
 
 ```rust
 use ormada::prelude::*;
 
-// select_related - Following FK (Book -> Author)
-// Best for: Loading the "one" side of a relationship
+// select_related - Uses SQL JOIN (single query)
+// Best for: FK and 1:1 relations
 let books = Book::objects(&db)
     .filter(Book::Published.eq(true))
     .select_related(relations![Author])
     .all()
     .await?;
+// SQL: SELECT books.*, authors.* FROM books LEFT JOIN authors ON ...
 
 for book in books {
     // Author is already loaded - no additional query!
     println!("{} by {}", book.title, book.author.name);
 }
 
-// prefetch_related - Same syntax, same result for FK relations
+// prefetch_related - Uses separate queries (1+M pattern)
+// Best for: 1:N and M:N relations (avoids row duplication)
 let books = Book::objects(&db)
     .prefetch_related(relations![Author])
     .all()
     .await?;
+// SQL: SELECT * FROM books; SELECT * FROM authors WHERE id IN (...)
 
 // Multiple relations
 let books = Book::objects(&db)
@@ -708,12 +711,14 @@ let books = Book::objects(&db)
     .filter(Book::Price.gte(1000))
     .order_by_desc(Book::Price)
     .limit(10)
-    .prefetch_related(relations![Author])
+    .select_related(relations![Author])  // JOIN for FK
     .all()
     .await?;
 ```
 
-> 💡 **Performance**: For 100 books by 5 authors, eager loading executes 2 queries instead of 101 (N+1)!
+> 💡 **Performance**: 
+> - `select_related`: 1 query with JOIN (most efficient for FK/1:1)
+> - `prefetch_related`: 1+M queries (best for 1:N/M:N to avoid row duplication)
 
 ### One-to-One Relationships
 

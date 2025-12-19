@@ -115,6 +115,30 @@ pub trait HasRelation<Related: EntityTrait>:
         model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations,
         related: Option<Related::Model>,
     );
+
+    /// Get the relation definition for JOIN-based loading
+    ///
+    /// This is used internally by `select_related` for efficient single-query JOINs.
+    /// The `#[ormada_model]` macro generates this automatically for FK relations.
+    #[doc(hidden)]
+    fn relation_def() -> crate::__internal::RelationDef {
+        panic!("relation_def not implemented for this relation. The #[ormada_model] macro should generate this.")
+    }
+}
+
+/// Trait for JOIN-based loading of relations (select_related)
+///
+/// This trait enables single-query loading using SQL JOINs.
+/// Unlike `LoadRelations` which uses separate queries, this uses JOINs for efficiency.
+pub trait JoinLoadRelations<Parent: EntityTrait + crate::traits::WithRelationsTrait> {
+    /// Execute the JOIN query and return models with relations populated
+    async fn load_with_join<C: ConnectionTrait>(
+        select: Select<Parent>,
+        db: &C,
+    ) -> Result<Vec<Parent::ModelWithRelations>, OrmadaError>;
+
+    /// Build the SQL string for the JOIN query (for debugging/explain)
+    fn build_join_sql<C: ConnectionTrait>(select: &Select<Parent>, db: &C) -> String;
 }
 
 /// Trait for loading relations at compile time
@@ -153,7 +177,58 @@ impl<E: EntityTrait + crate::traits::WithRelationsTrait> LoadRelations<E> for ()
     }
 }
 
-// Single relation
+// JoinLoadRelations: Single relation using JOIN
+impl<Parent, R1> JoinLoadRelations<Parent> for RelationSpec<R1>
+where
+    Parent: EntityTrait
+        + HasRelation<R1>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    R1: EntityTrait,
+    <Parent as EntityTrait>::Model: Sync,
+{
+    async fn load_with_join<C: ConnectionTrait>(
+        select: Select<Parent>,
+        db: &C,
+    ) -> Result<Vec<Parent::ModelWithRelations>, OrmadaError> {
+        use sea_orm::QuerySelect;
+
+        let relation_def = <Parent as HasRelation<R1>>::relation_def();
+
+        let joined_select = select
+            .join(sea_orm::JoinType::LeftJoin, relation_def)
+            .select_also(R1::default());
+
+        let results: Vec<(<Parent as EntityTrait>::Model, Option<R1::Model>)> = joined_select.all(db).await?;
+
+        let models_with_relations: Vec<Parent::ModelWithRelations> = results
+            .into_iter()
+            .map(|(model, related)| {
+                let mut model_with_rel = Parent::from_model_and_relations(model, &());
+                <Parent as HasRelation<R1>>::set_related(&mut model_with_rel, related);
+                model_with_rel
+            })
+            .collect();
+
+        Ok(models_with_relations)
+    }
+
+    fn build_join_sql<C: ConnectionTrait>(select: &Select<Parent>, db: &C) -> String {
+        use sea_orm::{QuerySelect, QueryTrait};
+
+        let relation_def = <Parent as HasRelation<R1>>::relation_def();
+
+        let joined_select = select
+            .clone()
+            .join(sea_orm::JoinType::LeftJoin, relation_def)
+            .select_also(R1::default());
+
+        let backend = db.get_database_backend();
+        let stmt = joined_select.build(backend);
+        stmt.to_string()
+    }
+}
+
+// Single relation (prefetch - separate queries)
 impl<Parent, R1> LoadRelations<Parent> for RelationSpec<R1>
 where
     Parent: EntityTrait
@@ -273,9 +348,48 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
     ///     }
     /// }
     /// ```
-    /// Add relations to prefetch - typed version
+    /// Add relations to prefetch (separate queries, 1+M pattern)
     pub fn prefetch_related<R>(self, _relations: R) -> QuerySetEager<'a, E, C, R> {
         QuerySetEager {
+            db: self.db,
+            select: self.select,
+            _relations: std::marker::PhantomData,
+        }
+    }
+
+    /// Add relations to load via JOIN (single query)
+    ///
+    /// Uses SQL JOINs to fetch parent and related entities in a single query.
+    /// More efficient than `prefetch_related` for many-to-one (FK) and one-to-one relations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use ormada::relations;
+    ///
+    /// // Single query with JOIN - same UX as prefetch_related!
+    /// let books = Book::objects(db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .select_related(relations![Author])
+    ///     .all()
+    ///     .await?;
+    ///
+    /// // SQL: SELECT books.*, authors.* FROM books LEFT JOIN authors ON ...
+    /// for book in books {
+    ///     println!("{} by {}", book.title, book.author.name);
+    /// }
+    /// ```
+    ///
+    /// # When to Use
+    ///
+    /// | Relation Type | Recommended Method |
+    /// |---------------|-------------------|
+    /// | Many-to-One (FK) | `select_related` |
+    /// | One-to-One | `select_related` |
+    /// | One-to-Many | `prefetch_related` |
+    /// | Many-to-Many | `prefetch_related` |
+    pub fn select_related<R>(self, _relations: R) -> QuerySetJoined<'a, E, C, R> {
+        QuerySetJoined {
             db: self.db,
             select: self.select,
             _relations: std::marker::PhantomData,
@@ -575,3 +689,233 @@ where
 
 // Note: WithRelations struct removed - replaced by macro-generated ModelWithRelations
 // Each entity now has its own ModelWithRelations type with compile-time typed relation fields
+
+// ============================================================================
+// QuerySet with JOIN-based Eager Loading (select_related)
+// ============================================================================
+
+/// `QuerySet` that uses SQL JOINs for eager loading (Django's `select_related`)
+///
+/// Unlike `QuerySetEager` which uses separate queries (1+M pattern),
+/// `QuerySetJoined` uses SQL JOINs to fetch parent and related entities
+/// in a single query. This is more efficient for many-to-one (FK) and one-to-one relations.
+///
+/// # Design
+///
+/// - Uses LEFT JOIN to fetch related entities in a single query
+/// - Returns `ModelWithRelations` just like `prefetch_related` for unified UX
+/// - Single query execution - no additional round trips
+///
+/// # When to Use
+///
+/// - **`select_related`**: For FK/1:1 relations (single query with JOIN)
+/// - **`prefetch_related`**: For 1:N/M:N relations (separate queries, avoids row duplication)
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Single query with JOIN - same UX as prefetch_related!
+/// let books = Book::objects(&db)
+///     .filter(Book::Published.eq(true))
+///     .select_related(relations![Author])
+///     .all()
+///     .await?;
+///
+/// for book in books {
+///     println!("{} by {}", book.title, book.author.name);
+/// }
+/// ```
+pub struct QuerySetJoined<'a, E: EntityTrait, C: ConnectionTrait, Relations = ()> {
+    pub(crate) db: &'a C,
+    pub(crate) select: Select<E>,
+    pub(crate) _relations: std::marker::PhantomData<Relations>,
+}
+
+// Separate impl block for typed relation methods using JoinLoadRelations
+impl<E, C, Relations> QuerySetJoined<'_, E, C, Relations>
+where
+    E: EntityTrait + crate::traits::WithRelationsTrait<Model = <E as EntityTrait>::Model>,
+    <E as EntityTrait>::Model: Sync + Clone,
+    <E as crate::traits::WithRelationsTrait>::ModelWithRelations: Clone,
+    C: ConnectionTrait,
+    Relations: JoinLoadRelations<E>,
+{
+    /// Get all records with joined relations
+    ///
+    /// Returns `ModelWithRelations` with direct field access to relations.
+    /// Uses a single SQL query with JOIN for efficiency.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let books = Book::objects(&db)
+    ///     .select_related(relations![Author])
+    ///     .all()
+    ///     .await?;
+    ///
+    /// for book in books {
+    ///     println!("{} by {}", book.title, book.author.name);
+    /// }
+    /// ```
+    pub async fn all(self) -> Result<Vec<E::ModelWithRelations>, OrmadaError> {
+        Relations::load_with_join(self.select, self.db).await
+    }
+
+    /// Get the first record with joined relation
+    ///
+    /// Returns an error if no records match the query.
+    pub async fn first(self) -> Result<E::ModelWithRelations, OrmadaError> {
+        let limited_select = self.select.limit(1);
+        let results = Relations::load_with_join(limited_select, self.db).await?;
+        results.into_iter().next().ok_or_else(|| OrmadaError::empty_result_set("first"))
+    }
+
+    /// Get the last record with joined relation
+    ///
+    /// Returns an error if no records match the query.
+    pub async fn last(self) -> Result<E::ModelWithRelations, OrmadaError> {
+        let results = Relations::load_with_join(self.select, self.db).await?;
+        results.into_iter().last().ok_or_else(|| OrmadaError::empty_result_set("last"))
+    }
+
+    /// Count records matching the query
+    ///
+    /// Note: This counts the main entity, not the joined results.
+    pub async fn count(self) -> Result<u64, OrmadaError> {
+        let count_select = self.select
+            .select_only()
+            .column_as(Expr::col(Asterisk).count(), "count");
+
+        let result = count_select.into_tuple::<i64>().one(self.db).await?;
+        Ok(result.unwrap_or(0) as u64)
+    }
+
+    /// Check if any records exist matching the query
+    pub async fn exists(self) -> Result<bool, OrmadaError> {
+        let result = self.select.limit(1).one(self.db).await?;
+        Ok(result.is_some())
+    }
+
+    /// Apply limit to the queryset
+    pub fn limit(mut self, limit: u64) -> Self {
+        self.select = self.select.limit(limit);
+        self
+    }
+
+    /// Apply offset to the queryset
+    pub fn offset(mut self, offset: u64) -> Self {
+        self.select = self.select.offset(offset);
+        self
+    }
+
+    /// Apply filter to the queryset
+    pub fn filter<F: Into<SimpleExpr>>(mut self, condition: F) -> Self {
+        self.select = self.select.filter(condition.into());
+        self
+    }
+
+    /// Exclude records matching the condition
+    pub fn exclude(mut self, condition: impl Into<Condition>) -> Self {
+        let cond: Condition = condition.into();
+        self.select = self.select.filter(cond.not());
+        self
+    }
+
+    /// Order by ascending
+    pub fn order_by_asc<Col: ColumnTrait>(mut self, column: Col) -> Self {
+        self.select = self.select.order_by_asc(column);
+        self
+    }
+
+    /// Order by descending
+    pub fn order_by_desc<Col: ColumnTrait>(mut self, column: Col) -> Self {
+        self.select = self.select.order_by_desc(column);
+        self
+    }
+
+    /// Apply distinct to the queryset
+    pub fn distinct(mut self) -> Self {
+        self.select = self.select.distinct();
+        self
+    }
+
+    /// Get the SQL query for debugging (pretty-printed by default)
+    ///
+    /// Shows the actual JOIN query that will be executed.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL
+    pub fn debug_sql(&self, pretty: bool) -> String {
+        let sql = Relations::build_join_sql(&self.select, self.db);
+
+        if pretty {
+            crate::format::format_sql_pretty(&sql)
+        } else {
+            sql
+        }
+    }
+
+    /// Get query execution plan
+    ///
+    /// Executes the EXPLAIN query and returns the database query execution plan.
+    /// Shows the plan for the actual JOIN query.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL
+    pub async fn explain(&self, pretty: bool) -> Result<String, OrmadaError> {
+        let raw_sql = Relations::build_join_sql(&self.select, self.db);
+
+        let formatted_sql = if pretty {
+            crate::format::format_sql_pretty(&raw_sql)
+        } else {
+            raw_sql.clone()
+        };
+
+        let backend = self.db.get_database_backend();
+        let explain_sql = match backend {
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {raw_sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {raw_sql}"),
+            _ => format!("EXPLAIN {raw_sql}"),
+        };
+
+        let results = self.db.execute_unprepared(&explain_sql).await?;
+
+        Ok(format!(
+            "EXPLAIN output for query:\n{formatted_sql}\n\nRows affected: {}",
+            results.rows_affected()
+        ))
+    }
+
+    /// Analyze query with actual execution
+    ///
+    /// **⚠️ WARNING**: This actually EXECUTES the query.
+    /// Shows the plan for the actual JOIN query.
+    ///
+    /// # Arguments
+    /// * `pretty` - Whether to pretty-print the SQL
+    pub async fn explain_analyze(&self, pretty: bool) -> Result<String, OrmadaError> {
+        let raw_sql = Relations::build_join_sql(&self.select, self.db);
+
+        let formatted_sql = if pretty {
+            crate::format::format_sql_pretty(&raw_sql)
+        } else {
+            raw_sql.clone()
+        };
+
+        let backend = self.db.get_database_backend();
+        let explain_sql = match backend {
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {raw_sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {raw_sql}"),
+            _ => format!("EXPLAIN ANALYZE {raw_sql}"),
+        };
+
+        let results = self.db.execute_unprepared(&explain_sql).await?;
+
+        Ok(format!(
+            "EXPLAIN ANALYZE output for query:\n{formatted_sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
+            results.rows_affected()
+        ))
+    }
+}

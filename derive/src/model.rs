@@ -1349,6 +1349,21 @@ fn generate_has_relation_impls(
                 fk_field_type.clone()
             };
 
+            // Generate relation_def for JOIN-based select_related
+            // The Relation enum variant is named after the entity type, not the field name
+            // We need to extract the entity name from the path (e.g., CategoryI64 from super::category_i64::_internal::Entity)
+            let entity_segments: Vec<_> = entity.segments.iter().collect();
+            let relation_variant_name = entity_segments
+                .iter()
+                .position(|s| s.ident == "_internal")
+                .and_then(|pos| if pos > 0 { Some(&entity_segments[pos - 1].ident) } else { None })
+                .map(|ident| format_ident!("{}", to_pascal_case(&ident.to_string())))
+                .unwrap_or_else(|| {
+                    // Fallback: use last segment before Entity
+                    let last = entity_segments.last().unwrap();
+                    format_ident!("{}", to_pascal_case(&last.ident.to_string()))
+                });
+
             quote! {
                 impl ::ormada::relations::HasRelation<#entity> for Entity {
                     type RelatedPK = #related_pk_type;
@@ -1358,6 +1373,10 @@ fn generate_has_relation_impls(
                     #set_related_impl
 
                     #load_related_impl
+
+                    fn relation_def() -> ::ormada::__internal::RelationDef {
+                        <Relation as ::ormada::__internal::RelationTrait>::def(&Relation::#relation_variant_name)
+                    }
                 }
             }
         })

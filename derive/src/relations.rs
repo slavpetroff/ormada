@@ -286,6 +286,8 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
             let related_entity = &rel.related_entity;
             let fk_field = &rel.foreign_key_field;
 
+            let relation_name = &rel.field_name;
+
             quote! {
                 impl ::ormada::relations::HasRelation<#related_entity> for Entity {
                     type RelatedPK = <<#related_entity as ::sea_orm::EntityTrait>::PrimaryKey as ::sea_orm::PrimaryKeyTrait>::ValueType;
@@ -332,6 +334,17 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
                             )
                         )
                     }
+
+                    fn set_related(
+                        model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations,
+                        related: ::core::option::Option<<#related_entity as ::sea_orm::EntityTrait>::Model>,
+                    ) {
+                        model.#relation_name = related.expect("select_related requires non-null FK");
+                    }
+
+                    fn relation_def() -> ::sea_orm::RelationDef {
+                        <Relation as ::sea_orm::RelationTrait>::def(&Relation::#relation_name)
+                    }
                 }
             }
         })
@@ -342,4 +355,3 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
     }
 }
 
-// Loader registration removed - compile-time typed relations don't need runtime registration
