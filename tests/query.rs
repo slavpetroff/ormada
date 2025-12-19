@@ -12,7 +12,7 @@
 
 //! Query integration tests
 //!
-//! This module contains all query-related integration tests for the Ormada-like ORM.
+//! This module contains all query-related integration tests for the Django-like ORM.
 
 mod fixtures;
 
@@ -1840,7 +1840,11 @@ async fn test_debug_sql(#[future] db_with_sample_authors: (DatabaseRouter, Vec<A
 async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, Vec<Author>)) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain().unwrap();
+    let explain = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .explain()
+        .await
+        .unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());
@@ -1854,7 +1858,11 @@ async fn test_explain_analyze_query(
 ) {
     let (db, _sample_authors) = db_with_sample_authors;
 
-    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain_analyze().unwrap();
+    let explain = Author::objects(&db)
+        .filter(Author::Age.gte(25))
+        .explain_analyze()
+        .await
+        .unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());

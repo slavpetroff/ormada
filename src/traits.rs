@@ -1,4 +1,4 @@
-//! Core traits for Ormada-like ORM functionality
+//! Core traits for Django-like ORM functionality
 
 use crate::error::OrmadaError;
 use sea_orm::{ConnectionTrait, EntityTrait};

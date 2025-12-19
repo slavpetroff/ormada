@@ -1,6 +1,6 @@
 //! # ormada
 //!
-//! **Ormada-inspired ergonomic ORM for `SeaORM` with zero-cost abstractions**
+//! **Django-inspired ergonomic ORM for `SeaORM` with zero-cost abstractions**
 
 // Allow test code to use unwrap/expect for clarity
 #![cfg_attr(test, allow(clippy::unwrap_used))]
@@ -9,16 +9,16 @@
 #![cfg_attr(test, allow(unused_must_use))]
 #![cfg_attr(test, allow(non_snake_case))]
 //!
-//! This library brings Ormada's elegant ORM API to Rust, providing:
+//! This library brings Django's elegant ORM API to Rust, providing:
 //! - **🚀 Zero-cost abstractions**: Compile-time typed relations, no runtime overhead
 //! - **🎯 Type-safe**: Full compile-time checking, works with `SeaORM`'s generated types
-//! - **🐍 Ormada-like**: 85%+ API compatibility for familiar, ergonomic queries
+//! - **🐍 Django-like**: 85%+ API compatibility for familiar, ergonomic queries
 //! - **⚡ Performance**: No duplication, direct integration with `SeaORM`
 //!
 //! ## Core Features
 //!
 //! ### 📊 Query API
-//! Ormada-style `QuerySet` with filtering, ordering, pagination, and aggregation:
+//! Django-style `QuerySet` with filtering, ordering, pagination, and aggregation:
 //! - `filter()` / `exclude()` - WHERE clauses with method chaining
 //! - `distinct()` - Remove duplicate rows
 //! - `order_by_asc()` / `order_by_desc()` - Ordering
@@ -40,7 +40,7 @@
 //!
 //! ### ✍️ Write API
 //! Ormada-style model operations:
-//! - `save()` - Ormada-like full model updates
+//! - `save()` - Django-like full model updates
 //! - `update()` - Bulk updates with filters
 //! - `delete()` - Soft/hard delete operations
 //!
@@ -173,7 +173,7 @@
 //!
 //! ## Column Operations
 //!
-//! All `SeaORM` Column enums automatically get Ormada-like methods via `ColumnExt`:
+//! All `SeaORM` Column enums automatically get Django-like methods via `ColumnExt`:
 //!
 //! ```rust,ignore
 //! // String operations
@@ -234,7 +234,7 @@
 #![doc(html_root_url = "https://docs.rs/ormada/0.1.0")]
 
 // =============================================================================
-// Ormada-like Module Structure
+// Django-like Module Structure
 // =============================================================================
 // These modules mirror Ormada's package structure for familiarity:
 // - db: Database connections, transactions (like ormada.db)

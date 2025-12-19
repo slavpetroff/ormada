@@ -1150,11 +1150,12 @@ println!("SQL: {}", sql);
 ### Explain Query Plan
 
 ```rust
-// Get query execution plan without running the query
+// Get query execution plan by running EXPLAIN
 let plan = Book::objects(&db)
     .filter(Book::Price.lt(5000))
     .filter(Book::Published.eq(true))
-    .explain()?;
+    .explain()
+    .await?;
 
 println!("{}", plan);
 // Shows: Index Scan vs Sequential Scan, estimated rows, etc.
@@ -1163,11 +1164,12 @@ println!("{}", plan);
 ### Explain Analyze
 
 ```rust
-// Run query and get actual execution statistics
+// Run EXPLAIN ANALYZE and get actual execution statistics
 // ⚠️ WARNING: Actually executes the query!
 let analysis = Book::objects(&db)
     .filter(Book::AuthorId.eq(author_id))
-    .explain_analyze()?;
+    .explain_analyze()
+    .await?;
 
 println!("{}", analysis);
 // Shows: actual rows, execution time, buffer hits/misses

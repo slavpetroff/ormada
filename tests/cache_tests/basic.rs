@@ -1,6 +1,6 @@
 //! Tests for QuerySet caching behavior
 //!
-//! Verifies Ormada-like automatic caching with concurrency safety
+//! Verifies Django-like automatic caching with concurrency safety
 
 use super::common::test_helpers::*;
 use ormada::prelude::*;

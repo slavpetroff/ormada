@@ -45,7 +45,7 @@ fn is_unique_violation(err: &DbErr) -> bool {
 
 /// Extension trait for Ormada-specific column operations
 ///
-/// This trait adds Ormada-like aliases to SeaORM's `ColumnTrait`.
+/// This trait adds Django-like aliases to SeaORM's `ColumnTrait`.
 /// For standard operations like `.eq()`, `.gt()`, etc., use `ColumnTrait` directly.
 ///
 /// **Note:** `ColumnTrait` is re-exported in our prelude and provides all standard
@@ -78,7 +78,7 @@ impl<T: ColumnTrait> ColumnExt for T {}
 /// Provides chainable query building with automatic caching and lazy evaluation.
 /// All operations are lazy until a terminal method (.`all()`, .`first()`, etc.) is called.
 ///
-/// **Caching Behavior (Ormada-like):**
+/// **Caching Behavior (Django-like):**
 /// - First execution of `.all()`, `.first()`, etc. hits the database
 /// - Results are cached in the `QuerySet` instance
 /// - Subsequent calls on the SAME `QuerySet` reuse cached results
@@ -209,6 +209,15 @@ impl CanExecute for Ordered {}
 impl CanExecute for Paginated {}
 impl CanExecute for Grouped {}
 impl CanExecute for Aggregated {}
+
+/// Marker trait for states that can add explain/explain_analyze
+pub trait CanExplain: QuerySetState {}
+impl CanExplain for Fresh {}
+impl CanExplain for Filtered {}
+impl CanExplain for Ordered {}
+impl CanExplain for Paginated {}
+impl CanExplain for Grouped {}
+impl CanExplain for Aggregated {}
 
 /// Query building state for introspection
 ///
@@ -936,6 +945,139 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, 
     pub fn offset(&self, offset: u64) -> QuerySet<'a, E, C, Paginated> {
         let new_select = self.inner.select.clone().offset(offset);
         self.with_select_and_op_to(new_select, QueryOp::Offset(offset), QueryState::Paginated)
+    }
+}
+
+// ============================================================================
+// Typestate: Explain operations (states that can request explain)
+// ============================================================================
+
+impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S> {
+    /// Get query execution plan (Django-inspired .`explain()`)
+    ///
+    /// Executes the EXPLAIN query and returns the database query execution plan.
+    /// Useful for understanding how the database will execute your query
+    /// and identifying performance bottlenecks.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // Check query plan for a complex filter
+    /// let plan = User::objects(&db)
+    ///     .filter(User::Email.contains("@gmail.com"))
+    ///     .filter(User::Age.gte(18))
+    ///     .explain()
+    ///     .await?;
+    ///
+    /// println!("Execution Plan:\n{}", plan);
+    /// ```
+    ///
+    /// # Performance Analysis
+    /// 
+    /// Look for these indicators in the plan:
+    /// - **Index Scan**: Good - using an index
+    /// - **Sequential Scan**: Bad - scanning entire table
+    /// - **Nested Loop**: Can be slow for large joins
+    /// - **Hash Join**: Usually faster for large datasets
+    ///
+    /// # Database Support
+    ///
+    /// - **`SQLite`**: `EXPLAIN QUERY PLAN`
+    /// - **`PostgreSQL`**: `EXPLAIN`
+    /// - **`MySQL`**: `EXPLAIN`
+    ///
+    /// # See Also
+    ///
+    /// - `.explain_analyze()` - Runs query and provides actual timings
+    /// - `.debug_sql()` - Shows the raw SQL query without executing
+    pub async fn explain(&self) -> Result<String, OrmadaError>
+    where
+        E: crate::traits::OrmadaEntity,
+    {
+        use sea_orm::QueryTrait;
+
+        let backend = self.inner.db.get_database_backend();
+        let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
+        let sql = stmt.to_string();
+
+        let explain_sql = match backend {
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
+            _ => format!("EXPLAIN {sql}"),
+        };
+
+        let results = self.inner.db.execute_unprepared(&explain_sql).await?;
+
+        Ok(format!(
+            "EXPLAIN output for query:\n{sql}\n\nRows affected: {}",
+            results.rows_affected()
+        ))
+    }
+
+    /// Analyze query with actual execution (Django-inspired .explain(analyze=True))
+    ///
+    /// Executes the EXPLAIN ANALYZE query and returns detailed execution statistics
+    /// including actual row counts, execution time, and resource usage.
+    ///
+    /// **⚠️ WARNING**: This actually EXECUTES the query, so use carefully
+    /// on production databases with large datasets.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // Analyze actual query performance
+    /// let analysis = Book::objects(&db)
+    ///     .filter(Book::Published.eq(true))
+    ///     .explain_analyze()
+    ///     .await?;
+    ///
+    /// println!("Execution Analysis:\n{}", analysis);
+    /// ```
+    ///
+    /// # What You Get
+    ///
+    /// - **Estimated vs Actual rows**: Are estimates accurate?
+    /// - **Execution time**: How long did each step take?
+    /// - **Buffer usage**: Cache hits/misses
+    /// - **Sort operations**: Memory vs disk sorting
+    ///
+    /// # Performance Tips
+    ///
+    /// If you see:
+    /// - **High actual rows**: Consider pagination/limits
+    /// - **Sequential scans**: Add indexes
+    /// - **Slow sorts**: Index the ORDER BY columns
+    /// - **Many disk buffer reads**: Increase `shared_buffers` (`PostgreSQL`)
+    ///
+    /// # Database Support
+    ///
+    /// - **`SQLite`**: Limited - returns EXPLAIN QUERY PLAN (no ANALYZE support)
+    /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
+    /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
+    pub async fn explain_analyze(&self) -> Result<String, OrmadaError>
+    where
+        E: crate::traits::OrmadaEntity,
+    {
+        use sea_orm::QueryTrait;
+
+        let backend = self.inner.db.get_database_backend();
+        let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
+        let sql = stmt.to_string();
+
+        let explain_sql = match backend {
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {sql}"),
+            _ => format!("EXPLAIN ANALYZE {sql}"),
+        };
+
+        let results = self.inner.db.execute_unprepared(&explain_sql).await?;
+
+        Ok(format!(
+            "EXPLAIN ANALYZE output for query:\n{sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
+            results.rows_affected()
+        ))
     }
 }
 
@@ -2518,141 +2660,6 @@ where
         stmt.to_string()
     }
 
-    /// Analyze query execution plan (Ormada-inspired .`explain()`)
-    ///
-    /// Returns the database query execution plan without running the query.
-    /// Useful for understanding how the database will execute your query
-    /// and identifying performance bottlenecks.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// // Check query plan for a complex filter
-    /// let plan = User::objects(&db)
-    ///     .filter(User::Email.contains("@gmail.com"))
-    ///     .filter(User::Age.gte(18))
-    ///     .explain()
-    ///     .await?;
-    ///
-    /// println!("Execution Plan:\n{}", plan);
-    /// // Output shows if indexes are used, scan type, etc.
-    /// ```
-    ///
-    /// # Performance Analysis
-    ///
-    /// Look for these indicators in the plan:
-    /// - **Index Scan**: Good - using an index
-    /// - **Sequential Scan**: Bad - scanning entire table
-    /// - **Nested Loop**: Can be slow for large joins
-    /// - **Hash Join**: Usually faster for large datasets
-    ///
-    /// # Database Support
-    ///
-    /// - **`SQLite`**: `EXPLAIN QUERY PLAN`
-    /// - **`PostgreSQL`**: `EXPLAIN`
-    /// - **`MySQL`**: `EXPLAIN`
-    ///
-    /// # See Also
-    ///
-    /// - `.explain_analyze()` - Runs query and provides actual timings
-    /// - `.debug_sql()` - Shows the raw SQL query
-    pub fn explain(&self) -> Result<String, OrmadaError>
-    where
-        E: crate::traits::OrmadaEntity,
-    {
-        use sea_orm::QueryTrait;
-
-        // Get the SQL for the current query
-        let backend = self.inner.db.get_database_backend();
-        let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
-        let sql = stmt.to_string();
-
-        // Construct EXPLAIN query based on database backend
-        let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
-            _ => format!("EXPLAIN {sql}"), // Fallback for any future database backends
-        };
-
-        // Return the SQL that would be explained
-        // Full EXPLAIN output requires database-specific result parsing
-        Ok(format!("EXPLAIN output for query:\n{sql}\n\nTo run: {explain_sql}"))
-    }
-
-    /// Analyze query with actual execution (Ormada-inspired .explain(analyze=True))
-    ///
-    /// Runs the query and provides detailed execution statistics including
-    /// actual row counts, execution time, and resource usage.
-    ///
-    /// **⚠️ WARNING**: This actually EXECUTES the query, so use carefully
-    /// on production databases with large datasets.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// // Analyze actual query performance
-    /// let analysis = Book::objects(&db)
-    ///     .filter(Book::Published.eq(true))
-    ///     .join(Author::Entity)
-    ///     .explain_analyze()
-    ///     .await?;
-    ///
-    /// println!("Execution Analysis:\n{}", analysis);
-    /// // Shows actual timings, rows processed, buffer hits, etc.
-    /// ```
-    ///
-    /// # What You Get
-    ///
-    /// - **Estimated vs Actual rows**: Are estimates accurate?
-    /// - **Execution time**: How long did each step take?
-    /// - **Buffer usage**: Cache hits/misses
-    /// - **Sort operations**: Memory vs disk sorting
-    ///
-    /// # Performance Tips
-    ///
-    /// If you see:
-    /// - **High actual rows**: Consider pagination/limits
-    /// - **Sequential scans**: Add indexes
-    /// - **Slow sorts**: Index the ORDER BY columns
-    /// - **Many disk buffer reads**: Increase `shared_buffers` (`PostgreSQL`)
-    ///
-    /// # Database Support
-    ///
-    /// - **`SQLite`**: Limited - same as `explain()`
-    /// - **`PostgreSQL`**: `EXPLAIN ANALYZE` - full statistics
-    /// - **`MySQL`**: `EXPLAIN ANALYZE` (`MySQL` 8.0.18+)
-    pub fn explain_analyze(&self) -> Result<String, OrmadaError>
-    where
-        E: crate::traits::OrmadaEntity,
-    {
-        use sea_orm::QueryTrait;
-
-        // Get the SQL for the current query
-        let backend = self.inner.db.get_database_backend();
-        let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
-        let sql = stmt.to_string();
-
-        // Construct EXPLAIN ANALYZE query based on database backend
-        let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => {
-                // SQLite doesn't support EXPLAIN ANALYZE, fallback to EXPLAIN QUERY PLAN
-                format!("EXPLAIN QUERY PLAN {sql}")
-            }
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
-            crate::db::DatabaseBackend::MySql => {
-                // MySQL 8.0.18+ supports EXPLAIN ANALYZE
-                format!("EXPLAIN ANALYZE {sql}")
-            }
-            _ => format!("EXPLAIN ANALYZE {sql}"), // Fallback for any future database backends
-        };
-
-        // Return the EXPLAIN ANALYZE SQL for manual execution
-        Ok(format!(
-            "EXPLAIN ANALYZE output for query:\n{sql}\n\nRun this command directly:\n{explain_sql}"
-        ))
-    }
-
     /// Type-safe projection query (alternative to JSON-based `values()`)
     ///
     /// Returns results as a custom type with compile-time validation.
@@ -3470,7 +3477,7 @@ impl From<FilterExpr> for SimpleExpr {
 /// Extension trait to add `.objects()` method to entities
 ///
 /// This trait is automatically implemented for all `SeaORM` entities and provides
-/// the Ormada-like `.objects(db)` entry point for querying.
+/// the Django-like `.objects(db)` entry point for querying.
 ///
 /// # Basic Usage
 ///

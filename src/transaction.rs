@@ -160,7 +160,7 @@
 
 /// Ergonomic transaction macro with static dispatch
 ///
-/// This macro provides Ormada-like transaction syntax with zero boxing overhead.
+/// This macro provides Django-like transaction syntax with zero boxing overhead.
 /// Uses **static dispatch** - no `Box::pin` or `dyn Future`.
 ///
 /// # Syntax

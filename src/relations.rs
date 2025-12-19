@@ -2,7 +2,7 @@
 #![allow(clippy::future_not_send)]
 #![allow(clippy::cast_sign_loss)]
 
-//! Relation loading for Ormada-like ORM
+//! Relation loading for Django-like ORM
 //!
 //! This module provides eager loading of relations with zero N+1 queries.
 //!
@@ -478,7 +478,86 @@ where
         self
     }
 
-    // Note: build_relation_graph removed - replaced by compile-time LoadRelations trait
+    /// Get query execution plan
+    ///
+    /// Executes the EXPLAIN query and returns the database query execution plan.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let plan = Book::objects(&db)
+    ///     .prefetch_related(relations![Author])
+    ///     .explain()
+    ///     .await?;
+    ///
+    /// println!("Query Plan:\n{}", plan);
+    /// ```
+    pub async fn explain(&self) -> Result<String, OrmadaError>
+    where
+        E: crate::traits::OrmadaEntity,
+    {
+        use sea_orm::QueryTrait;
+
+        let backend = self.db.get_database_backend();
+        let stmt = self.select.clone().build(backend);
+        let sql = stmt.to_string();
+
+        let explain_sql = match backend {
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {sql}"),
+            _ => format!("EXPLAIN {sql}"),
+        };
+
+        let results = self.db.execute_unprepared(&explain_sql).await?;
+
+        Ok(format!(
+            "EXPLAIN output for query:\n{sql}\n\nRows affected: {}",
+            results.rows_affected()
+        ))
+    }
+
+    /// Analyze query with actual execution
+    ///
+    /// Executes the EXPLAIN ANALYZE query and returns detailed execution statistics.
+    ///
+    /// **⚠️ WARNING**: This actually EXECUTES the query.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let analysis = Book::objects(&db)
+    ///     .prefetch_related(relations![Author])
+    ///     .explain_analyze()
+    ///     .await?;
+    ///
+    /// println!("Execution Analysis:\n{}", analysis);
+    /// ```
+    pub async fn explain_analyze(&self) -> Result<String, OrmadaError>
+    where
+        E: crate::traits::OrmadaEntity,
+    {
+        use sea_orm::QueryTrait;
+
+        let backend = self.db.get_database_backend();
+        let stmt = self.select.clone().build(backend);
+        let sql = stmt.to_string();
+
+        let explain_sql = match backend {
+            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {sql}"),
+            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {sql}"),
+            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {sql}"),
+            _ => format!("EXPLAIN ANALYZE {sql}"),
+        };
+
+        let results = self.db.execute_unprepared(&explain_sql).await?;
+
+        Ok(format!(
+            "EXPLAIN ANALYZE output for query:\n{sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
+            results.rows_affected()
+        ))
+    }
+
 }
 
 // Note: WithRelations struct removed - replaced by macro-generated ModelWithRelations

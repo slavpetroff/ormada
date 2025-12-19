@@ -79,7 +79,8 @@ pub async fn example_explain(db: &DatabaseRouter) -> Result<(), OrmadaError> {
         .filter(Book::Category.eq("Technical"))
         .filter(Book::Price.gt(3000))
         .order_by_asc(Book::Title)
-        .explain()?;
+        .explain()
+        .await?;
 
     // Plan should contain query strategy info
     assert!(!plan.is_empty(), "Plan should not be empty");
@@ -103,7 +104,8 @@ pub async fn example_explain_analyze(db: &DatabaseRouter) -> Result<(), OrmadaEr
         .filter(Book::Published.eq(true))
         .filter(Book::Price.between(2000, 4000))
         .order_by_desc(Book::Price)
-        .explain_analyze()?;
+        .explain_analyze()
+        .await?;
 
     assert!(!analysis.is_empty(), "Analysis should not be empty");
 

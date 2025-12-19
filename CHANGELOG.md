@@ -5,6 +5,7 @@
 ### 🎉 New Features
 
 #### QuerySet Typestate Pattern
+
 - **Compile-time query validation** - Invalid query chains now fail at compile time
 - **State markers**: `Fresh`, `Filtered`, `Ordered`, `Paginated`, `Aggregated`
 - **Capability traits**: `CanFilter`, `CanOrder`, `CanPaginate`, `CanExecute`
@@ -23,17 +24,20 @@ let books = Book::objects(db)
 ```
 
 #### Enhanced FilterExpr & FilterOp Enums
+
 - **`FilterOp` enum** - Typed filter operations (Eq, Ne, Lt, Lte, Gt, Gte, Like, In, IsNull, etc.)
 - **`FilterExpr::Typed`** - Introspectable filter expressions with column name, operation, and value
 - Pattern-matchable for debugging and logging query plans
 
 #### Transaction State Tracking
+
 - **`TransactionState` enum** - Replaced boolean flag with `Idle`/`Active` states
 - Clearer transaction management in `DatabaseRouter`
 
 ### 🔧 Breaking Changes
 
 #### Lifecycle Hooks Now Optional
+
 - **Default**: Empty `LifecycleHooks` is auto-generated (no user code needed)
 - **Custom hooks**: Use `hooks = true` attribute
 
@@ -59,21 +63,25 @@ impl LifecycleHooks for book::Model {
 ```
 
 #### Encapsulated SeaORM Imports
+
 - **Minimal exports**: Only essential SeaORM types exposed in prelude
 - **Hidden internals**: `ActiveModelTrait`, `EntityTrait`, `QueryFilter`, etc. no longer exported
 - **Advanced access**: Full `sea_orm` module still available for power users
 
 **Kept in prelude:**
+
 - `Database`, `DatabaseConnection`, `DatabaseTransaction`
 - `DbErr`, `IsolationLevel`, `Condition`
 - `ConnectionTrait`, `TransactionTrait`, `ExprTrait`
 
 ### 📚 Documentation
+
 - Updated `#[ormada_model]` macro documentation with all attributes
 - Added lifecycle hooks documentation with examples
 - Clarified SeaORM encapsulation philosophy
 
 ### 🧪 Test Coverage
+
 - **84.52% coverage** maintained
 - New typestate marker tests
 - Updated lifecycle hooks tests
@@ -85,6 +93,7 @@ impl LifecycleHooks for book::Model {
 ### 🎉 New Features
 
 #### Query Methods
+
 - **`distinct()`** - Remove duplicate rows from results (Ormada's `.distinct()`)
 - **`earliest(column)`** - Get earliest record by field (Ormada's `.earliest()`)
 - **`latest(column)`** - Get latest record by field (Ormada's `.latest()`)
@@ -92,29 +101,35 @@ impl LifecycleHooks for book::Model {
 - **`values_list(columns, flat)`** - Select columns as arrays (Ormada's `.values_list()`)
 
 #### Upsert Operations
+
 - **`get_or_create(creator)`** - Get existing or create new record atomically (Ormada's `.get_or_create()`)
 - **`update_or_create(updater, creator)`** - Update existing or create new (Ormada's `.update_or_create()`)
 
 #### Transactions
+
 - **`#[atomic]`** - Attribute macro for transactional functions (supports nesting!)
 - **`objects(txn)`** - QuerySet now supports `DatabaseTransaction` seamlessly
 - **`AtomicExt`** - Improved trait for manual transaction handling
 
 #### Aggregations
+
 - **`aggregate_sum`** - Calculate sum of a column (database-level)
 - **`aggregate_avg`** - Calculate average of a column (database-level)
 - **`aggregate_max`** - Calculate maximum of a column (database-level)
 - **`aggregate_min`** - Calculate minimum of a column (database-level)
 
 #### Bulk Operations
+
 - **`bulk_create`** - High-performance inserts via `QuerySet` API
 
 ### 📚 Documentation
+
 - Comprehensive inline documentation for all methods with examples
 - Enhanced library-level documentation with complete feature overview
 - Real-world usage examples for each API method
 
 ### 🧪 Test Coverage
+
 - **97.44% test coverage** (304/312 lines)
 - 220+ tests across 20+ test files
 - Tests for both happy paths and error cases
@@ -134,6 +149,7 @@ impl LifecycleHooks for book::Model {
 ### ✨ API Enhancements
 
 #### Before
+
 ```rust
 // Limited API
 let books = book::Entity::objects(db)
@@ -144,8 +160,9 @@ let books = book::Entity::objects(db)
 ```
 
 #### After
+
 ```rust
-// Rich, Ormada-like API
+// Rich, Django-like API
 // Get unique results
 let unique_books = book::Entity::objects(db)
     .distinct()
@@ -182,6 +199,7 @@ let (author, created) = author::Entity::objects(db)
 ### 🚀 Performance
 
 All new methods maintain zero-cost abstractions:
+
 - **`distinct()`** - Translates to `SELECT DISTINCT`
 - **`earliest()`/`latest()`** - Single query with `ORDER BY ... LIMIT 1`
 - **`values()`/`values_list()`** - Only fetches specified columns
@@ -189,6 +207,7 @@ All new methods maintain zero-cost abstractions:
 - **`update_or_create()`** - 1-3 queries (SELECT, INSERT or UPDATE)
 
 ### 🐛 Bug Fixes
+
 - Removed deprecated code paths (old `WithRelations` struct, unused tuple implementations)
 - Fixed trait bounds for upsert operations
 - Improved error messages across the board
@@ -196,6 +215,7 @@ All new methods maintain zero-cost abstractions:
 ### 📖 Documentation Examples
 
 Every method now includes:
+
 - ✅ Purpose and use case
 - ✅ Parameter descriptions
 - ✅ Return value documentation
@@ -209,6 +229,7 @@ Every method now includes:
 Current Ormada ORM API coverage: **90%+**
 
 Implemented Ormada methods:
+
 - ✅ `.filter()` / `.exclude()`
 - ✅ `.distinct()`
 - ✅ `.order_by()` / `.reverse()`

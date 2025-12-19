@@ -548,7 +548,7 @@ fn test_query_state_transitions() {
 
 #[test]
 fn test_query_state_pattern_matching() {
-    let states = [
+    let states = vec![
         QueryState::Fresh,
         QueryState::Filtered,
         QueryState::Ordered,
