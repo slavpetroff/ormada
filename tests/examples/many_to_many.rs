@@ -47,8 +47,7 @@ pub mod models {
     }
 
     pub mod article {
-        
-        
+
         use ormada::prelude::*;
 
         /// Article model with M:N relationship to Tag through ArticleTag.

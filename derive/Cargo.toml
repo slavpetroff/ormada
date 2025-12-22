@@ -2,7 +2,7 @@
 name = "ormada-derive"
 version = "0.1.0"
 edition = "2021"
-authors = ["Stanislav Petroff <slavpetroff@gmail.com>"]
+authors = ["Stanislav Petrov <slavpetroff@gmail.com>"]
 description = "Proc macro for ormada - Djano-like ORM for Rust"
 license = "MIT OR Apache-2.0"
 

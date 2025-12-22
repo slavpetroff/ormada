@@ -41,6 +41,7 @@ mod atomic;
 mod model;
 mod projection;
 mod relations;
+mod schema;
 
 /// Check if a field has a specific `sea_orm` attribute
 fn has_sea_orm_attribute(field: &syn::Field, attr_name: &str) -> bool {
@@ -424,6 +425,115 @@ pub fn ormada_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn ergorm_projection(attr: TokenStream, item: TokenStream) -> TokenStream {
     match projection::generate_projection(attr.into(), item.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Attribute macro for defining schema in migration files
+///
+/// This macro is used in migration files to define schema snapshots.
+/// It uses the same syntax as `#[ormada_model]` but is purely declarative -
+/// no runtime code is generated. The CLI parses these definitions to
+/// generate SQL migrations.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// use ormada::migration::prelude::*;
+///
+/// // Initial migration - full schema definition
+/// pub mod m001_initial {
+///     use super::*;
+///
+///     #[ormada_schema(table = "books", migration = "001_initial")]
+///     pub struct Book {
+///         #[primary_key]
+///         pub id: i32,
+///
+///         #[max_length(200)]
+///         pub title: String,
+///
+///         #[foreign_key(Author)]
+///         pub author_id: i32,
+///     }
+/// }
+///
+/// // Delta migration - extends previous schema
+/// pub mod m002_add_isbn {
+///     use super::*;
+///
+///     #[ormada_schema(table = "books", migration = "002", after = "001", extends = Book)]
+///     pub struct Book {
+///         // Only new fields - inherited fields are implicit
+///         #[index]
+///         pub isbn: String,
+///     }
+/// }
+/// ```
+///
+/// # Attributes
+///
+/// - `table = "name"` - **(required)** Database table name
+/// - `migration = "id"` - Migration identifier (usually matches filename)
+/// - `after = "id"` - Migration this depends on (for ordering)
+/// - `extends = Entity` - Extend schema from previous migration (for deltas)
+/// - `migrate = false` - Exclude from migration generation
+///
+/// # Field Attributes
+///
+/// Same as `#[ormada_model]`:
+/// - `#[primary_key]` - Mark as primary key
+/// - `#[foreign_key(Entity)]` - Foreign key relationship
+/// - `#[index]` - Create index on column
+/// - `#[unique]` - Unique constraint
+/// - `#[max_length(n)]` - String max length
+/// - `#[default(value)]` - Default value
+/// - `#[nullable]` - Allow NULL values
+///
+/// Additional for migrations:
+/// - `#[rename(from = "old", to = "new")]` - Rename column
+/// - `#[drop]` - Drop column (use `()` type)
+#[proc_macro_attribute]
+pub fn ormada_schema(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match schema::impl_ormada_schema(attr.into(), item.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Attribute macro for data migrations
+///
+/// Marks an async function as a data migration that runs after schema changes.
+/// The function receives a database connection and uses the standard Ormada ORM API.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// use ormada::migration::prelude::*;
+/// use crate::models::Author;
+///
+/// #[ormada_data_migration(migration = "003", after = "002")]
+/// async fn populate_emails(db: &DatabaseConnection) -> Result<(), OrmadaError> {
+///     // Use the same Ormada ORM API as your application code!
+///     Author::objects(db)
+///         .filter(Author::Email.is_null())
+///         .update_all(|author| {
+///             author.email = format!("{}@example.com", author.name.to_lowercase());
+///         })
+///         .await?;
+///
+///     Ok(())
+/// }
+/// ```
+///
+/// # Attributes
+///
+/// - `migration = "id"` - **(required)** Migration identifier
+/// - `after = "id"` - Migration this depends on
+#[proc_macro_attribute]
+pub fn ormada_data_migration(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match schema::impl_ormada_data_migration(attr.into(), item.into()) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }

@@ -1,0 +1,20 @@
+[package]
+name = "ormada-schema"
+version = "0.1.0"
+edition = "2021"
+authors = ["Stanislav Petrov <slavpetroff@gmail.com>"]
+description = "Schema types and parsing for Ormada ORM migrations"
+license = "MIT"
+
+[dependencies]
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+walkdir = "2.4"
+heck = "0.5"
+Inflector = "0.11"
+
+[dev-dependencies]
+pretty_assertions = "1.4"

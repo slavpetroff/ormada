@@ -20,6 +20,7 @@ pub mod filtering;
 pub mod fk_validation;
 pub mod group_by_aggregations;
 pub mod many_to_many;
+pub mod migrations;
 pub mod one_to_one;
 pub mod projections;
 pub mod query_debugging;

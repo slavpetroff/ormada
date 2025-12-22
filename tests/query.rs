@@ -1841,21 +1841,14 @@ async fn test_explain_query(#[future] db_with_sample_authors: (DatabaseRouter, V
     let (db, _sample_authors) = db_with_sample_authors;
 
     // Test with pretty-printing enabled (default)
-    let explain = Author::objects(&db)
-        .filter(Author::Age.gte(25))
-        .explain(true)
-        .await
-        .unwrap();
+    let explain = Author::objects(&db).filter(Author::Age.gte(25)).explain(true).await.unwrap();
 
     assert!(explain.contains("EXPLAIN"));
     assert!(!explain.is_empty());
 
     // Test with pretty-printing disabled
-    let explain_compact = Author::objects(&db)
-        .filter(Author::Age.gte(25))
-        .explain(false)
-        .await
-        .unwrap();
+    let explain_compact =
+        Author::objects(&db).filter(Author::Age.gte(25)).explain(false).await.unwrap();
 
     assert!(explain_compact.contains("EXPLAIN"));
     assert!(!explain_compact.is_empty());

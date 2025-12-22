@@ -354,4 +354,3 @@ pub fn generate_has_relation_impls(relations: &[RelationInfo]) -> TokenStream {
         #(#impls)*
     }
 }
-

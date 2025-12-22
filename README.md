@@ -61,6 +61,7 @@ Ormada brings Django-like ergonomics to Rust while maintaining full type safety.
 - [Lifecycle Hooks](#lifecycle-hooks)
 - [Validation](#validation)
 - [Error Handling](#error-handling)
+- [Migrations](#migrations)
 - [Advanced Features](#advanced-features)
 - [License](#license)
 
@@ -1309,6 +1310,146 @@ let count = Book::objects(&db)
         Ok(book)
     })
     .await?;
+```
+
+## Migrations
+
+Ormada provides a declarative migration system that uses the **same syntax** as `#[ormada_model]` — no new DSL to learn.
+
+### Installation
+
+The CLI is a separate binary crate. Install it first:
+
+```bash
+# From the ormada workspace
+cargo install --path cli
+
+# Or install globally (once published)
+cargo install ormada-cli
+```
+
+### Configuration
+
+Configuration can be provided in either `ormada.toml` or `Cargo.toml`:
+
+**Option 1: ormada.toml** (created by `migrate init`)
+```toml
+[migrations]
+migrations_dir = "migrations"
+
+[database]
+url = "postgres://user:pass@localhost/db"
+```
+
+**Option 2: Cargo.toml** (no extra file needed)
+```toml
+[package.metadata.ormada]
+migrations_dir = "src/db/migrations"
+database_url = "postgres://user:pass@localhost/db"
+```
+
+### Quick Start
+
+```bash
+# Initialize migrations directory
+# Use --path for custom location: ormada migrate init --path src/db/migrations
+ormada migrate init
+
+# Generate migration from model changes
+ormada migrate make "add books table"
+
+# Show migration status
+ormada migrate status
+
+# Apply pending migrations
+ormada migrate run
+
+# Preview without applying (dry run)
+ormada migrate run --dry-run
+```
+
+### Migration Files
+
+Each migration is a standalone `.rs` file. No module wrapping needed - the CLI parses files independently:
+
+```rust
+// migrations/m001_initial.rs
+use ormada::prelude::*;
+
+#[ormada_schema(table = "authors", migration = "m001_initial")]
+pub struct Author {
+    #[primary_key]
+    pub id: i32,
+    
+    #[max_length(100)]
+    pub name: String,
+}
+
+#[ormada_schema(table = "books", migration = "m001_initial")]
+pub struct Book {
+    #[primary_key]
+    pub id: i32,
+    
+    #[foreign_key(Author)]
+    pub author_id: i32,
+    
+    #[max_length(200)]
+    pub title: String,
+}
+```
+
+### Delta Migrations
+
+Use `extends` to only specify changes — inherited fields are implicit:
+
+```rust
+// migrations/m002_add_isbn.rs
+use ormada::prelude::*;
+
+#[ormada_schema(
+    table = "books",
+    migration = "m002_add_isbn",
+    after = "m001_initial",
+    extends = Book
+)]
+pub struct Book {
+    #[index]
+    pub isbn: String,
+    
+    #[default(0)]
+    pub page_count: i32,
+}
+```
+
+### Rename and Drop
+
+```rust
+// The 'to' is inferred from the field name - only specify 'from'
+#[ormada_schema(table = "authors", migration = "m003", after = "m002", extends = Author)]
+pub struct Author {
+    #[rename(from = "name")]
+    pub full_name: String,  // Renames 'name' -> 'full_name'
+    
+    #[drop]
+    pub legacy_field: (),
+}
+```
+
+### Data Migrations
+
+Use the same Ormada ORM API you already know:
+
+```rust
+#[ormada_data_migration(migration = "m004", after = "m003")]
+async fn populate_emails(db: &DatabaseConnection) -> Result<(), OrmadaError> {
+    Author::objects(db)
+        .filter(Author::Email.is_null())
+        .update_all(|author| {
+            author.email = format!("{}@example.com", author.full_name);
+        })
+        .await?;
+    Ok(())
+}
 ```
 
 ## Limitations

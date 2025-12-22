@@ -198,7 +198,8 @@ where
             .join(sea_orm::JoinType::LeftJoin, relation_def)
             .select_also(R1::default());
 
-        let results: Vec<(<Parent as EntityTrait>::Model, Option<R1::Model>)> = joined_select.all(db).await?;
+        let results: Vec<(<Parent as EntityTrait>::Model, Option<R1::Model>)> =
+            joined_select.all(db).await?;
 
         let models_with_relations: Vec<Parent::ModelWithRelations> = results
             .into_iter()
@@ -782,9 +783,8 @@ where
     ///
     /// Note: This counts the main entity, not the joined results.
     pub async fn count(self) -> Result<u64, OrmadaError> {
-        let count_select = self.select
-            .select_only()
-            .column_as(Expr::col(Asterisk).count(), "count");
+        let count_select =
+            self.select.select_only().column_as(Expr::col(Asterisk).count(), "count");
 
         let result = count_select.into_tuple::<i64>().one(self.db).await?;
         Ok(result.unwrap_or(0) as u64)
@@ -865,11 +865,8 @@ where
     pub async fn explain(&self, pretty: bool) -> Result<String, OrmadaError> {
         let raw_sql = Relations::build_join_sql(&self.select, self.db);
 
-        let formatted_sql = if pretty {
-            crate::format::format_sql_pretty(&raw_sql)
-        } else {
-            raw_sql.clone()
-        };
+        let formatted_sql =
+            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
 
         let backend = self.db.get_database_backend();
         let explain_sql = match backend {
@@ -897,11 +894,8 @@ where
     pub async fn explain_analyze(&self, pretty: bool) -> Result<String, OrmadaError> {
         let raw_sql = Relations::build_join_sql(&self.select, self.db);
 
-        let formatted_sql = if pretty {
-            crate::format::format_sql_pretty(&raw_sql)
-        } else {
-            raw_sql.clone()
-        };
+        let formatted_sql =
+            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
 
         let backend = self.db.get_database_backend();
         let explain_sql = match backend {

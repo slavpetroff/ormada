@@ -1803,10 +1803,7 @@ where
     /// | One-to-One | `select_related` |
     /// | One-to-Many | `prefetch_related` |
     /// | Many-to-Many | `prefetch_related` |
-    pub fn select_related<R>(
-        self,
-        _relations: R,
-    ) -> crate::relations::QuerySetJoined<'a, E, C, R> {
+    pub fn select_related<R>(self, _relations: R) -> crate::relations::QuerySetJoined<'a, E, C, R> {
         crate::relations::QuerySetJoined {
             db: self.inner.db,
             select: self.inner.select.clone(),

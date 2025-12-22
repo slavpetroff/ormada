@@ -293,6 +293,9 @@ pub mod types;
 /// Upsert operations (get_or_create, update_or_create)
 pub mod upsert;
 
+/// Migration system for schema management
+pub mod migration;
+
 // =============================================================================
 // Internal Module (Hidden from users)
 // =============================================================================
@@ -359,7 +362,9 @@ pub mod prelude {
 
     // Derive macros
     #[cfg(feature = "derive")]
-    pub use ormada_derive::{atomic, ergorm_projection, ormada_model, OrmadaModel};
+    pub use ormada_derive::{
+        atomic, ergorm_projection, ormada_data_migration, ormada_model, ormada_schema, OrmadaModel,
+    };
 
     // =========================================================================
     // Utilities

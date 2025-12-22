@@ -19,7 +19,7 @@ pub mod models {
     }
 
     pub mod profile {
-        
+
         use ormada::prelude::*;
 
         #[ormada_model(table = "o2o_profiles")]

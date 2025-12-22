@@ -18,7 +18,7 @@ pub mod models {
     }
 
     pub mod book {
-        
+
         use ormada::prelude::*;
 
         #[ormada_model(table = "grp_books")]
