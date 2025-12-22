@@ -1003,22 +1003,15 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
         let backend = self.inner.db.get_database_backend();
         let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
         let raw_sql = stmt.to_string();
-
-        let formatted_sql =
-            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
-
-        let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN {raw_sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN {raw_sql}"),
-            _ => format!("EXPLAIN {raw_sql}"),
-        };
-
+        let explain_sql = crate::format::build_explain_sql(backend, &raw_sql, false);
         let results = self.inner.db.execute_unprepared(&explain_sql).await?;
 
-        Ok(format!(
-            "EXPLAIN output for query:\n{formatted_sql}\n\nRows affected: {}",
-            results.rows_affected()
+        Ok(crate::format::format_explain_output(
+            &raw_sql,
+            pretty,
+            results.rows_affected(),
+            false,
+            None,
         ))
     }
 
@@ -1075,22 +1068,15 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
         let backend = self.inner.db.get_database_backend();
         let stmt = self.apply_soft_delete_filter(self.inner.select.clone()).build(backend);
         let raw_sql = stmt.to_string();
-
-        let formatted_sql =
-            if pretty { crate::format::format_sql_pretty(&raw_sql) } else { raw_sql.clone() };
-
-        let explain_sql = match backend {
-            crate::db::DatabaseBackend::Sqlite => format!("EXPLAIN QUERY PLAN {raw_sql}"),
-            crate::db::DatabaseBackend::Postgres => format!("EXPLAIN ANALYZE {raw_sql}"),
-            crate::db::DatabaseBackend::MySql => format!("EXPLAIN ANALYZE {raw_sql}"),
-            _ => format!("EXPLAIN ANALYZE {raw_sql}"),
-        };
-
+        let explain_sql = crate::format::build_explain_sql(backend, &raw_sql, true);
         let results = self.inner.db.execute_unprepared(&explain_sql).await?;
 
-        Ok(format!(
-            "EXPLAIN ANALYZE output for query:\n{formatted_sql}\n\nRows affected: {}\n\nTo run manually: {explain_sql}",
-            results.rows_affected()
+        Ok(crate::format::format_explain_output(
+            &raw_sql,
+            pretty,
+            results.rows_affected(),
+            true,
+            Some(&explain_sql),
         ))
     }
 }

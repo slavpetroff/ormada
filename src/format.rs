@@ -120,6 +120,47 @@ pub fn format_sql_compact(sql: &str) -> String {
     format_sql(sql, Some(SqlFormatOptions::compact()))
 }
 
+/// Build an EXPLAIN SQL statement for the given backend
+///
+/// Returns the appropriate EXPLAIN command for the database backend.
+#[must_use]
+pub fn build_explain_sql(
+    backend: crate::db::DatabaseBackend,
+    raw_sql: &str,
+    analyze: bool,
+) -> String {
+    match (backend, analyze) {
+        (crate::db::DatabaseBackend::Sqlite, _) => format!("EXPLAIN QUERY PLAN {raw_sql}"),
+        (crate::db::DatabaseBackend::Postgres, false) => format!("EXPLAIN {raw_sql}"),
+        (crate::db::DatabaseBackend::Postgres, true) => format!("EXPLAIN ANALYZE {raw_sql}"),
+        (crate::db::DatabaseBackend::MySql, false) => format!("EXPLAIN {raw_sql}"),
+        (crate::db::DatabaseBackend::MySql, true) => format!("EXPLAIN ANALYZE {raw_sql}"),
+        (_, false) => format!("EXPLAIN {raw_sql}"),
+        (_, true) => format!("EXPLAIN ANALYZE {raw_sql}"),
+    }
+}
+
+/// Format explain output with SQL and results
+#[must_use]
+pub fn format_explain_output(
+    raw_sql: &str,
+    pretty: bool,
+    rows_affected: u64,
+    analyze: bool,
+    explain_sql: Option<&str>,
+) -> String {
+    let formatted_sql = if pretty { format_sql_pretty(raw_sql) } else { raw_sql.to_string() };
+    let prefix = if analyze { "EXPLAIN ANALYZE" } else { "EXPLAIN" };
+
+    if let Some(explain) = explain_sql {
+        format!(
+            "{prefix} output for query:\n{formatted_sql}\n\nRows affected: {rows_affected}\n\nTo run manually: {explain}"
+        )
+    } else {
+        format!("{prefix} output for query:\n{formatted_sql}\n\nRows affected: {rows_affected}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +212,58 @@ mod tests {
         assert!(formatted.contains("LEFT JOIN"));
         assert!(formatted.contains("GROUP BY"));
         assert!(formatted.contains("ORDER BY"));
+    }
+
+    #[test]
+    fn test_build_explain_sql_postgres() {
+        let sql = "SELECT * FROM users";
+
+        let explain = build_explain_sql(crate::db::DatabaseBackend::Postgres, sql, false);
+        assert_eq!(explain, "EXPLAIN SELECT * FROM users");
+
+        let analyze = build_explain_sql(crate::db::DatabaseBackend::Postgres, sql, true);
+        assert_eq!(analyze, "EXPLAIN ANALYZE SELECT * FROM users");
+    }
+
+    #[test]
+    fn test_build_explain_sql_sqlite() {
+        let sql = "SELECT * FROM users";
+
+        let explain = build_explain_sql(crate::db::DatabaseBackend::Sqlite, sql, false);
+        assert_eq!(explain, "EXPLAIN QUERY PLAN SELECT * FROM users");
+
+        let analyze = build_explain_sql(crate::db::DatabaseBackend::Sqlite, sql, true);
+        assert_eq!(analyze, "EXPLAIN QUERY PLAN SELECT * FROM users");
+    }
+
+    #[test]
+    fn test_build_explain_sql_mysql() {
+        let sql = "SELECT * FROM users";
+
+        let explain = build_explain_sql(crate::db::DatabaseBackend::MySql, sql, false);
+        assert_eq!(explain, "EXPLAIN SELECT * FROM users");
+
+        let analyze = build_explain_sql(crate::db::DatabaseBackend::MySql, sql, true);
+        assert_eq!(analyze, "EXPLAIN ANALYZE SELECT * FROM users");
+    }
+
+    #[test]
+    fn test_format_explain_output_basic() {
+        let output = format_explain_output("SELECT * FROM users", true, 10, false, None);
+
+        assert!(output.contains("EXPLAIN output for query"));
+        assert!(output.contains("Rows affected: 10"));
+    }
+
+    #[test]
+    fn test_format_explain_output_analyze() {
+        let explain_sql = "EXPLAIN ANALYZE SELECT * FROM users";
+        let output =
+            format_explain_output("SELECT * FROM users", false, 5, true, Some(explain_sql));
+
+        assert!(output.contains("EXPLAIN ANALYZE output for query"));
+        assert!(output.contains("Rows affected: 5"));
+        assert!(output.contains("To run manually:"));
+        assert!(output.contains(explain_sql));
     }
 }

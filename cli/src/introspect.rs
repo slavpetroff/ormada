@@ -1,5 +1,7 @@
 //! Database introspection for comparing against models
 
+#![allow(dead_code)] // Trait kept for future introspection commands
+
 use anyhow::Result;
 use ormada_schema::TableSchema;
 

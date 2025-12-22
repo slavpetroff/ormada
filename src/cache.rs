@@ -4,9 +4,8 @@
 //! similar to Ormada's transaction-level query caching. Cache is automatically
 //! cleared when the scope ends, preventing stale data.
 
+use rustc_hash::FxHashMap;
 use sea_orm::{DatabaseConnection, DbErr};
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, RwLock};
 
@@ -46,7 +45,7 @@ use std::sync::{Arc, RwLock};
 /// - **No race conditions:** Scoped to single connection wrapper
 pub struct CachedConnection {
     inner: DatabaseConnection,
-    cache: Arc<RwLock<HashMap<u64, Arc<Vec<u8>>>>>,
+    cache: Arc<RwLock<FxHashMap<u64, Arc<Vec<u8>>>>>,
 }
 
 impl CachedConnection {
@@ -54,7 +53,7 @@ impl CachedConnection {
     pub fn new(db: DatabaseConnection) -> Self {
         Self {
             inner: db,
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(RwLock::new(FxHashMap::default())),
         }
     }
 
@@ -121,7 +120,8 @@ impl CachedConnection {
     }
 
     fn hash_query(query: &str) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        use rustc_hash::FxHasher;
+        let mut hasher = FxHasher::default();
         query.hash(&mut hasher);
         hasher.finish()
     }

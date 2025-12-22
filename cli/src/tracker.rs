@@ -6,6 +6,8 @@
 //! - Checksum (to detect tampering)
 //! - Applied timestamp
 
+#![allow(dead_code)] // Many helpers are kept for future CLI commands
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
