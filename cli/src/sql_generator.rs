@@ -4,7 +4,7 @@ use ormada_schema::{
     ColumnChanges, ColumnSchema, ColumnType, ForeignKeySchema, IndexSchema, OnDeleteAction,
     SchemaOperation, TableSchema,
 };
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Generate SQL for a list of schema operations
 /// Orders CREATE TABLE operations by foreign key dependencies
@@ -35,8 +35,8 @@ fn order_operations_by_dependencies(operations: &[SchemaOperation]) -> Vec<&Sche
     }
 
     // Build dependency graph for CREATE TABLE operations
-    let table_names: HashSet<String> = create_tables.iter().map(|t| t.name.clone()).collect();
-    let mut dependencies: HashMap<String, Vec<String>> = HashMap::new();
+    let table_names: FxHashSet<String> = create_tables.iter().map(|t| t.name.clone()).collect();
+    let mut dependencies: FxHashMap<String, Vec<String>> = FxHashMap::default();
 
     for table in &create_tables {
         let deps: Vec<String> = table
@@ -49,7 +49,7 @@ fn order_operations_by_dependencies(operations: &[SchemaOperation]) -> Vec<&Sche
     }
 
     // Topological sort using Kahn's algorithm
-    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut in_degree: FxHashMap<String, usize> = FxHashMap::default();
     for table in &create_tables {
         in_degree.entry(table.name.clone()).or_insert(0);
     }
@@ -74,7 +74,7 @@ fn order_operations_by_dependencies(operations: &[SchemaOperation]) -> Vec<&Sche
         .collect();
 
     let mut ordered_names: Vec<String> = Vec::new();
-    let mut processed: HashSet<String> = HashSet::new();
+    let mut processed: FxHashSet<String> = FxHashSet::default();
 
     while let Some(name) = queue.pop() {
         if processed.contains(&name) {

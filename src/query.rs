@@ -1139,7 +1139,7 @@ where
         {
             let cache = self.inner.cache.read().await;
             if let Some(ref results) = *cache {
-                return Ok((**results).clone());
+                return Ok(Vec::clone(results));
             }
         }
 
@@ -1148,15 +1148,12 @@ where
 
         // Cache miss - execute query and cache results
         let results = query.all(self.inner.db).await?;
-        let results_arc = Arc::new(results);
 
-        // Update cache (exclusive write lock)
-        {
-            let mut cache = self.inner.cache.write().await;
-            *cache = Some(Arc::clone(&results_arc));
-        }
+        // Update cache (exclusive write lock) and return without extra clone
+        let mut cache = self.inner.cache.write().await;
+        *cache = Some(Arc::new(results.clone()));
 
-        Ok((*results_arc).clone())
+        Ok(results)
     }
 
     /// Execute query and return first result (Ormada's .`first()`)
@@ -1999,33 +1996,37 @@ where
     {
         use sea_orm::{
             ColumnTrait, Condition, Iterable, ModelTrait, PrimaryKeyToColumn, QueryFilter,
+            QuerySelect, QueryTrait,
         };
 
-        // First, fetch just the primary keys of records to delete
-        let models = self.inner.select.clone().all(self.inner.db).await?;
-
-        if models.is_empty() {
-            return Ok(0);
-        }
-
-        let count = models.len() as u64;
-
-        // Extract primary key values for bulk delete
-        // For entities with single-column primary keys, use IN clause
         let pk_columns: Vec<_> = E::PrimaryKey::iter().collect();
 
         if pk_columns.len() == 1 {
-            // Single primary key - use optimized IN clause
+            // Single primary key - use subquery for efficient deletion
+            // DELETE FROM table WHERE pk IN (SELECT pk FROM table WHERE ...)
             let pk_col = pk_columns[0].into_column();
-            let pk_values: Vec<_> = models.iter().map(|m| m.get(pk_col)).collect();
 
-            // Bulk delete with WHERE pk IN (...)
-            E::delete_many()
-                .filter(ColumnTrait::is_in(&pk_col, pk_values))
+            // Build subquery that selects only the PK column
+            let subquery = self.inner.select.clone().select_only().column(pk_col).into_query();
+
+            // Delete using IN subquery - no need to fetch all models into memory
+            let result = E::delete_many()
+                .filter(ColumnTrait::in_subquery(&pk_col, subquery))
                 .exec(self.inner.db)
                 .await?;
+
+            Ok(result.rows_affected)
         } else {
-            // Composite primary key - build OR conditions
+            // Composite primary key - need to fetch models to build OR conditions
+            let models = self.inner.select.clone().all(self.inner.db).await?;
+
+            if models.is_empty() {
+                return Ok(0);
+            }
+
+            let count = models.len() as u64;
+
+            // Build OR conditions for composite PKs
             let mut condition = Condition::any();
             for model in models {
                 let mut row_condition = Condition::all();
@@ -2038,9 +2039,9 @@ where
             }
 
             E::delete_many().filter(condition).exec(self.inner.db).await?;
-        }
 
-        Ok(count)
+            Ok(count)
+        }
     }
 
     /// Get existing record or create it (Ormada's .`get_or_create()`)

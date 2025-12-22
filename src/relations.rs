@@ -278,9 +278,12 @@ where
         models: &[<Parent as EntityTrait>::Model],
         db: &C,
     ) -> Result<Self::Output, OrmadaError> {
-        let r1 = <Parent as HasRelation<R1>>::load_related(models, db).await?;
-        let r2 = <Parent as HasRelation<R2>>::load_related(models, db).await?;
-        Ok((r1, r2))
+        // Load relations in parallel for better performance
+        let (r1, r2) = futures::join!(
+            <Parent as HasRelation<R1>>::load_related(models, db),
+            <Parent as HasRelation<R2>>::load_related(models, db)
+        );
+        Ok((r1?, r2?))
     }
 
     fn populate(

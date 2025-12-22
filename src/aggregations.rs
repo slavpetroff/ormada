@@ -57,8 +57,8 @@
 
 use crate::error::OrmadaError;
 use crate::query::QuerySet;
+use rustc_hash::FxHashMap;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QuerySelect};
-use std::collections::HashMap;
 
 // ============================================================================
 // AggregateValue Enum - Type-safe aggregation results
@@ -428,13 +428,13 @@ pub struct AggregateResult {
     /// Count of records
     pub count: u64,
     /// Sum values by column name
-    pub sums: HashMap<String, f64>,
+    pub sums: FxHashMap<String, f64>,
     /// Average values by column name
-    pub averages: HashMap<String, f64>,
+    pub averages: FxHashMap<String, f64>,
     /// Maximum values by column name
-    pub maxes: HashMap<String, f64>,
+    pub maxes: FxHashMap<String, f64>,
     /// Minimum values by column name
-    pub mins: HashMap<String, f64>,
+    pub mins: FxHashMap<String, f64>,
 }
 
 #[cfg(test)]
@@ -467,16 +467,16 @@ mod tests {
 
     #[test]
     fn test_aggregate_result_construction() {
-        let mut sums = HashMap::new();
+        let mut sums = FxHashMap::default();
         sums.insert("price".to_string(), 100.0);
 
-        let mut averages = HashMap::new();
+        let mut averages = FxHashMap::default();
         averages.insert("price".to_string(), 50.0);
 
-        let mut maxes = HashMap::new();
+        let mut maxes = FxHashMap::default();
         maxes.insert("price".to_string(), 75.0);
 
-        let mut mins = HashMap::new();
+        let mut mins = FxHashMap::default();
         mins.insert("price".to_string(), 25.0);
 
         let result = AggregateResult { count: 10, sums, averages, maxes, mins };
@@ -492,10 +492,10 @@ mod tests {
     fn test_aggregate_result_empty_maps() {
         let result = AggregateResult {
             count: 0,
-            sums: HashMap::new(),
-            averages: HashMap::new(),
-            maxes: HashMap::new(),
-            mins: HashMap::new(),
+            sums: FxHashMap::default(),
+            averages: FxHashMap::default(),
+            maxes: FxHashMap::default(),
+            mins: FxHashMap::default(),
         };
 
         assert_eq!(result.count, 0);
