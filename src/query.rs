@@ -15,10 +15,10 @@ use crate::models::{
     ModelTrait, QueryFilter, QueryOrder, Select,
 };
 use crate::upsert::UpsertBuilder;
-use sea_orm::sea_query::{BinOper, ColumnRef, Expr, Func, SimpleExpr};
-use std::sync::Arc;
-use smallvec::SmallVec;
 use parking_lot::RwLock;
+use sea_orm::sea_query::{BinOper, ColumnRef, Expr, Func, SimpleExpr};
+use smallvec::SmallVec;
+use std::sync::Arc;
 
 // ============================================================================
 // QueryOperations - Lazy Query Building (stores operations, builds Select on demand)
@@ -46,7 +46,7 @@ pub(crate) struct StoredAnnotation {
 }
 
 /// Operations storage for lazy Select building
-/// 
+///
 /// Instead of building Select<E> incrementally (which requires cloning),
 /// we store operations and build the final Select only at execution time.
 #[derive(Clone)]
@@ -61,7 +61,7 @@ pub(crate) struct QueryOperations {
     pub(crate) annotations: SmallVec<[StoredAnnotation; 2]>,
     /// LIMIT clause
     pub(crate) limit: Option<u64>,
-    /// OFFSET clause  
+    /// OFFSET clause
     pub(crate) offset: Option<u64>,
     /// DISTINCT flag
     pub(crate) distinct: bool,
@@ -92,12 +92,12 @@ impl QueryOperations {
     pub(crate) fn new() -> Self {
         Self::default()
     }
-    
+
     /// Add a filter condition
     pub(crate) fn add_filter(&mut self, condition: Condition, is_exclude: bool) {
         self.filters.push(StoredFilter { condition, is_exclude });
     }
-    
+
     /// Add an order by clause
     pub(crate) fn add_order_by(&mut self, column: impl ColumnTrait, direction: Order) {
         self.order_by.push(StoredOrderBy {
@@ -105,33 +105,34 @@ impl QueryOperations {
             direction,
         });
     }
-    
+
     /// Build Select<E> from stored operations (called at execution time)
-    /// 
+    ///
     /// Uses fold pattern for clean, functional query construction.
     pub(crate) fn build_select<E>(&self) -> Select<E>
     where
         E: EntityTrait + crate::traits::OrmadaEntity,
     {
         use sea_orm::QuerySelect;
-        
+
         let select = self.filters.iter().fold(E::find(), |sel, filter| {
             let cond = filter.condition.clone();
             sel.filter(if filter.is_exclude { cond.not() } else { cond })
         });
-        
-        let select = self.group_by.iter().fold(select, |sel, col| {
-            sel.group_by(SimpleExpr::Column(col.clone()))
-        });
-        
+
+        let select = self
+            .group_by
+            .iter()
+            .fold(select, |sel, col| sel.group_by(SimpleExpr::Column(col.clone())));
+
         let select = self.annotations.iter().fold(select, |sel, ann| {
             sel.expr_as(ann.aggregation.clone().into_expr(), ann.alias.as_str())
         });
-        
+
         let select = self.order_by.iter().fold(select, |sel, ord| {
             sel.order_by(SimpleExpr::Column(ord.column.clone()), ord.direction.clone())
         });
-        
+
         let select = match self.limit {
             Some(l) => select.limit(l),
             None => select,
@@ -141,10 +142,10 @@ impl QueryOperations {
             None => select,
         };
         let select = if self.distinct { select.distinct() } else { select };
-        
+
         self.apply_soft_delete_filter::<E>(select)
     }
-    
+
     /// Apply soft delete filter based on mode
     pub(crate) fn apply_soft_delete_filter<E>(&self, select: Select<E>) -> Select<E>
     where
@@ -152,17 +153,17 @@ impl QueryOperations {
     {
         use crate::traits::SoftDeleteConfig;
         use sea_orm::sea_query::Alias;
-        
+
         let SoftDeleteConfig::Enabled { column } = E::soft_delete() else {
             return select;
         };
-        
+
         let bin_op = match self.soft_delete_mode {
             SoftDeleteMode::ExcludeDeleted => BinOper::Is,
             SoftDeleteMode::OnlyDeleted => BinOper::IsNot,
             SoftDeleteMode::IncludeDeleted => return select,
         };
-        
+
         let condition = SimpleExpr::Binary(
             Box::new(Expr::col(Alias::new(column))),
             bin_op,
@@ -170,21 +171,25 @@ impl QueryOperations {
         );
         select.filter(condition)
     }
-    
+
     /// Generate `QueryPlan` from stored operations (for introspection)
     pub(crate) fn to_query_plan(&self) -> QueryPlan {
         let filter_ops = self.filters.iter().map(|f| {
             let expr = FilterExpr::raw(f.condition.clone());
-            if f.is_exclude { QueryOp::Exclude(expr) } else { QueryOp::Filter(expr) }
+            if f.is_exclude {
+                QueryOp::Exclude(expr)
+            } else {
+                QueryOp::Filter(expr)
+            }
         });
-        
+
         let group_ops = self.group_by.iter().map(|c| QueryOp::GroupBy(c.clone()));
-        
+
         let annotation_ops = self.annotations.iter().map(|a| QueryOp::Annotate {
             alias: a.alias.clone(),
             aggregation: a.aggregation.clone(),
         });
-        
+
         let order_ops = self.order_by.iter().map(|o| QueryOp::OrderBy {
             column: o.column.clone(),
             direction: match o.direction {
@@ -192,13 +197,13 @@ impl QueryOperations {
                 _ => OrderDirection::Asc,
             },
         });
-        
+
         let limit_op = self.limit.map(QueryOp::Limit);
         let offset_op = self.offset.map(QueryOp::Offset);
         let distinct_op = self.distinct.then_some(QueryOp::Distinct);
         let soft_delete_op = (self.soft_delete_mode != SoftDeleteMode::ExcludeDeleted)
             .then_some(QueryOp::SoftDelete(self.soft_delete_mode));
-        
+
         let ops: SmallVec<[QueryOp; 8]> = filter_ops
             .chain(group_ops)
             .chain(annotation_ops)
@@ -208,7 +213,7 @@ impl QueryOperations {
             .chain(distinct_op)
             .chain(soft_delete_op)
             .collect();
-        
+
         QueryPlan { operations: ops }
     }
 }
@@ -762,7 +767,7 @@ impl QueryPlan {
 }
 
 /// Internal state for `QuerySet` (shared via Arc)
-/// 
+///
 /// Uses lazy query building via `QueryOperations` - Select<E> is only built at execution time.
 /// This eliminates cloning of Select<E> on every query building operation.
 pub(crate) struct QuerySetInner<'a, E: EntityTrait, C: ConnectionTrait> {
@@ -802,13 +807,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySet<'a, E, C, Fresh> {
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C, S> {
     /// Create a new `QuerySet` with modified operations, transitioning to new state
-    /// 
+    ///
     /// This is the core method for lazy query building - no Select<E> cloning happens here.
     /// Cache is reset since operations changed.
-    fn with_ops_to<NewS: QuerySetState>(
-        &self,
-        ops: QueryOperations,
-    ) -> QuerySet<'a, E, C, NewS> {
+    fn with_ops_to<NewS: QuerySetState>(&self, ops: QueryOperations) -> QuerySet<'a, E, C, NewS> {
         QuerySet {
             inner: Arc::new(QuerySetInner {
                 db: self.inner.db,
@@ -840,9 +842,9 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C
         ops.soft_delete_mode = mode;
         self.with_ops(ops)
     }
-    
+
     /// Build Select<E> from stored operations (called at execution time)
-    /// 
+    ///
     /// This is the lazy evaluation point - Select is only built when actually needed.
     pub(crate) fn build_select(&self) -> Select<E>
     where
@@ -1285,10 +1287,10 @@ where
 
         // Cache miss: build and execute query
         let results = self.build_select().all(self.inner.db).await?;
-        
+
         // Store in cache for subsequent calls
         *self.inner.cache.write() = Some(Arc::new(results.clone()));
-        
+
         Ok(results)
     }
 
@@ -1343,10 +1345,7 @@ where
     {
         // Use cache if available
         if let Some(cached) = self.inner.cache.read().as_ref() {
-            return cached
-                .first()
-                .cloned()
-                .ok_or_else(|| OrmadaError::empty_result_set("first"));
+            return cached.first().cloned().ok_or_else(|| OrmadaError::empty_result_set("first"));
         }
 
         // No cache - execute single record query (don't populate cache for efficiency)
@@ -1395,10 +1394,7 @@ where
     {
         // Use cache if available
         if let Some(cached) = self.inner.cache.read().as_ref() {
-            return cached
-                .last()
-                .cloned()
-                .ok_or_else(|| OrmadaError::empty_result_set("last"));
+            return cached.last().cloned().ok_or_else(|| OrmadaError::empty_result_set("last"));
         }
 
         use sea_orm::{Iterable, PrimaryKeyToColumn};
@@ -1453,7 +1449,7 @@ where
 
         // For get(), we use find_by_id directly but apply soft delete from ops
         let mut query = E::find_by_id(id);
-        
+
         // Apply soft delete filter manually (since we're not using build_select)
         query = self.inner.ops.apply_soft_delete_filter::<E>(query);
 
@@ -3016,10 +3012,7 @@ where
         let mut ops = self.inner.ops.clone();
 
         for (alias, aggregation) in annotations {
-            ops.annotations.push(StoredAnnotation {
-                alias: alias.to_string(),
-                aggregation,
-            });
+            ops.annotations.push(StoredAnnotation { alias: alias.to_string(), aggregation });
         }
 
         ops.query_state.aggregate();
