@@ -2,6 +2,10 @@
 //!
 //! **Note**: Lifecycle hooks are NOT called for bulk operations for performance.
 
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::similar_names)]
+
 use ormada::prelude::*;
 
 mod author {
@@ -40,13 +44,13 @@ pub async fn setup_db() -> Result<DatabaseRouter, OrmadaError> {
     Ok(router)
 }
 
-/// bulk_create - insert many records in a single query
+/// `bulk_create` - insert many records in a single query
 /// **Note**: Does NOT trigger lifecycle hooks
 pub async fn example_bulk_create(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     let authors: Vec<Author> = (0..100)
         .map(|i| Author {
-            name: format!("Author {}", i),
-            email: format!("author{}@example.com", i),
+            name: format!("Author {i}"),
+            email: format!("author{i}@example.com"),
             ..Default::default()
         })
         .collect();
@@ -60,7 +64,7 @@ pub async fn example_bulk_create(db: &DatabaseRouter) -> Result<(), OrmadaError>
     Ok(())
 }
 
-/// upsert_many - INSERT ... ON CONFLICT DO UPDATE
+/// `upsert_many` - INSERT ... ON CONFLICT DO UPDATE
 /// **Note**: Does NOT trigger lifecycle hooks
 /// **Note**: Requires UNIQUE constraint on conflict column (isbn in this case)
 pub async fn example_bulk_upsert(db: &DatabaseRouter) -> Result<(), OrmadaError> {

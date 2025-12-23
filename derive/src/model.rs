@@ -727,7 +727,7 @@ fn to_snake_case(s: &str) -> String {
     s.to_snake_case()
 }
 
-/// Strip ormada-specific attributes from a field, keeping only SeaORM/serde ones
+/// Strip ormada-specific attributes from a field, keeping only `SeaORM/serde` ones
 fn strip_django_attributes(field: &mut syn::Field, config: &FieldConfig) {
     // Make field public
     field.vis = syn::Visibility::Public(syn::token::Pub::default());
@@ -949,7 +949,7 @@ fn generate_many_to_many_helpers(
             // Column names for the through table (PascalCase)
             // The through table has article_id and tag_id columns
             // We need ArticleId (for self) and TagId (for related)
-            let self_column_name = format_ident!("{}Id", to_pascal_case(&through_module.trim_end_matches("_tag").trim_end_matches("_article")));
+            let self_column_name = format_ident!("{}Id", to_pascal_case(through_module.trim_end_matches("_tag").trim_end_matches("_article")));
             let related_column_name = format_ident!("{}Id", to_pascal_case(&related_module));
 
             // Field names for accessing the through record (snake_case)
@@ -1776,7 +1776,7 @@ fn generate_model_with_relations_struct(
         // This ensures Deref<Target = Model> is always available
         return quote! {
             /// Model with loaded relations (wrapper for Model when no relations exist)
-            #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+            #[derive(Debug, Clone, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
             #[serde(transparent)]
             pub struct ModelWithRelations(pub Model);
 
@@ -1869,7 +1869,7 @@ fn generate_model_with_relations_struct(
         /// The base `Model` type (returned by `create()`, `update()`, queries without prefetch)
         /// does NOT have relation fields, providing compile-time safety against accessing
         /// unloaded relations.
-        #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
         pub struct ModelWithRelations {
             /// The base model with all database fields
             #[serde(flatten)]

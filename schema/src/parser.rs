@@ -83,7 +83,7 @@ pub fn discover_models(
         for entry in WalkDir::new(&search_path)
             .into_iter()
             .filter_map(Result::ok)
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
         {
             let path = entry.path();
 

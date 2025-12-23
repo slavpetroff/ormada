@@ -3,10 +3,10 @@
 //! Demonstrates M:N relationships using the `#[many_to_many]` decorator
 //! with a through table (join model).
 //!
-//! ## Pattern: Article <-> ArticleTag <-> Tag
+//! ## Pattern: Article <-> `ArticleTag` <-> Tag
 //!
-//! - Article has many Tags through ArticleTag
-//! - Tag has many Articles through ArticleTag
+//! - Article has many Tags through `ArticleTag`
+//! - Tag has many Articles through `ArticleTag`
 //!
 //! ## Key Decorators:
 //!
@@ -50,7 +50,7 @@ pub mod models {
 
         use ormada::prelude::*;
 
-        /// Article model with M:N relationship to Tag through ArticleTag.
+        /// Article model with M:N relationship to Tag through `ArticleTag`.
         /// The `#[many_to_many]` decorator generates `get_tags()` helper method.
         #[ormada_model(table = "m2m_articles")]
         pub struct Article {
@@ -207,7 +207,7 @@ pub async fn example_query_tags_for_article(db: &DatabaseRouter) -> Result<(), O
     Ok(())
 }
 
-/// Load join table with related Article using prefetch_related
+/// Load join table with related Article using `prefetch_related`
 pub async fn example_prefetch_article_from_join(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     let (tags, articles) = seed_data(db).await?;
 
@@ -240,7 +240,7 @@ pub async fn example_prefetch_article_from_join(db: &DatabaseRouter) -> Result<(
     Ok(())
 }
 
-/// Load join table with related Tag using prefetch_related
+/// Load join table with related Tag using `prefetch_related`
 pub async fn example_prefetch_tag_from_join(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     let (tags, articles) = seed_data(db).await?;
 

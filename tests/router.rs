@@ -3,6 +3,11 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::assertions_on_constants)]
 
 //! Database router integration tests
 
@@ -180,14 +185,14 @@ async fn test_consistency_context_clone() {
     ctx.mark_write();
 
     // Clone should share the same underlying state
-    let cloned = ctx.clone();
+    let cloned = ctx;
     assert!(cloned.has_write_occurred());
 }
 
 #[tokio::test]
 async fn test_consistency_context_debug() {
     let ctx = ConsistencyContext::new();
-    let debug_str = format!("{:?}", ctx);
+    let debug_str = format!("{ctx:?}");
     assert!(debug_str.contains("ConsistencyContext"));
 }
 
@@ -270,14 +275,14 @@ async fn test_router_transaction_with_config() {
 #[tokio::test]
 async fn test_routing_strategy_variants(#[case] strategy: RoutingStrategy) {
     // Verify all routing strategies can be constructed and debugged
-    let debug_str = format!("{:?}", strategy);
+    let debug_str = format!("{strategy:?}");
     assert!(!debug_str.is_empty());
 }
 
 #[tokio::test]
 async fn test_routing_strategy_clone_and_eq() {
     let s1 = RoutingStrategy::Primary;
-    let s2 = s1.clone();
+    let s2 = s1;
     assert_eq!(s1, s2);
 
     let s3 = RoutingStrategy::RoundRobin;

@@ -63,7 +63,7 @@ pub async fn example_project_to_dto(db: &DatabaseRouter) -> Result<(), OrmadaErr
     Ok(())
 }
 
-/// Comparison: project<T>() vs values()
+/// Comparison: project<T>() vs `values()`
 pub async fn example_project_vs_values(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_books(db).await?;
 
@@ -78,12 +78,12 @@ pub async fn example_project_vs_values(db: &DatabaseRouter) -> Result<(), Ormada
     let json_price = values[0]["price"].as_i64().unwrap();
 
     assert_eq!(typed_title, json_title);
-    assert_eq!(typed_price as i64, json_price);
+    assert_eq!(i64::from(typed_price), json_price);
 
     Ok(())
 }
 
-/// project_columns<T>() - Optimized projection with explicit column selection
+/// `project_columns`<T>() - Optimized projection with explicit column selection
 ///
 /// Only selects the specified columns, reducing database load for large tables.
 pub async fn example_project_columns_optimized(db: &DatabaseRouter) -> Result<(), OrmadaError> {

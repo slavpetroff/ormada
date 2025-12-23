@@ -1,4 +1,4 @@
-//! Query Debugging Example - debug_sql, explain, explain_analyze
+//! Query Debugging Example - `debug_sql`, explain, `explain_analyze`
 //!
 //! These tools help you understand and optimize your queries:
 //! - `debug_sql()` - See the exact SQL that will be executed
@@ -24,12 +24,13 @@ pub async fn setup_db() -> Result<DatabaseRouter, OrmadaError> {
     Ok(router)
 }
 
+#[allow(clippy::cast_sign_loss)]
 async fn seed_books(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     let categories = ["Fiction", "Non-Fiction", "Technical", "Biography"];
-    for i in 0..100 {
+    for i in 0..100_i32 {
         Book::objects(db)
             .create(Book {
-                title: format!("Book {}", i),
+                title: format!("Book {i}"),
                 price: 1000 + (i % 50) * 100,
                 category: categories[i as usize % 4].into(),
                 published: i % 3 != 0,
@@ -40,10 +41,10 @@ async fn seed_books(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     Ok(())
 }
 
-/// debug_sql() - Inspect generated SQL before execution
+/// `debug_sql()` - Inspect generated SQL before execution
 ///
 /// Use this to verify your query logic and debug issues.
-pub async fn example_debug_sql(db: &DatabaseRouter) -> Result<(), OrmadaError> {
+pub fn example_debug_sql(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     // Complex query with multiple conditions (pretty-printed)
     let sql = Book::objects(db)
         .filter(Book::Published.eq(true))
@@ -65,7 +66,7 @@ pub async fn example_debug_sql(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     Ok(())
 }
 
-/// explain() - Get query plan without executing
+/// `explain()` - Get query plan without executing
 ///
 /// Use this to identify potential performance issues like:
 /// - Sequential scans (missing indexes)
@@ -92,7 +93,7 @@ pub async fn example_explain(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     Ok(())
 }
 
-/// explain_analyze() - Get actual execution statistics
+/// `explain_analyze()` - Get actual execution statistics
 ///
 /// WARNING: This actually runs the query!
 /// Use for performance tuning to see real execution times.
@@ -125,7 +126,7 @@ mod tests {
     #[tokio::test]
     async fn test_debug_sql() {
         let db = setup_db().await.unwrap();
-        example_debug_sql(&db).await.unwrap();
+        example_debug_sql(&db).unwrap();
     }
 
     #[tokio::test]

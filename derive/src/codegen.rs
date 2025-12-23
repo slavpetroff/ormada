@@ -1,6 +1,6 @@
 //! Code generation utilities for the ormada_model macro
 //!
-//! This module contains helpers that generate SeaORM-compatible code
+//! This module contains helpers that generate `SeaORM`-compatible code
 //! using paths through `::ormada::__internal::` instead of `::sea_orm::`.
 
 use proc_macro2::TokenStream;

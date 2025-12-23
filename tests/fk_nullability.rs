@@ -4,6 +4,12 @@
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
 #![allow(clippy::indexing_slicing)]
+#![allow(clippy::ref_option)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::used_underscore_binding)]
+#![allow(clippy::no_effect_underscore_binding)]
+#![allow(clippy::items_after_statements)]
 
 //! FK Nullability Tests
 //!

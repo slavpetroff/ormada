@@ -53,13 +53,7 @@ fn order_operations_by_dependencies(operations: &[SchemaOperation]) -> Vec<&Sche
     for table in &create_tables {
         in_degree.entry(table.name.clone()).or_insert(0);
     }
-    for deps in dependencies.values() {
-        for dep in deps {
-            // The table that has the dependency needs to come after its dependency
-            // So we don't increment in_degree for the dependency
-        }
-    }
-    // Actually, we need to count how many tables depend on each table
+    // We need to count how many tables depend on each table
     for (table_name, deps) in &dependencies {
         for _dep in deps {
             *in_degree.entry(table_name.clone()).or_insert(0) += 1;
@@ -69,7 +63,7 @@ fn order_operations_by_dependencies(operations: &[SchemaOperation]) -> Vec<&Sche
     // Tables with no dependencies (in_degree == 0) come first
     let mut queue: Vec<String> = create_tables
         .iter()
-        .filter(|t| dependencies.get(&t.name).map_or(true, |d| d.is_empty()))
+        .filter(|t| dependencies.get(&t.name).is_none_or(|d| d.is_empty()))
         .map(|t| t.name.clone())
         .collect();
 

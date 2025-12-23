@@ -3,6 +3,10 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::indexing_slicing)]
 
 //! Lifecycle hooks integration tests
 //!

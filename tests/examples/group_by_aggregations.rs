@@ -95,7 +95,7 @@ async fn seed_data(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     Ok(())
 }
 
-/// Group by author_id with multiple aggregations
+/// Group by `author_id` with multiple aggregations
 pub async fn example_group_by_author(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_data(db).await?;
 

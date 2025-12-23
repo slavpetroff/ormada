@@ -3,6 +3,12 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::used_underscore_binding)]
 
 //! Upsert operations integration tests
 

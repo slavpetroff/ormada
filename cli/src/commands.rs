@@ -190,7 +190,7 @@ pub async fn migrate_status() -> Result<()> {
     let mut migrations: Vec<_> = std::fs::read_dir(&migrations_path)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "rs") && e.file_name() != "mod.rs"
+            e.path().extension().is_some_and(|ext| ext == "rs") && e.file_name() != "mod.rs"
         })
         .collect();
 
@@ -298,7 +298,7 @@ pub async fn migrate_run(_migration: Option<&str>, dry_run: bool) -> Result<()> 
     let mut migration_files: Vec<_> = std::fs::read_dir(&migrations_path)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "rs") && e.file_name() != "mod.rs"
+            e.path().extension().is_some_and(|ext| ext == "rs") && e.file_name() != "mod.rs"
         })
         .collect();
 
@@ -448,7 +448,7 @@ pub async fn migrate_sql(output: Option<&str>) -> Result<()> {
     let mut migration_files: Vec<_> = std::fs::read_dir(&migrations_path)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "rs") && e.file_name() != "mod.rs"
+            e.path().extension().is_some_and(|ext| ext == "rs") && e.file_name() != "mod.rs"
         })
         .collect();
 
@@ -542,7 +542,7 @@ fn load_existing_schema(migrations_path: &Path) -> Result<Vec<ormada_schema::Tab
     let mut migration_files: Vec<_> = std::fs::read_dir(migrations_path)?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().map_or(false, |ext| ext == "rs") && e.file_name() != "mod.rs"
+            e.path().extension().is_some_and(|ext| ext == "rs") && e.file_name() != "mod.rs"
         })
         .collect();
 

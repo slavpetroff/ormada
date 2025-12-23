@@ -84,7 +84,7 @@ pub fn generate_diff(current: &[TableSchema], target: &[TableSchema]) -> Vec<Sch
     }
 
     // 2. Find dropped tables (in current but not in target)
-    for (name, _) in &current_tables {
+    for name in current_tables.keys() {
         if !target_tables.contains_key(name) {
             operations.push(SchemaOperation::DropTable((*name).to_string()));
         }
@@ -160,7 +160,7 @@ fn diff_table(current: &TableSchema, target: &TableSchema) -> Vec<SchemaOperatio
     }
 
     // Dropped columns (in current but not in target, and not renamed)
-    for (name, _) in &current_cols {
+    for name in current_cols.keys() {
         if !target_cols.contains_key(name) && !renamed_from.contains_key(name) {
             // Check if any target column has dropped = true for this name
             let explicitly_dropped = target_cols.values().any(|c| c.dropped && c.name == *name);
@@ -262,7 +262,7 @@ fn diff_indexes(
     }
 
     // Dropped indexes
-    for (name, _) in &current_by_name {
+    for name in current_by_name.keys() {
         if !target_by_name.contains_key(name) {
             ops.push(SchemaOperation::DropIndex {
                 table: table.to_string(),

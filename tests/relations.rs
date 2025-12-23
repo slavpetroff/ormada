@@ -4,6 +4,11 @@
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
 #![allow(clippy::indexing_slicing)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::used_underscore_binding)]
 
 //! Relations integration tests - `prefetch_related` and N+1 prevention
 

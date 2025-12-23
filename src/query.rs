@@ -1,4 +1,10 @@
-//! QuerySet API for Django-like query building on SeaORM.
+//! QuerySet API for Django-like query building on `SeaORM`.
+#![allow(clippy::type_repetition_in_bounds)]
+#![allow(clippy::significant_drop_tightening)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::indexing_slicing)]
 
 use crate::db::{ConnectionTrait, DbErr, TransactionTrait};
 use crate::error::OrmadaError;
@@ -45,7 +51,7 @@ fn is_unique_violation(err: &DbErr) -> bool {
 
 /// Extension trait for Ormada-specific column operations
 ///
-/// This trait adds Django-like aliases to SeaORM's `ColumnTrait`.
+/// This trait adds Django-like aliases to `SeaORM's` `ColumnTrait`.
 /// For standard operations like `.eq()`, `.gt()`, etc., use `ColumnTrait` directly.
 ///
 /// **Note:** `ColumnTrait` is re-exported in our prelude and provides all standard
@@ -53,7 +59,7 @@ fn is_unique_violation(err: &DbErr) -> bool {
 /// `.contains()`, `.starts_with()`, `.ends_with()`, `.is_null()`, `.is_not_null()`,
 /// `.is_in()`, etc.
 ///
-/// This trait only adds Ormada-specific aliases not present in SeaORM.
+/// This trait only adds Ormada-specific aliases not present in `SeaORM`.
 pub trait ColumnExt: ColumnTrait {
     /// Alias for `is_in` - Ormada's `field__in=[...]` syntax
     ///
@@ -139,10 +145,10 @@ pub enum SoftDeleteMode {
 // QuerySet Typestate Markers - Zero-sized types for compile-time state tracking
 // ============================================================================
 
-/// Marker trait for all valid QuerySet states
-pub trait QuerySetState: Clone + Copy + Default + std::fmt::Debug {}
+/// Marker trait for all valid `QuerySet` states
+pub trait QuerySetState: Clone + Copy + Default + std::fmt::Debug + Send + Sync {}
 
-/// Fresh state - initial QuerySet, no operations applied
+/// Fresh state - initial `QuerySet`, no operations applied
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Fresh;
 impl QuerySetState for Fresh {}
@@ -210,7 +216,7 @@ impl CanExecute for Paginated {}
 impl CanExecute for Grouped {}
 impl CanExecute for Aggregated {}
 
-/// Marker trait for states that can add explain/explain_analyze
+/// Marker trait for states that can add `explain/explain_analyze`
 pub trait CanExplain: QuerySetState {}
 impl CanExplain for Fresh {}
 impl CanExplain for Filtered {}
@@ -389,12 +395,12 @@ pub enum QueryOp {
 
 impl QueryOp {
     /// Create a filter operation
-    pub fn filter(expr: FilterExpr) -> Self {
+    pub const fn filter(expr: FilterExpr) -> Self {
         Self::Filter(expr)
     }
 
     /// Create an exclude operation
-    pub fn exclude(expr: FilterExpr) -> Self {
+    pub const fn exclude(expr: FilterExpr) -> Self {
         Self::Exclude(expr)
     }
 
@@ -415,17 +421,17 @@ impl QueryOp {
     }
 
     /// Create a limit operation
-    pub fn limit(n: u64) -> Self {
+    pub const fn limit(n: u64) -> Self {
         Self::Limit(n)
     }
 
     /// Create an offset operation
-    pub fn offset(n: u64) -> Self {
+    pub const fn offset(n: u64) -> Self {
         Self::Offset(n)
     }
 
     /// Create a distinct operation
-    pub fn distinct() -> Self {
+    pub const fn distinct() -> Self {
         Self::Distinct
     }
 
@@ -467,7 +473,7 @@ impl QueryOp {
 
 /// Query plan - a collection of operations that can be inspected and optimized
 ///
-/// The query plan captures all operations applied to a QuerySet in order,
+/// The query plan captures all operations applied to a `QuerySet` in order,
 /// enabling introspection before execution.
 ///
 /// # Example
@@ -489,7 +495,7 @@ pub struct QueryPlan {
 
 impl QueryPlan {
     /// Create a new empty query plan
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { operations: Vec::new() }
     }
 
@@ -525,12 +531,12 @@ impl QueryPlan {
 
     /// Check if plan has ordering
     pub fn has_ordering(&self) -> bool {
-        self.operations.iter().any(|op| op.is_order_by())
+        self.operations.iter().any(QueryOp::is_order_by)
     }
 
     /// Check if plan has limit
     pub fn has_limit(&self) -> bool {
-        self.operations.iter().any(|op| op.is_limit())
+        self.operations.iter().any(QueryOp::is_limit)
     }
 
     /// Get all filter expressions
@@ -783,7 +789,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanFilter> QuerySet<'a, E, C, S>
 }
 
 // Continue with common methods that preserve state
-impl<'a, E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'a, E, C, S> {
+impl<E: EntityTrait, C: ConnectionTrait, S: QuerySetState> QuerySet<'_, E, C, S> {
     /// Include soft-deleted records in query results
     ///
     /// By default, models with `#[soft_delete]` automatically exclude deleted records.
@@ -952,7 +958,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, 
 // Typestate: Explain operations (states that can request explain)
 // ============================================================================
 
-impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S> {
+impl<E: EntityTrait, C: ConnectionTrait + Sync, S: CanExplain> QuerySet<'_, E, C, S>
+where
+    E::Model: Send + Sync,
+{
     /// Get query execution plan (Django-inspired .`explain()`)
     ///
     /// Executes the EXPLAIN query and returns the database query execution plan.
@@ -1085,9 +1094,10 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExplain> QuerySet<'a, E, C, S
 // Typestate: Execution operations (all executable states)
 // ============================================================================
 
-impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanExecute + 'a> QuerySet<'a, E, C, S>
+impl<'a, E: EntityTrait, C: ConnectionTrait + Sync, S: CanExecute + 'a> QuerySet<'a, E, C, S>
 where
     E: crate::traits::OrmadaEntity,
+    E::Model: Send + Sync,
 {
     /// Execute query and return all matching results (Ormada's .`all()`)
     ///
@@ -2932,7 +2942,7 @@ impl Aggregation {
     /// ```rust,ignore
     /// .annotate([("total", Aggregation::count_all())])
     /// ```
-    pub fn count_all() -> Self {
+    pub const fn count_all() -> Self {
         Self::CountAll
     }
 
@@ -3204,7 +3214,7 @@ impl From<Q> for Condition {
 ///
 /// Each variant represents a specific comparison operation.
 /// This enables exhaustive pattern matching and clear error messages.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterOp {
     /// Equality: column = value
     Eq,
@@ -3283,7 +3293,7 @@ impl FilterOp {
 ///
 /// This enum represents filter operations in a pattern-matchable, introspectable way.
 /// Supports typed operations with column/value information, logical combinations,
-/// and raw expressions for SeaORM compatibility.
+/// and raw expressions for `SeaORM` compatibility.
 ///
 /// # Example
 ///
@@ -3326,30 +3336,31 @@ pub enum FilterExpr {
         op: FilterOp,
         /// String representation of the value (for introspection)
         value_repr: String,
-        /// The actual SeaORM expression
+        /// The actual `SeaORM` expression
         expr: SimpleExpr,
     },
-    /// Raw SimpleExpr for compatibility with SeaORM
+    /// Raw `SimpleExpr` for compatibility with `SeaORM`
     Raw(SimpleExpr),
 }
 
 impl FilterExpr {
     /// Create an AND combination of filters
-    pub fn and(filters: Vec<FilterExpr>) -> Self {
+    pub const fn and(filters: Vec<Self>) -> Self {
         Self::And(filters)
     }
 
     /// Create an OR combination of filters
-    pub fn or(filters: Vec<FilterExpr>) -> Self {
+    pub const fn or(filters: Vec<Self>) -> Self {
         Self::Or(filters)
     }
 
     /// Negate this filter expression
+    #[allow(clippy::should_implement_trait)]
     pub fn not(self) -> Self {
         Self::Not(Box::new(self))
     }
 
-    /// Create from any SimpleExpr (for compatibility)
+    /// Create from any `SimpleExpr` (for compatibility)
     pub fn raw(expr: impl Into<SimpleExpr>) -> Self {
         Self::Raw(expr.into())
     }
@@ -3362,7 +3373,7 @@ impl FilterExpr {
         expr: SimpleExpr,
     ) -> Self {
         Self::Typed {
-            column: format!("{:?}", column),
+            column: format!("{column:?}"),
             op,
             value_repr,
             expr,
@@ -3371,53 +3382,48 @@ impl FilterExpr {
 
     /// Create equality filter: column = value
     pub fn eq<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
-        let value_repr = format!("{:?}", value);
-        Self::typed(column, FilterOp::Eq, value_repr, column.eq(value).into())
+        let value_repr = format!("{value:?}");
+        Self::typed(column, FilterOp::Eq, value_repr, column.eq(value))
     }
 
     /// Create not-equal filter: column != value
     pub fn ne<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
-        let value_repr = format!("{:?}", value);
-        Self::typed(column, FilterOp::Ne, value_repr, column.ne(value).into())
+        let value_repr = format!("{value:?}");
+        Self::typed(column, FilterOp::Ne, value_repr, column.ne(value))
     }
 
     /// Create less-than filter: column < value
     pub fn lt<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
-        let value_repr = format!("{:?}", value);
-        Self::typed(column, FilterOp::Lt, value_repr, column.lt(value).into())
+        let value_repr = format!("{value:?}");
+        Self::typed(column, FilterOp::Lt, value_repr, column.lt(value))
     }
 
     /// Create less-than-or-equal filter: column <= value
     pub fn lte<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
-        let value_repr = format!("{:?}", value);
-        Self::typed(column, FilterOp::Lte, value_repr, column.lte(value).into())
+        let value_repr = format!("{value:?}");
+        Self::typed(column, FilterOp::Lte, value_repr, column.lte(value))
     }
 
     /// Create greater-than filter: column > value
     pub fn gt<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
-        let value_repr = format!("{:?}", value);
-        Self::typed(column, FilterOp::Gt, value_repr, column.gt(value).into())
+        let value_repr = format!("{value:?}");
+        Self::typed(column, FilterOp::Gt, value_repr, column.gt(value))
     }
 
     /// Create greater-than-or-equal filter: column >= value
     pub fn gte<C: ColumnTrait, V: Into<Value> + std::fmt::Debug>(column: C, value: V) -> Self {
-        let value_repr = format!("{:?}", value);
-        Self::typed(column, FilterOp::Gte, value_repr, column.gte(value).into())
+        let value_repr = format!("{value:?}");
+        Self::typed(column, FilterOp::Gte, value_repr, column.gte(value))
     }
 
     /// Create IS NULL filter
     pub fn is_null<C: ColumnTrait>(column: C) -> Self {
-        Self::typed(column, FilterOp::IsNull, "NULL".to_string(), column.is_null().into())
+        Self::typed(column, FilterOp::IsNull, "NULL".to_string(), column.is_null())
     }
 
     /// Create IS NOT NULL filter
     pub fn is_not_null<C: ColumnTrait>(column: C) -> Self {
-        Self::typed(
-            column,
-            FilterOp::IsNotNull,
-            "NOT NULL".to_string(),
-            column.is_not_null().into(),
-        )
+        Self::typed(column, FilterOp::IsNotNull, "NOT NULL".to_string(), column.is_not_null())
     }
 
     /// Check if this is an AND expression
@@ -3446,7 +3452,7 @@ impl FilterExpr {
     }
 
     /// Get the filter operation if this is a typed filter
-    pub fn get_op(&self) -> Option<&FilterOp> {
+    pub const fn get_op(&self) -> Option<&FilterOp> {
         match self {
             Self::Typed { op, .. } => Some(op),
             _ => None,
@@ -3469,7 +3475,7 @@ impl FilterExpr {
         }
     }
 
-    /// Convert to SeaORM Condition for query execution
+    /// Convert to `SeaORM` Condition for query execution
     pub fn into_condition(self) -> Condition {
         match self {
             Self::And(filters) => {
@@ -3487,8 +3493,7 @@ impl FilterExpr {
                 condition
             }
             Self::Not(inner) => inner.into_condition().not(),
-            Self::Typed { expr, .. } => Condition::all().add(expr),
-            Self::Raw(expr) => Condition::all().add(expr),
+            Self::Typed { expr, .. } | Self::Raw(expr) => Condition::all().add(expr),
         }
     }
 }

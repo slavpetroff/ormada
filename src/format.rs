@@ -131,12 +131,12 @@ pub fn build_explain_sql(
 ) -> String {
     match (backend, analyze) {
         (crate::db::DatabaseBackend::Sqlite, _) => format!("EXPLAIN QUERY PLAN {raw_sql}"),
-        (crate::db::DatabaseBackend::Postgres, false) => format!("EXPLAIN {raw_sql}"),
-        (crate::db::DatabaseBackend::Postgres, true) => format!("EXPLAIN ANALYZE {raw_sql}"),
-        (crate::db::DatabaseBackend::MySql, false) => format!("EXPLAIN {raw_sql}"),
-        (crate::db::DatabaseBackend::MySql, true) => format!("EXPLAIN ANALYZE {raw_sql}"),
-        (_, false) => format!("EXPLAIN {raw_sql}"),
-        (_, true) => format!("EXPLAIN ANALYZE {raw_sql}"),
+        (crate::db::DatabaseBackend::Postgres | crate::db::DatabaseBackend::MySql | _, false) => {
+            format!("EXPLAIN {raw_sql}")
+        }
+        (crate::db::DatabaseBackend::Postgres | crate::db::DatabaseBackend::MySql | _, true) => {
+            format!("EXPLAIN ANALYZE {raw_sql}")
+        }
     }
 }
 
@@ -152,13 +152,14 @@ pub fn format_explain_output(
     let formatted_sql = if pretty { format_sql_pretty(raw_sql) } else { raw_sql.to_string() };
     let prefix = if analyze { "EXPLAIN ANALYZE" } else { "EXPLAIN" };
 
-    if let Some(explain) = explain_sql {
-        format!(
-            "{prefix} output for query:\n{formatted_sql}\n\nRows affected: {rows_affected}\n\nTo run manually: {explain}"
-        )
-    } else {
-        format!("{prefix} output for query:\n{formatted_sql}\n\nRows affected: {rows_affected}")
-    }
+    explain_sql.map_or_else(
+        || format!("{prefix} output for query:\n{formatted_sql}\n\nRows affected: {rows_affected}"),
+        |explain| {
+            format!(
+                "{prefix} output for query:\n{formatted_sql}\n\nRows affected: {rows_affected}\n\nTo run manually: {explain}"
+            )
+        },
+    )
 }
 
 #[cfg(test)]

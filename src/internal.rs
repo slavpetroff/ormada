@@ -1,6 +1,6 @@
 //! Internal re-exports for macro-generated code
 //!
-//! This module re-exports SeaORM types needed by the `#[ormada_model]` macro.
+//! This module re-exports `SeaORM` types needed by the `#[ormada_model]` macro.
 //! **Users should NOT import from this module directly.**
 //!
 //! All paths in generated code use `::ormada::__internal::` to ensure

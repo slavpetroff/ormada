@@ -23,7 +23,7 @@ async fn seed_articles(db: &DatabaseRouter) -> Result<Vec<Article>, OrmadaError>
     for i in 1..=5 {
         let article = Article::objects(db)
             .create(Article {
-                title: format!("Article {}", i),
+                title: format!("Article {i}"),
                 deleted_at: None,
                 ..Default::default()
             })

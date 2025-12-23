@@ -6,17 +6,18 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::needless_raw_string_hashes)]
+#![allow(clippy::too_many_lines)]
 
 //! Benchmark for caching performance
 //!
-//! Measures the benefit of QuerySet caching vs repeated queries
+//! Measures the benefit of `QuerySet` caching vs repeated queries
 //!
 //! ## Configuration
 //! Adjust these constants to tune benchmark behavior:
-//! - TOTAL_RECORDS: Number of records to seed (default: 100,000)
-//! - WARM_UP_TIME_SECS: Warm-up duration (default: 5s)
-//! - MEASUREMENT_TIME_SECS: Measurement duration (default: 30s)
-//! - SAMPLE_SIZE: Number of samples to collect (default: 50)
+//! - `TOTAL_RECORDS`: Number of records to seed (default: 100,000)
+//! - `WARM_UP_TIME_SECS`: Warm-up duration (default: 5s)
+//! - `MEASUREMENT_TIME_SECS`: Measurement duration (default: 30s)
+//! - `SAMPLE_SIZE`: Number of samples to collect (default: 50)
 
 use std::hint::black_box;
 use std::time::Duration;
@@ -32,7 +33,7 @@ use ormada::router::DatabaseRouter;
 /// Total number of records to seed in the database
 const TOTAL_RECORDS: i32 = 100_000;
 
-/// Batch size for bulk inserts (SQLite has ~999 variable limit)
+/// Batch size for bulk inserts (`SQLite` has ~999 variable limit)
 const BATCH_SIZE: i32 = 1000;
 
 /// Warm-up time before measurement starts

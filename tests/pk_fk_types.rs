@@ -6,12 +6,16 @@
 //! - FK validation for all supported integer types
 //!
 //! NOTE: String/UUID PKs with FK relations require additional macro work
-//! to support non-integer types in get_foreign_key and load_related.
+//! to support non-integer types in `get_foreign_key` and `load_related`.
 //! Currently, only integer PK/FK types are fully supported for relations.
 
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::too_many_lines)]
 
 use ormada::prelude::*;
 use rstest::*;

@@ -1,4 +1,4 @@
-//! Upsert Operations Example - get_or_create and update_or_create
+//! Upsert Operations Example - `get_or_create` and `update_or_create`
 
 use ormada::prelude::*;
 
@@ -17,7 +17,7 @@ pub async fn setup_db() -> Result<DatabaseRouter, OrmadaError> {
     Ok(router)
 }
 
-/// get_or_create - Get existing or create new (thread-safe)
+/// `get_or_create` - Get existing or create new (thread-safe)
 pub async fn example_get_or_create(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     // First call creates
     let (author1, created1) = Author::objects(db)
@@ -53,7 +53,7 @@ pub async fn example_get_or_create(db: &DatabaseRouter) -> Result<(), OrmadaErro
     Ok(())
 }
 
-/// update_or_create - Update existing or create new
+/// `update_or_create` - Update existing or create new
 pub async fn example_update_or_create(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     // First call creates
     let (author1, created1) = Author::objects(db)

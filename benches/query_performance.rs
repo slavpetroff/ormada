@@ -5,6 +5,7 @@
 #![allow(unused_must_use)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::cast_possible_wrap)]
 
 use std::hint::black_box;
 
@@ -59,7 +60,7 @@ async fn seed_data(db: &DatabaseRouter, count: usize) {
 fn bench_query_all_sizes(c: &mut Criterion) {
     let mut group = c.benchmark_group("query_all");
 
-    for size in [100, 1000, 10_000].iter() {
+    for size in &[100, 1000, 10_000] {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let db = rt.block_on(setup_db());
         rt.block_on(seed_data(&db, *size));

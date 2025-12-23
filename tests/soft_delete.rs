@@ -3,6 +3,12 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::used_underscore_binding)]
+#![allow(clippy::indexing_slicing)]
+#![allow(clippy::no_effect_underscore_binding)]
 
 //! Soft delete integration tests
 

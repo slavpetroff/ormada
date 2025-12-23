@@ -78,7 +78,7 @@ async fn seed_data(db: &DatabaseRouter) -> Result<(Vec<Author>, Vec<Book>), Orma
             let book = Book::objects(db)
                 .create(Book {
                     author_id: author.id,
-                    title: format!("{}'s Book {}", name, i),
+                    title: format!("{name}'s Book {i}"),
                     price: 1000 + i * 100,
                     published: i % 2 == 1,
                     ..Default::default()
@@ -108,7 +108,7 @@ pub async fn example_one_to_many(db: &DatabaseRouter) -> Result<(), OrmadaError>
     Ok(())
 }
 
-/// Eager Loading with prefetch_related - prevents N+1 queries
+/// Eager Loading with `prefetch_related` - prevents N+1 queries
 pub async fn example_prefetch_related(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_data(db).await?;
 
@@ -124,7 +124,7 @@ pub async fn example_prefetch_related(db: &DatabaseRouter) -> Result<(), OrmadaE
     Ok(())
 }
 
-/// Nullable FK with on_delete = SetNull
+/// Nullable FK with `on_delete` = `SetNull`
 pub async fn example_nullable_fk(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     let (authors, _) = seed_data(db).await?;
 

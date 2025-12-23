@@ -19,10 +19,11 @@ pub async fn setup_db() -> Result<DatabaseRouter, OrmadaError> {
     Ok(router)
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 async fn seed_books(db: &DatabaseRouter, count: usize) -> Result<(), OrmadaError> {
     let books: Vec<Book> = (0..count)
         .map(|i| Book {
-            title: format!("Book {}", i),
+            title: format!("Book {i}"),
             price: 1000 + (i as i32 * 10),
             published: i % 2 == 0,
             ..Default::default()
@@ -49,7 +50,7 @@ pub async fn example_iterator(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     Ok(())
 }
 
-/// earliest() and latest() by field
+/// `earliest()` and `latest()` by field
 pub async fn example_earliest_latest(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_books(db, 20).await?;
 

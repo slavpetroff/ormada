@@ -121,8 +121,9 @@ pub trait HasRelation<Related: EntityTrait>:
     /// This is used internally by `select_related` for efficient single-query JOINs.
     /// The `#[ormada_model]` macro generates this automatically for FK relations.
     #[doc(hidden)]
+    #[allow(clippy::unimplemented)]
     fn relation_def() -> crate::__internal::RelationDef {
-        panic!("relation_def not implemented for this relation. The #[ormada_model] macro should generate this.")
+        unimplemented!("relation_def not implemented for this relation. The #[ormada_model] macro should generate this.")
     }
 }
 

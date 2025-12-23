@@ -4,6 +4,9 @@
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
 #![allow(clippy::indexing_slicing)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
 
 //! rstest fixtures for comprehensive test support
 //!

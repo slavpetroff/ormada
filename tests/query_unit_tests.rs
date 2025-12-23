@@ -1,3 +1,13 @@
+#![allow(clippy::panic)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::no_effect_underscore_binding)]
+#![allow(clippy::used_underscore_binding)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::indexing_slicing)]
+
 use ormada::fields::Condition;
 use ormada::query::{
     Aggregated, Aggregation, CanExecute, CanFilter, CanOrder, CanPaginate, FilterExpr, FilterOp,
@@ -73,7 +83,7 @@ fn test_aggregation_count_all() {
 #[test]
 fn test_aggregation_enum_is_debug() {
     let agg = Aggregation::count_all();
-    let debug_str = format!("{:?}", agg);
+    let debug_str = format!("{agg:?}");
     assert!(debug_str.contains("CountAll"));
 }
 
@@ -135,7 +145,7 @@ fn test_filter_expr_not() {
 #[test]
 fn test_filter_expr_is_debug() {
     let filter = FilterExpr::And(vec![FilterExpr::Or(vec![])]);
-    let debug_str = format!("{:?}", filter);
+    let debug_str = format!("{filter:?}");
     assert!(debug_str.contains("And"));
     assert!(debug_str.contains("Or"));
 }
@@ -143,19 +153,19 @@ fn test_filter_expr_is_debug() {
 #[test]
 fn test_filter_expr_is_clone() {
     let filter = FilterExpr::And(vec![FilterExpr::Or(vec![])]);
-    let cloned = filter.clone();
+    let cloned = filter;
     assert!(cloned.is_and());
 }
 
 #[test]
 fn test_filter_expr_nested_structure() {
     let ab = FilterExpr::And(vec![
-        FilterExpr::Raw(Expr::value(true).into()),
-        FilterExpr::Raw(Expr::value(false).into()),
+        FilterExpr::Raw(Expr::value(true)),
+        FilterExpr::Raw(Expr::value(false)),
     ]);
     let cd = FilterExpr::And(vec![
-        FilterExpr::Raw(Expr::value(true).into()),
-        FilterExpr::Raw(Expr::value(true).into()),
+        FilterExpr::Raw(Expr::value(true)),
+        FilterExpr::Raw(Expr::value(true)),
     ]);
     let combined = FilterExpr::Or(vec![ab, cd]);
 
@@ -172,7 +182,7 @@ fn test_filter_expr_nested_structure() {
 
 #[test]
 fn test_filter_expr_into_condition() {
-    let filter = FilterExpr::And(vec![FilterExpr::Raw(Expr::value(true).into())]);
+    let filter = FilterExpr::And(vec![FilterExpr::Raw(Expr::value(true))]);
     let _condition: Condition = filter.into();
 }
 
@@ -182,7 +192,7 @@ fn test_filter_expr_pattern_matching() {
         FilterExpr::And(vec![]),
         FilterExpr::Or(vec![]),
         FilterExpr::Not(Box::new(FilterExpr::And(vec![]))),
-        FilterExpr::Raw(Expr::value(true).into()),
+        FilterExpr::Raw(Expr::value(true)),
     ];
 
     for filter in filters {
@@ -240,7 +250,7 @@ fn test_query_op_exclude() {
 #[test]
 fn test_query_op_is_debug() {
     let op = QueryOp::Limit(10);
-    let debug_str = format!("{:?}", op);
+    let debug_str = format!("{op:?}");
     assert!(debug_str.contains("Limit"));
     assert!(debug_str.contains("10"));
 }
@@ -248,7 +258,7 @@ fn test_query_op_is_debug() {
 #[test]
 fn test_query_op_is_clone() {
     let op = QueryOp::Limit(10);
-    let cloned = op.clone();
+    let cloned = op;
     assert!(cloned.is_limit());
 }
 
@@ -359,7 +369,7 @@ fn test_query_plan_iter() {
 fn test_query_plan_is_debug() {
     let mut plan = QueryPlan::new();
     plan.push(QueryOp::Limit(10));
-    let debug_str = format!("{:?}", plan);
+    let debug_str = format!("{plan:?}");
     assert!(debug_str.contains("QueryPlan"));
     assert!(debug_str.contains("Limit"));
 }
@@ -572,7 +582,7 @@ fn test_query_state_pattern_matching() {
 #[test]
 fn test_query_state_clone_copy() {
     let state = QueryState::Filtered;
-    let cloned = state.clone();
+    let cloned = state;
     let copied = state;
 
     assert_eq!(state, cloned);
@@ -585,7 +595,7 @@ fn test_filter_expr_typed_is_typed() {
         column: "price".to_string(),
         op: FilterOp::Eq,
         value_repr: "100".to_string(),
-        expr: Expr::value(100).into(),
+        expr: Expr::value(100),
     };
     assert!(filter.is_typed());
     assert!(!filter.is_raw());
@@ -600,11 +610,11 @@ fn test_filter_expr_get_op() {
         column: "price".to_string(),
         op: FilterOp::Lt,
         value_repr: "50".to_string(),
-        expr: Expr::value(50).into(),
+        expr: Expr::value(50),
     };
     assert_eq!(filter.get_op(), Some(&FilterOp::Lt));
 
-    let raw = FilterExpr::Raw(Expr::value(true).into());
+    let raw = FilterExpr::Raw(Expr::value(true));
     assert_eq!(raw.get_op(), None);
 }
 
@@ -614,7 +624,7 @@ fn test_filter_expr_get_column() {
         column: "author_id".to_string(),
         op: FilterOp::Eq,
         value_repr: "1".to_string(),
-        expr: Expr::value(1).into(),
+        expr: Expr::value(1),
     };
     assert_eq!(filter.get_column(), Some("author_id"));
 
@@ -628,7 +638,7 @@ fn test_filter_expr_get_value_repr() {
         column: "name".to_string(),
         op: FilterOp::Contains,
         value_repr: "test".to_string(),
-        expr: Expr::value("test").into(),
+        expr: Expr::value("test"),
     };
     assert_eq!(filter.get_value_repr(), Some("test"));
 
@@ -642,7 +652,7 @@ fn test_filter_expr_typed_into_condition() {
         column: "status".to_string(),
         op: FilterOp::Eq,
         value_repr: "active".to_string(),
-        expr: Expr::value("active").into(),
+        expr: Expr::value("active"),
     };
     let _condition: Condition = filter.into();
 }

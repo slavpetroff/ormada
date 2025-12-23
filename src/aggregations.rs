@@ -310,12 +310,13 @@ struct AggregateValueFloat {
     value: Option<f64>,
 }
 
-#[allow(clippy::future_not_send)]
 impl<
         E: EntityTrait + crate::traits::OrmadaEntity,
-        C: ConnectionTrait,
+        C: ConnectionTrait + Sync,
         S: crate::query::CanExecute,
     > AggregateExt<E> for QuerySet<'_, E, C, S>
+where
+    E::Model: Send + Sync,
 {
     async fn aggregate_count(self) -> Result<u64, OrmadaError> {
         self.count().await
@@ -562,7 +563,7 @@ mod tests {
     #[test]
     fn test_aggregate_value_is_debug() {
         let value = AggregateValue::sum("price", Some(100.0));
-        let debug_str = format!("{:?}", value);
+        let debug_str = format!("{value:?}");
         assert!(debug_str.contains("Sum"));
         assert!(debug_str.contains("price"));
     }

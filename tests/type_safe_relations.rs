@@ -4,22 +4,28 @@
 #![allow(clippy::panic)]
 #![allow(unused_must_use)]
 #![allow(clippy::indexing_slicing)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::no_effect_underscore_binding)]
+#![allow(clippy::items_after_statements)]
 
 //! Type-Safe Relation Loading Tests
 //!
 //! Tests for the phantom type relation loading feature where:
 //! - `Model` (from create/update/queries without prefetch) has NO relation fields
-//! - `ModelWithRelations` (from prefetch_related) HAS relation fields
+//! - `ModelWithRelations` (from `prefetch_related`) HAS relation fields
 //!
 //! This provides compile-time safety: you can't accidentally access unloaded relations.
 //!
 //! ## Key Type Safety Features Tested:
-//! 1. Model after create() has no relation fields
-//! 2. Model after update() has no relation fields
+//! 1. Model after `create()` has no relation fields
+//! 2. Model after `update()` has no relation fields
 //! 3. Model from queries without prefetch has no relation fields
-//! 4. ModelWithRelations from prefetch_related() has relation fields
-//! 5. ModelWithRelations implements Deref to Model for base field access
-//! 6. Conversion from Model to ModelWithRelations works correctly
+//! 4. `ModelWithRelations` from `prefetch_related()` has relation fields
+//! 5. `ModelWithRelations` implements Deref to Model for base field access
+//! 6. Conversion from Model to `ModelWithRelations` works correctly
 
 mod fixtures;
 
@@ -570,7 +576,7 @@ async fn test_model_and_model_with_relations_are_different_types(
     takes_model_with_relations(&book_with_relations);
 
     // ModelWithRelations can be used where Model is expected via Deref
-    takes_model(&*book_with_relations);
+    takes_model(&book_with_relations);
 }
 
 #[rstest]
@@ -732,7 +738,7 @@ async fn test_non_nullable_fk_validation_rejects_zero(#[future] db: DatabaseRout
     // Should fail with validation error
     assert!(result.is_err());
     let err = result.unwrap_err();
-    let err_str = format!("{:?}", err);
+    let err_str = format!("{err:?}");
     assert!(err_str.contains("foreign key cannot be the default value"));
     assert!(err_str.contains("author_id"));
 }

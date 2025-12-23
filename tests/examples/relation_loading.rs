@@ -1,4 +1,4 @@
-//! Relation Loading Examples - select_related vs prefetch_related
+//! Relation Loading Examples - `select_related` vs `prefetch_related`
 //!
 //! This module demonstrates the two main strategies for eager loading relations:
 //!
@@ -14,7 +14,7 @@
 //!
 //! ## When to Use Each
 //!
-//! - **`select_related`**: Use when following a ForeignKey or OneToOne field
+//! - **`select_related`**: Use when following a `ForeignKey` or `OneToOne` field
 //!   (e.g., Book -> Author). Each book has exactly one author.
 //!
 //! - **`prefetch_related`**: Use when loading reverse relations or M:N
@@ -98,7 +98,7 @@ async fn seed_data(db: &DatabaseRouter) -> Result<Vec<(Author, Vec<Book>)>, Orma
     Ok(result)
 }
 
-/// select_related - Load parent from child (FK direction)
+/// `select_related` - Load parent from child (FK direction)
 ///
 /// Use when: You have Books and want to load their Authors
 /// Pattern: Book -> Author (following the FK)
@@ -125,10 +125,10 @@ pub async fn example_select_related(db: &DatabaseRouter) -> Result<(), OrmadaErr
     Ok(())
 }
 
-/// prefetch_related - Load related objects in batch
+/// `prefetch_related` - Load related objects in batch
 ///
 /// Use when: You have Books and want to load their Authors
-/// (Same as select_related for FK relations)
+/// (Same as `select_related` for FK relations)
 pub async fn example_prefetch_related(db: &DatabaseRouter) -> Result<(), OrmadaError> {
     seed_data(db).await?;
 

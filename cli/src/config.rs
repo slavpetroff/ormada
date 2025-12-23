@@ -36,9 +36,11 @@ impl CliConfig {
     /// 3. Defaults
     pub fn load() -> Result<Self> {
         let project_root = find_project_root()?;
-        let mut config = Self::default();
-        config.project_root = project_root.clone();
-        config.migrations_dir = PathBuf::from("migrations");
+        let mut config = Self {
+            project_root: project_root.clone(),
+            migrations_dir: PathBuf::from("migrations"),
+            ..Self::default()
+        };
 
         // Try to load database URL from environment
         config.database_url = std::env::var("DATABASE_URL").ok();
