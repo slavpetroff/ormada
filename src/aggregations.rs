@@ -331,14 +331,14 @@ where
         let column_expr = Expr::col(column_ref.clone());
         let sum_expr = Func::sum(column_expr);
 
-        let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
+        let query = self.build_select().select_only().expr_as(sum_expr, "value");
 
         match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 let sum_expr = Func::sum(Expr::col(column_ref));
-                let query = self.inner.select.clone().select_only().expr_as(sum_expr, "value");
+                let query = self.build_select().select_only().expr_as(sum_expr, "value");
 
                 query
                     .into_model::<AggregateValueFloat>()
@@ -356,7 +356,7 @@ where
         let column_expr = Expr::col(column.as_column_ref());
         let avg_expr = Func::avg(column_expr);
 
-        let query = self.inner.select.clone().select_only().expr_as(avg_expr, "value");
+        let query = self.build_select().select_only().expr_as(avg_expr, "value");
 
         query
             .into_model::<AggregateValueFloat>()
@@ -374,14 +374,14 @@ where
         let column_expr = Expr::col(column_ref.clone());
         let max_expr = Func::max(column_expr);
 
-        let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
+        let query = self.build_select().select_only().expr_as(max_expr, "value");
 
         match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 let max_expr = Func::max(Expr::col(column_ref));
-                let query = self.inner.select.clone().select_only().expr_as(max_expr, "value");
+                let query = self.build_select().select_only().expr_as(max_expr, "value");
 
                 query
                     .into_model::<AggregateValueFloat>()
@@ -402,14 +402,14 @@ where
         let column_expr = Expr::col(column_ref.clone());
         let min_expr = Func::min(column_expr);
 
-        let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
+        let query = self.build_select().select_only().expr_as(min_expr, "value");
 
         match query.into_model::<AggregateValueInt>().one(self.inner.db).await {
             Ok(Some(result)) => Ok(result.value.map(|v| v as f64)),
             Ok(None) => Ok(None),
             Err(DbErr::Type(_) | DbErr::Query(_)) => {
                 let min_expr = Func::min(Expr::col(column_ref));
-                let query = self.inner.select.clone().select_only().expr_as(min_expr, "value");
+                let query = self.build_select().select_only().expr_as(min_expr, "value");
 
                 query
                     .into_model::<AggregateValueFloat>()
