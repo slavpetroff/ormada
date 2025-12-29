@@ -31,7 +31,7 @@
 //! }).await?;
 //! ```
 //!
-//! # Using #[atomic] Attribute
+//! # Using `#[atomic]` Attribute
 //!
 //! ```rust,ignore
 //! use ormada::prelude::*;

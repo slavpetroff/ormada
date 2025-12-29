@@ -52,7 +52,7 @@
 //! ### 🔒 Transactions
 //! Ormada-style atomic operations for data consistency:
 //! - `atomic()` - Execute operations in a transaction
-//! - `#[atomic]` - Attribute macro for transactional functions (new!)
+//! - `#\[atomic\]` - Attribute macro for transactional functions (new!)
 //! - `savepoint()` - Nested transactions with rollback points
 //! - Automatic commit on success, rollback on error
 //! - ACID guarantees for data integrity

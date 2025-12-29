@@ -1060,7 +1060,7 @@ impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanOrder> QuerySet<'a, E, C, S> 
 // ============================================================================
 
 impl<'a, E: EntityTrait, C: ConnectionTrait, S: CanPaginate> QuerySet<'a, E, C, S> {
-    /// Limit results (Ormada's [:n])
+    /// Limit results (Ormada's `[:n]`)
     ///
     /// Transitions to `Paginated` state. Available on `Fresh`, `Filtered`, `Ordered`, and `Paginated` states.
     ///

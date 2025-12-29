@@ -67,7 +67,7 @@ impl Default for SoftDeleteConfig {
 
 /// Trait for entities that support Ormada-style creation behavior
 ///
-/// This is automatically implemented by #[derive(OrmadaModel)] and #[`ormada_model`].
+/// This is automatically implemented by `#[derive(OrmadaModel)]` and `#[ormada_model]`.
 /// It handles auto-increment IDs, `auto_now/auto_now_add` timestamps, and field validation.
 pub trait OrmadaEntity: EntityTrait {
     /// Convert a Model to `ActiveModel` for creation with validation

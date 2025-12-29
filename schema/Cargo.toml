@@ -2,9 +2,16 @@
 name = "ormada-schema"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
 authors = ["Stanislav Petrov <slavpetroff@gmail.com>"]
 description = "Schema types and parsing for Ormada ORM migrations"
 license = "MIT"
+keywords = ["orm", "database", "schema", "migration", "seaorm"]
+categories = ["database", "development-tools"]
+repository = "https://github.com/slavpetroff/ormada"
+homepage = "https://github.com/slavpetroff/ormada"
+documentation = "https://docs.rs/ormada-schema"
+readme = "../README.md"
 
 [dependencies]
 syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }

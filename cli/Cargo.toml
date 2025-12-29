@@ -2,9 +2,16 @@
 name = "ormada-cli"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
 authors = ["Stanislav Petrov <slavpetroff@gmail.com>"]
-description = "CLI tool for Ormada ORM migrations"
+description = "CLI tool for Ormada ORM migrations - generate, run, and manage database migrations"
 license = "MIT"
+keywords = ["orm", "database", "cli", "migration", "seaorm"]
+categories = ["database", "command-line-utilities", "development-tools"]
+repository = "https://github.com/slavpetroff/ormada"
+homepage = "https://github.com/slavpetroff/ormada"
+documentation = "https://docs.rs/ormada-cli"
+readme = "../README.md"
 
 [[bin]]
 name = "ormada"
@@ -18,9 +25,9 @@ sea-orm = { version = "2.0.0-rc.18", features = ["runtime-tokio-native-tls", "sq
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"] }
 refinery = { version = "0.8", features = ["tokio-postgres", "rusqlite"] }
 chrono = "0.4"
-colored = "2.1"
-dialoguer = "0.11"
-indicatif = "0.17"
+colored = "3.0"
+dialoguer = "0.12.0"
+indicatif = "0.18.3"
 anyhow = "1.0"
 sha2 = "0.10"
 hex = "0.4"
