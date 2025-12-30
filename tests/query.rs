@@ -484,10 +484,10 @@ async fn test_pagination_various_sizes(#[future] db: DatabaseRouter, #[case] cou
         .await
         .unwrap();
 
-    assert_eq!(page1.len(), page_size.min(count));
+    assert_eq!(page1.len(), Ord::min(page_size, count));
     if count > page_size {
         assert!(!page2.is_empty());
-        assert_eq!(page2.len(), (page_size).min(count - page_size));
+        assert_eq!(page2.len(), Ord::min(page_size, count - page_size));
     }
 }
 

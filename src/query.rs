@@ -17,6 +17,7 @@ use crate::models::{
 use crate::upsert::UpsertBuilder;
 use parking_lot::RwLock;
 use sea_orm::sea_query::{BinOper, ColumnRef, Expr, Func, SimpleExpr};
+use sea_orm::ExprTrait;
 use smallvec::SmallVec;
 use std::sync::Arc;
 

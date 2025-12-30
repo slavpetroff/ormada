@@ -196,7 +196,7 @@ pub trait OptionModelExt<M> {
     fn as_model(&self) -> Option<&M>;
 }
 
-/// Implementation for Option<T> where T implements `AsRef`<M>
+/// Implementation for `Option<T>` where `T` implements `AsRef<M>`
 impl<T, M> OptionModelExt<M> for Option<T>
 where
     T: AsRef<M>,

@@ -2,7 +2,7 @@
 name = "ormada-derive"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.82"
 authors = ["Stanislav Petrov <slavpetroff@gmail.com>"]
 description = "Proc macros for Ormada ORM - Django-like ergonomic ORM for Rust"
 license = "MIT"

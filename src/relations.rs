@@ -21,6 +21,7 @@ use crate::fields::{ColumnTrait, Condition};
 use crate::models::{EntityTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 use rustc_hash::FxHashMap;
 use sea_orm::sea_query::{Asterisk, Expr, SimpleExpr};
+use sea_orm::ExprTrait;
 use std::any::{Any, TypeId};
 
 // ============================================================================

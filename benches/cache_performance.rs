@@ -73,7 +73,7 @@ async fn setup_db() -> DatabaseRouter {
 
     // Seed records for high-load testing (batched to avoid SQLite limit)
     for batch_start in (0..TOTAL_RECORDS).step_by(BATCH_SIZE as usize) {
-        let batch_end = (batch_start + BATCH_SIZE).min(TOTAL_RECORDS);
+        let batch_end = Ord::min(batch_start + BATCH_SIZE, TOTAL_RECORDS);
         let models: Vec<_> = (batch_start..batch_end)
             .map(|i| benchmark_item::Model {
                 value: i % 1000,
