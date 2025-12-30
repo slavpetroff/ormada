@@ -21,6 +21,106 @@ use crate::fields::{ColumnTrait, Condition};
 use crate::models::{EntityTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 use rustc_hash::FxHashMap;
 use sea_orm::sea_query::{Asterisk, Expr, SimpleExpr};
+use std::any::{Any, TypeId};
+
+// ============================================================================
+// Reverse Relation Storage
+// ============================================================================
+
+/// Storage for reverse relations (one-to-many) loaded via `prefetch_related`
+///
+/// This provides runtime storage for reverse relations since the parent model
+/// doesn't know about child models at compile time (the FK is declared on the child).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Author's ModelWithRelations has this storage
+/// let authors = Author::objects(&db)
+///     .prefetch_related(reverse_relations![Book])
+///     .all()
+///     .await?;
+///
+/// for author in &authors {
+///     // Access reverse relations via get_children method
+///     let books: &[Book::Model] = author.get_children::<Book>();
+/// }
+/// ```
+#[derive(Debug, Default, Clone)]
+pub struct ReverseRelationStorage {
+    data: FxHashMap<TypeId, Box<dyn CloneableAny + Send + Sync>>,
+}
+
+/// Trait for type-erased cloneable storage
+pub trait CloneableAny: Any {
+    /// Clone into a boxed trait object
+    fn clone_box(&self) -> Box<dyn CloneableAny + Send + Sync>;
+    /// Get reference as Any for downcasting
+    fn as_any(&self) -> &dyn Any;
+    /// Get mutable reference as Any for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Clone + Send + Sync + 'static> CloneableAny for Vec<T> {
+    fn clone_box(&self) -> Box<dyn CloneableAny + Send + Sync> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl std::fmt::Debug for dyn CloneableAny + Send + Sync {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CloneableAny")
+    }
+}
+
+impl Clone for Box<dyn CloneableAny + Send + Sync> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
+impl ReverseRelationStorage {
+    /// Create a new empty storage
+    pub fn new() -> Self {
+        Self { data: FxHashMap::default() }
+    }
+
+    /// Get children of type T
+    ///
+    /// Returns an empty slice if no children of this type were loaded.
+    pub fn get<T: 'static>(&self) -> &[T] {
+        self.data
+            .get(&TypeId::of::<Vec<T>>())
+            .and_then(|v| v.as_any().downcast_ref::<Vec<T>>())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// Set children of type T
+    pub fn set<T: Clone + Send + Sync + 'static>(&mut self, children: Vec<T>) {
+        self.data.insert(TypeId::of::<Vec<T>>(), Box::new(children));
+    }
+
+    /// Check if children of type T are loaded
+    pub fn has<T: 'static>(&self) -> bool {
+        self.data.contains_key(&TypeId::of::<Vec<T>>())
+    }
+}
+
+impl PartialEq for ReverseRelationStorage {
+    fn eq(&self, other: &Self) -> bool {
+        self.data.len() == other.data.len()
+    }
+}
+
+impl Eq for ReverseRelationStorage {}
 
 // /// Note: RelationGraph has been removed in favor of compile-time typed relations
 // See LoadRelations trait and HasRelation trait for the new zero-cost approach
@@ -32,27 +132,37 @@ use sea_orm::sea_query::{Asterisk, Expr, SimpleExpr};
 /// Helper macro to create relation specifications for prefetching
 ///
 /// This macro provides a clean syntax for specifying which relations to prefetch.
-/// Users just pass the Model type (e.g., `Author`) and the macro extracts the Entity.
+/// It works for **both** forward relations (FK) and reverse relations (one-to-many).
+///
+/// The macro automatically detects the relation type based on context:
+/// - **Forward**: When the queried model has a FK to the specified model
+/// - **Reverse**: When the specified model has a FK to the queried model
 ///
 /// # Examples
 ///
 /// ```rust,ignore
 /// use ormada::relations;
 ///
-/// // Single relation - just use the Model name!
+/// // Forward relation: Book has FK to Author, load the author
 /// let books = Book::objects(db)
 ///     .prefetch_related(relations![Author])
 ///     .all()
 ///     .await?;
 ///
-/// // Multiple relations
-/// let books = Book::objects(db)
-///     .prefetch_related(relations![Author, Publisher, Category])
+/// // Reverse relation: Book has FK to Author, load author's books
+/// let authors = Author::objects(db)
+///     .prefetch_related(relations![Book])
 ///     .all()
 ///     .await?;
+///
+/// // Access loaded relations with get_* methods
+/// for author in &authors {
+///     let books = author.get_books(&db).await?;
+/// }
 /// ```
 #[macro_export]
 macro_rules! relations {
+    // Single model - detect forward vs reverse at compile time
     ($model:ty) => {
         $crate::relations::RelationSpec::<< $model as $crate::relations::HasEntityType >::__Entity>::new()
     };
@@ -61,7 +171,9 @@ macro_rules! relations {
     };
 }
 
-/// Typed relation specification - zero runtime cost
+/// Typed relation specification for forward relations (FK)
+///
+/// Created by the `relations!` macro. For reverse relations, use `reverse_relations!`.
 pub struct RelationSpec<E: EntityTrait> {
     _marker: std::marker::PhantomData<E>,
 }
@@ -93,8 +205,12 @@ pub trait HasEntityType {
 }
 
 /// Trait for entities that can load a specific relation
-pub trait HasRelation<Related: EntityTrait>:
-    EntityTrait + crate::traits::WithRelationsTrait
+///
+/// The `Related` type must implement both `EntityTrait` and `WithRelationsTrait`
+/// to support nested prefetch (storing `ModelWithRelations` instead of `Model`).
+pub trait HasRelation<Related>: EntityTrait + crate::traits::WithRelationsTrait
+where
+    Related: EntityTrait + crate::traits::WithRelationsTrait,
 {
     /// The type of the foreign key (usually i32, but can be other types)
     type RelatedPK: std::cmp::Eq + std::hash::Hash + Clone;
@@ -104,16 +220,25 @@ pub trait HasRelation<Related: EntityTrait>:
 
     /// Load related models for a batch of parent models
     /// This must be implemented by the macro since we need access to the specific Column enum
+    /// Returns Model (not ModelWithRelations) - conversion happens in set_related
     async fn load_related<C: ConnectionTrait>(
         models: &[<Self as EntityTrait>::Model],
         db: &C,
-    ) -> Result<FxHashMap<Self::RelatedPK, Related::Model>, OrmadaError>;
+    ) -> Result<FxHashMap<Self::RelatedPK, <Related as EntityTrait>::Model>, OrmadaError>;
 
     /// Set the related model on the ModelWithRelations wrapper
     /// This is called during prefetch_related to populate relation fields
+    /// Converts Model to ModelWithRelations to enable nested prefetch
     fn set_related(
         model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations,
-        related: Option<Related::Model>,
+        related: Option<<Related as EntityTrait>::Model>,
+    );
+
+    /// Set the related ModelWithRelations directly (for nested prefetch)
+    /// This allows setting a pre-populated ModelWithRelations with nested relations
+    fn set_related_with_relations(
+        model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations,
+        related: Option<<Related as crate::traits::WithRelationsTrait>::ModelWithRelations>,
     );
 
     /// Get the relation definition for JOIN-based loading
@@ -125,6 +250,53 @@ pub trait HasRelation<Related: EntityTrait>:
     fn relation_def() -> crate::__internal::RelationDef {
         unimplemented!("relation_def not implemented for this relation. The #[ormada_model] macro should generate this.")
     }
+}
+
+/// Trait for reverse relations (one-to-many, e.g., Author → Books)
+///
+/// This is the inverse of `HasRelation`. While `HasRelation<Author>` on `Book`
+/// loads the author for each book, `HasReverseRelation<Book>` on `Author`
+/// loads all books for each author.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Author has many Books (reverse of Book.author_id FK)
+/// let authors = Author::objects(&db)
+///     .prefetch_related(reverse_relations![Book])  // Loads all books per author
+///     .all()
+///     .await?;
+///
+/// for author in &authors {
+///     let books = author.get_books(&db).await?;  // Unified async interface
+///     println!("{} wrote {} books", author.name, books.len());
+/// }
+/// ```
+///
+/// This trait is automatically implemented by the `#[ormada_model]` macro
+/// when a child model has `#[foreign_key(ParentModel)]`.
+pub trait HasReverseRelation<Child: EntityTrait>:
+    EntityTrait + crate::traits::WithRelationsTrait
+{
+    /// The type of the parent's primary key
+    type ParentPK: std::cmp::Eq + std::hash::Hash + Clone + Send + Sync;
+
+    /// Extract the primary key from a parent model
+    fn get_primary_key(model: &<Self as EntityTrait>::Model) -> Self::ParentPK;
+
+    /// Load child models for a batch of parent models
+    ///
+    /// Returns a map from parent PK to Vec of child models
+    async fn load_children<C: ConnectionTrait>(
+        models: &[<Self as EntityTrait>::Model],
+        db: &C,
+    ) -> Result<FxHashMap<Self::ParentPK, Vec<Child::Model>>, OrmadaError>;
+
+    /// Set the child models on the ModelWithRelations wrapper
+    fn set_children(
+        model: &mut <Self as crate::traits::WithRelationsTrait>::ModelWithRelations,
+        children: Vec<Child::Model>,
+    );
 }
 
 /// Trait for JOIN-based loading of relations (select_related)
@@ -184,7 +356,7 @@ where
     Parent: EntityTrait
         + HasRelation<R1>
         + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
-    R1: EntityTrait,
+    R1: EntityTrait + crate::traits::WithRelationsTrait,
     <Parent as EntityTrait>::Model: Sync,
 {
     async fn load_with_join<C: ConnectionTrait>(
@@ -199,7 +371,7 @@ where
             .join(sea_orm::JoinType::LeftJoin, relation_def)
             .select_also(R1::default());
 
-        let results: Vec<(<Parent as EntityTrait>::Model, Option<R1::Model>)> =
+        let results: Vec<(<Parent as EntityTrait>::Model, Option<<R1 as EntityTrait>::Model>)> =
             joined_select.all(db).await?;
 
         let models_with_relations: Vec<Parent::ModelWithRelations> = results
@@ -236,9 +408,9 @@ where
     Parent: EntityTrait
         + HasRelation<R1>
         + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
-    R1: EntityTrait,
+    R1: EntityTrait + crate::traits::WithRelationsTrait,
 {
-    type Output = FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>;
+    type Output = FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, <R1 as EntityTrait>::Model>;
 
     async fn load_all<C: ConnectionTrait>(
         models: &[<Parent as EntityTrait>::Model],
@@ -267,12 +439,12 @@ where
         + HasRelation<R1>
         + HasRelation<R2>
         + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
-    R1: EntityTrait,
-    R2: EntityTrait,
+    R1: EntityTrait + crate::traits::WithRelationsTrait,
+    R2: EntityTrait + crate::traits::WithRelationsTrait,
 {
     type Output = (
-        FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, R1::Model>,
-        FxHashMap<<Parent as HasRelation<R2>>::RelatedPK, R2::Model>,
+        FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, <R1 as EntityTrait>::Model>,
+        FxHashMap<<Parent as HasRelation<R2>>::RelatedPK, <R2 as EntityTrait>::Model>,
     );
 
     async fn load_all<C: ConnectionTrait>(
@@ -301,6 +473,204 @@ where
 // The single and 2-tuple cases cover 95%+ of real-world use cases
 
 // ============================================================================
+// Mixed Forward + Reverse Relations (Tuple)
+// ============================================================================
+
+// Forward + Reverse relation tuple: (RelationSpec<R>, ReverseRelationSpec<C>)
+impl<Parent, R1, C1> LoadRelations<Parent> for (RelationSpec<R1>, ReverseRelationSpec<C1>)
+where
+    Parent: EntityTrait
+        + HasRelation<R1>
+        + HasReverseRelation<C1>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    R1: EntityTrait + crate::traits::WithRelationsTrait,
+    C1: EntityTrait,
+    <Parent as EntityTrait>::Model: Sync,
+{
+    type Output = (
+        FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, <R1 as EntityTrait>::Model>,
+        FxHashMap<<Parent as HasReverseRelation<C1>>::ParentPK, Vec<C1::Model>>,
+    );
+
+    async fn load_all<C: ConnectionTrait>(
+        models: &[<Parent as EntityTrait>::Model],
+        db: &C,
+    ) -> Result<Self::Output, OrmadaError> {
+        let (forward, reverse) = futures::join!(
+            <Parent as HasRelation<R1>>::load_related(models, db),
+            <Parent as HasReverseRelation<C1>>::load_children(models, db)
+        );
+        Ok((forward?, reverse?))
+    }
+
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    ) {
+        // Populate forward relation
+        for model in models.iter_mut() {
+            let pk = <Parent as HasRelation<R1>>::get_foreign_key(&**model);
+            let related = data.0.get(&pk).cloned();
+            <Parent as HasRelation<R1>>::set_related(model, related);
+        }
+        // Populate reverse relation
+        for model in models.iter_mut() {
+            let pk = <Parent as HasReverseRelation<C1>>::get_primary_key(&**model);
+            let children = data.1.get(&pk).cloned().unwrap_or_default();
+            <Parent as HasReverseRelation<C1>>::set_children(model, children);
+        }
+    }
+}
+
+// Reverse + Forward relation tuple: (ReverseRelationSpec<C>, RelationSpec<R>)
+impl<Parent, C1, R1> LoadRelations<Parent> for (ReverseRelationSpec<C1>, RelationSpec<R1>)
+where
+    Parent: EntityTrait
+        + HasRelation<R1>
+        + HasReverseRelation<C1>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    R1: EntityTrait + crate::traits::WithRelationsTrait,
+    C1: EntityTrait,
+    <Parent as EntityTrait>::Model: Sync,
+{
+    type Output = (
+        FxHashMap<<Parent as HasReverseRelation<C1>>::ParentPK, Vec<C1::Model>>,
+        FxHashMap<<Parent as HasRelation<R1>>::RelatedPK, <R1 as EntityTrait>::Model>,
+    );
+
+    async fn load_all<C: ConnectionTrait>(
+        models: &[<Parent as EntityTrait>::Model],
+        db: &C,
+    ) -> Result<Self::Output, OrmadaError> {
+        let (reverse, forward) = futures::join!(
+            <Parent as HasReverseRelation<C1>>::load_children(models, db),
+            <Parent as HasRelation<R1>>::load_related(models, db)
+        );
+        Ok((reverse?, forward?))
+    }
+
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    ) {
+        // Populate reverse relation
+        for model in models.iter_mut() {
+            let pk = <Parent as HasReverseRelation<C1>>::get_primary_key(&**model);
+            let children = data.0.get(&pk).cloned().unwrap_or_default();
+            <Parent as HasReverseRelation<C1>>::set_children(model, children);
+        }
+        // Populate forward relation
+        for model in models.iter_mut() {
+            let pk = <Parent as HasRelation<R1>>::get_foreign_key(&**model);
+            let related = data.1.get(&pk).cloned();
+            <Parent as HasRelation<R1>>::set_related(model, related);
+        }
+    }
+}
+
+// ============================================================================
+// Reverse Relation Loading (One-to-Many)
+// ============================================================================
+
+/// Marker struct for reverse relations (one-to-many)
+///
+/// **Note**: The `relations!` macro now handles both forward and reverse relations.
+/// This type is kept for backwards compatibility.
+pub struct ReverseRelationSpec<E: EntityTrait> {
+    _marker: std::marker::PhantomData<E>,
+}
+
+impl<E: EntityTrait> ReverseRelationSpec<E> {
+    /// Create a new reverse relation specification
+    pub const fn new() -> Self {
+        Self { _marker: std::marker::PhantomData }
+    }
+}
+
+impl<E: EntityTrait> Default for ReverseRelationSpec<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Legacy macro for reverse relations - use `relations!` instead
+#[macro_export]
+macro_rules! reverse_relations {
+    ($model:ty) => {
+        $crate::relations::ReverseRelationSpec::<< $model as $crate::relations::HasEntityType >::__Entity>::new()
+    };
+    ($($model:ty),+ $(,)?) => {
+        ( $( $crate::relations::ReverseRelationSpec::<< $model as $crate::relations::HasEntityType >::__Entity>::new() ),+ )
+    };
+}
+
+// LoadRelations implementation for ReverseRelationSpec (backwards compatibility)
+impl<Parent, Child> LoadRelations<Parent> for ReverseRelationSpec<Child>
+where
+    Parent: EntityTrait
+        + HasReverseRelation<Child>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    Child: EntityTrait,
+    <Parent as EntityTrait>::Model: Sync,
+{
+    type Output = FxHashMap<<Parent as HasReverseRelation<Child>>::ParentPK, Vec<Child::Model>>;
+
+    async fn load_all<C: ConnectionTrait>(
+        models: &[<Parent as EntityTrait>::Model],
+        db: &C,
+    ) -> Result<Self::Output, OrmadaError> {
+        <Parent as HasReverseRelation<Child>>::load_children(models, db).await
+    }
+
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    ) {
+        for model in models {
+            let pk = <Parent as HasReverseRelation<Child>>::get_primary_key(&**model);
+            let children = data.get(&pk).cloned().unwrap_or_default();
+            <Parent as HasReverseRelation<Child>>::set_children(model, children);
+        }
+    }
+}
+
+// Two reverse relations (tuple) - backwards compatibility
+impl<Parent, C1, C2> LoadRelations<Parent> for (ReverseRelationSpec<C1>, ReverseRelationSpec<C2>)
+where
+    Parent: EntityTrait
+        + HasReverseRelation<C1>
+        + HasReverseRelation<C2>
+        + crate::traits::WithRelationsTrait<Model = <Parent as EntityTrait>::Model>,
+    C1: EntityTrait,
+    C2: EntityTrait,
+    <Parent as EntityTrait>::Model: Sync,
+{
+    type Output = (
+        FxHashMap<<Parent as HasReverseRelation<C1>>::ParentPK, Vec<C1::Model>>,
+        FxHashMap<<Parent as HasReverseRelation<C2>>::ParentPK, Vec<C2::Model>>,
+    );
+
+    async fn load_all<C: ConnectionTrait>(
+        models: &[<Parent as EntityTrait>::Model],
+        db: &C,
+    ) -> Result<Self::Output, OrmadaError> {
+        let (c1, c2) = futures::join!(
+            <Parent as HasReverseRelation<C1>>::load_children(models, db),
+            <Parent as HasReverseRelation<C2>>::load_children(models, db)
+        );
+        Ok((c1?, c2?))
+    }
+
+    fn populate(
+        models: &mut [<Parent as crate::traits::WithRelationsTrait>::ModelWithRelations],
+        data: &Self::Output,
+    ) {
+        <ReverseRelationSpec<C1> as LoadRelations<Parent>>::populate(models, &data.0);
+        <ReverseRelationSpec<C2> as LoadRelations<Parent>>::populate(models, &data.1);
+    }
+}
+
+// ============================================================================
 // QuerySet with Eager Loading
 // ============================================================================
 
@@ -320,40 +690,41 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
             _relations: std::marker::PhantomData,
         }
     }
+}
 
-    /// Add relations to prefetch
+impl<'a, E, C> QuerySetEager<'a, E, C, ()>
+where
+    E: EntityTrait + crate::traits::WithRelationsTrait<Model = <E as EntityTrait>::Model>,
+    <E as EntityTrait>::Model: Sync + Clone,
+    C: ConnectionTrait,
+{
+    /// Add relations to prefetch (chainable)
     ///
-    /// Use the `relations!` macro for clean syntax. You can also chain multiple
-    /// calls or pass a raw Vec of `TypeIds`.
+    /// Use `with_nested!` for nested prefetch or `reverse_relations!` for reverse relations.
+    /// Multiple calls can be chained.
     ///
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use ormada::relations;
-    /// use entity::{author::Entity as Author, publisher::Entity as Publisher};
-    ///
-    /// // Using the relations! macro (recommended)
+    /// // Single nested prefetch
     /// let books = Book::objects(db)
-    ///     .filter(Column::Published.eq(true))
-    ///     .prefetch_related(relations![Author, Publisher])
+    ///     .prefetch_related(with_nested![Author => Book])
     ///     .all()
     ///     .await?;
     ///
-    /// // Single relation
+    /// // Chained prefetch for multiple nested relations
     /// let books = Book::objects(db)
-    ///     .prefetch_related(relations![Author])
+    ///     .prefetch_related(with_nested![Author => Book])
+    ///     .prefetch_related(with_nested![Publisher => Author])
     ///     .all()
     ///     .await?;
     ///
-    /// // Access the loaded relations
-    /// for book in books {
-    ///     println!("Title: {}", book.title);
-    ///     if let Some(author) = book.author {
-    ///         println!("Author: {}", author.name);
-    ///     }
-    /// }
+    /// // Reverse relations
+    /// let authors = Author::objects(db)
+    ///     .prefetch_related(reverse_relations![Book])
+    ///     .all()
+    ///     .await?;
     /// ```
-    /// Add relations to prefetch (separate queries, 1+M pattern)
     pub fn prefetch_related<R>(self, _relations: R) -> QuerySetEager<'a, E, C, R> {
         QuerySetEager {
             db: self.db,
@@ -395,6 +766,33 @@ impl<'a, E: EntityTrait, C: ConnectionTrait> QuerySetEager<'a, E, C, ()> {
     /// | Many-to-Many | `prefetch_related` |
     pub fn select_related<R>(self, _relations: R) -> QuerySetJoined<'a, E, C, R> {
         QuerySetJoined {
+            db: self.db,
+            select: self.select,
+            _relations: std::marker::PhantomData,
+        }
+    }
+}
+
+// Chainable prefetch_related - allows chaining multiple prefetch calls
+impl<'a, E, C, R1> QuerySetEager<'a, E, C, R1>
+where
+    E: EntityTrait + crate::traits::WithRelationsTrait<Model = <E as EntityTrait>::Model>,
+    <E as EntityTrait>::Model: Sync + Clone,
+    C: ConnectionTrait,
+{
+    /// Chain another prefetch_related call
+    ///
+    /// This allows loading multiple nested relations in a single query chain:
+    ///
+    /// ```rust,ignore
+    /// let books = Book::objects(db)
+    ///     .prefetch_related(with_nested![Author => Book])
+    ///     .prefetch_related(with_nested![Publisher => Author])
+    ///     .all()
+    ///     .await?;
+    /// ```
+    pub fn and_prefetch<R2>(self, _relations: R2) -> QuerySetEager<'a, E, C, (R1, R2)> {
+        QuerySetEager {
             db: self.db,
             select: self.select,
             _relations: std::marker::PhantomData,

@@ -347,18 +347,24 @@ pub mod prelude {
         FilterExpr, FilterOp, Filtered, Fresh, OrderDirection, Ordered, Paginated, QueryExt,
         QueryOp, QueryPlan, QuerySet, QuerySetState, QueryState, Q,
     };
-    pub use crate::relations::{HasRelation, LoadRelations, QuerySetEager};
+    pub use crate::relations::{
+        HasRelation, HasReverseRelation, LoadRelations, QuerySetEager, ReverseRelationSpec,
+        ReverseRelationStorage,
+    };
     pub use crate::router::{
         ConsistencyContext, DatabaseRouter, RoutingStrategy, TransactionState,
     };
-    pub use crate::traits::{OrmadaConnection, OrmadaEntity, SoftDeleteConfig, WithRelationsTrait};
+    pub use crate::traits::{
+        AsModelRef, OptionModelExt, OrmadaConnection, OrmadaEntity, SoftDeleteConfig,
+        WithRelationsTrait,
+    };
     pub use crate::types::OnDelete;
     pub use async_trait::async_trait;
 
     // =========================================================================
     // Macros
     // =========================================================================
-    pub use crate::{hooks, relations, tx};
+    pub use crate::{hooks, relations, reverse_relations, tx};
 
     // Derive macros
     #[cfg(feature = "derive")]

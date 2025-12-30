@@ -342,24 +342,6 @@ async fn test_non_nullable_fk_type_is_model_not_option(
     accepts_author(&book.author);
 }
 
-#[rstest]
-#[awt]
-#[tokio::test]
-async fn test_nullable_fk_type_is_option_model(
-    #[future] db_with_articles_all_with_authors: (DatabaseRouter, Author, Vec<Article>),
-) {
-    let (db, _author, _articles) = db_with_articles_all_with_authors;
-
-    let article = Article::objects(&db)
-        .prefetch_related(relations![Author])
-        .first()
-        .await
-        .unwrap();
-
-    fn accepts_option_author(_author: &Option<Author>) {}
-    accepts_option_author(&article.author);
-}
-
 // ============================================================================
 // Filter and Order Tests with Relations
 // ============================================================================

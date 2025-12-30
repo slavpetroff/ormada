@@ -1879,7 +1879,9 @@ where
     /// ```
     pub fn prefetch_related<R>(self, relations: R) -> crate::relations::QuerySetEager<'a, E, C, R>
     where
-        E: crate::traits::OrmadaEntity,
+        E: crate::traits::OrmadaEntity
+            + crate::traits::WithRelationsTrait<Model = <E as sea_orm::EntityTrait>::Model>,
+        <E as sea_orm::EntityTrait>::Model: Sync + Clone,
     {
         use crate::relations::QuerySetEager;
 
@@ -2912,9 +2914,10 @@ where
         Ok(select.into_model::<T>().all(self.inner.db).await?)
     }
 
-    /// Group query results by one or more columns (Ormada's .`group_by()`)
+    /// Group query results by one or more columns for SQL GROUP BY (aggregations)
     ///
-    /// Used with `.annotate()` for aggregation queries.
+    /// Used with `.annotate()` for aggregation queries that collapse rows.
+    /// For loading related objects grouped by parent, use `prefetch_related`.
     ///
     /// # Examples
     ///

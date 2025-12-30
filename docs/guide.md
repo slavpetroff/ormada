@@ -387,28 +387,117 @@ let summaries: Vec<BookSummary> = Book::objects(&db)
 
 ## Relations
 
-### Eager Loading (Prevent N+1)
+Ormada provides three types of relations:
+
+| Relation Type | Declaration | Direction | Example |
+|---------------|-------------|-----------|---------|
+| **Forward (FK)** | `#[foreign_key(Model)]` | Child → Parent | Book → Author |
+| **Reverse (1:N)** | Auto-inferred from FK | Parent → Children | Author → Books |
+| **Many-to-Many** | `#[many_to_many(Model, through = JoinModel)]` | Both ways | Book ↔ Tags |
+
+### Forward Relations (Foreign Key)
+
+When a model has a foreign key, you can load the related parent model:
+
+```rust
+// Book has #[foreign_key(Author)]
+let books = Book::objects(&db)
+    .select_related(relations![Author])  // JOIN-based, single query
+    .all()
+    .await?;
+
+for book in &books {
+    println!("{} by {}", book.title, book.author.name);
+}
+
+// Or use prefetch_related for separate queries
+let books = Book::objects(&db)
+    .prefetch_related(relations![Author])
+    .all()
+    .await?;
+```
+
+### Reverse Relations (One-to-Many)
+
+When `Book` declares `#[foreign_key(Author)]`, Ormada automatically generates:
+
+- `Author::Model::get_books(&db)` - async method to load books
+- `Author::ModelWithRelations::get_books(&db)` - returns prefetched data if available
+
+```rust
+// Single author - lazy load
+let author = Author::objects(&db).first().await?;
+let books = author.get_books(&db).await?;
+
+// Multiple authors - efficient batch loading (2 queries total)
+let authors = Author::objects(&db)
+    .prefetch_related(reverse_relations![Book])
+    .all()
+    .await?;
+
+for author in &authors {
+    // Returns prefetched data, no additional DB query
+    let books = author.get_books(&db).await?;
+    println!("{} wrote {} books", author.name, books.len());
+}
+```
+
+### Eager Loading Methods
 
 | Method | Query Pattern | Best For |
 |--------|---------------|----------|
-| `select_related` | Single JOIN query | FK, 1:1 relations |
-| `prefetch_related` | Separate queries (1+M) | 1:N, M:N relations |
+| `select_related` | Single JOIN query | Forward FK relations (many-to-one) |
+| `prefetch_related` | Separate queries | Reverse relations (one-to-many), M:N |
 
 ```rust
-// select_related - Uses SQL JOIN
+// select_related - Uses SQL JOIN (forward relations only)
 let books = Book::objects(&db)
     .filter(Book::Published.eq(true))
     .select_related(relations![Author])
     .all()
     .await?;
 
-for book in books {
-    println!("{} by {}", book.title, book.author.name);
-}
+// prefetch_related - Separate queries (works for all relation types)
+// Forward relation
+let books = Book::objects(&db)
+    .prefetch_related(relations![Author])
+    .all()
+    .await?;
 
-// prefetch_related - Separate queries
+// Reverse relation
+let authors = Author::objects(&db)
+    .prefetch_related(reverse_relations![Book])
+    .all()
+    .await?;
+```
+
+### Combining Multiple Relations
+
+Use tuple syntax to load multiple relations in a single `prefetch_related` call:
+
+```rust
+// Multiple forward relations
 let books = Book::objects(&db)
     .prefetch_related(relations![Author, Publisher])
+    .all()
+    .await?;
+
+// Multiple reverse relations (Author has Books and Articles)
+let authors = Author::objects(&db)
+    .prefetch_related((reverse_relations![Book], reverse_relations![Article]))
+    .all()
+    .await?;
+
+for author in &authors {
+    let books = author.get_books(&db).await?;
+    let articles = author.get_articles(&db).await?;
+    println!("{} wrote {} books and {} articles", 
+             author.name, books.len(), articles.len());
+}
+
+// Mixed: forward + reverse relations
+let books = Book::objects(&db)
+    .prefetch_related((relations![Author], reverse_relations![Review]))
     .all()
     .await?;
 ```
@@ -430,6 +519,16 @@ pub struct Book {
 let book = Book::objects(&db).get(book_id).await?;
 let tags = book.get_tags(&db).await?;
 ```
+
+### Generated Methods Summary
+
+When you define relations, Ormada generates these methods:
+
+| Declaration | Generated On | Method | Returns |
+|-------------|--------------|--------|---------|
+| `#[foreign_key(Author)]` on Book | `Author::Model` | `get_books(&db)` | `Result<Vec<Book>>` |
+| `#[foreign_key(Author)]` on Book | `Author::ModelWithRelations` | `get_books(&db)` | `Result<Vec<Book>>` (prefetched) |
+| `#[many_to_many(Tag, through = BookTag)]` | `Book::Model` | `get_tags(&db)` | `Result<Vec<Tag>>` |
 
 ---
 

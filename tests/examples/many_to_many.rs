@@ -277,7 +277,7 @@ pub async fn example_prefetch_tag_from_join(db: &DatabaseRouter) -> Result<(), O
 pub async fn get_tags_for_article(
     db: &DatabaseRouter,
     article_id: i32,
-) -> Result<Vec<Tag>, OrmadaError> {
+) -> Result<Vec<models::tag::ModelWithRelations>, OrmadaError> {
     let article_tags = ArticleTag::objects(db)
         .filter(ArticleTag::ArticleId.eq(article_id))
         .prefetch_related(relations![Tag])
@@ -291,7 +291,7 @@ pub async fn get_tags_for_article(
 pub async fn get_articles_for_tag(
     db: &DatabaseRouter,
     tag_id: i32,
-) -> Result<Vec<Article>, OrmadaError> {
+) -> Result<Vec<models::article::ModelWithRelations>, OrmadaError> {
     let article_tags = ArticleTag::objects(db)
         .filter(ArticleTag::TagId.eq(tag_id))
         .prefetch_related(relations![Article])

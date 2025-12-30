@@ -114,6 +114,98 @@ pub trait WithRelationsTrait {
         Self: Sized;
 }
 
+/// Trait for types that can be viewed as a Model reference
+///
+/// This trait provides a unified interface for working with both `Model` and `ModelWithRelations`
+/// types, allowing functions to accept either type seamlessly.
+///
+/// Both `Model` and `ModelWithRelations` implement this trait, enabling polymorphic behavior
+/// where users only need to think about `Model` types while the ORM handles the internal
+/// representation.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Function that accepts both Model and ModelWithRelations
+/// fn process_author<T: AsModelRef<Model = Author>>(author: &T) -> i32 {
+///     author.as_model_ref().id
+/// }
+///
+/// // Works with Model
+/// let author: Author = Author::objects(db).create(data).await?;
+/// process_author(&author);
+///
+/// // Works with ModelWithRelations
+/// let author_with_books = Author::objects(db)
+///     .prefetch_related(reverse_relations![Book])
+///     .first()
+///     .await?;
+/// process_author(&author_with_books);
+/// ```
+pub trait AsModelRef {
+    /// The underlying Model type
+    type Model: ?Sized;
+
+    /// Get a reference to the underlying Model
+    ///
+    /// For `Model`, this returns `&self`.
+    /// For `ModelWithRelations`, this returns `&self.inner` via Deref.
+    fn as_model_ref(&self) -> &Self::Model;
+}
+
+/// Blanket implementation for types that implement Deref
+///
+/// This automatically implements `AsModelRef` for both `Model` (via identity Deref)
+/// and `ModelWithRelations` (via its Deref to Model implementation).
+impl<T> AsModelRef for T
+where
+    T: std::ops::Deref,
+    T::Target: Sized,
+{
+    type Model = T::Target;
+
+    fn as_model_ref(&self) -> &Self::Model {
+        self
+    }
+}
+
+/// Extension trait for Option to enable seamless Model access
+///
+/// This trait provides a `.as_model()` method that converts `&Option<ModelWithRelations>`
+/// to `Option<&Model>`, enabling clean function signatures.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// // Clean function signature
+/// fn process_author(author: Option<&Author>) {
+///     if let Some(a) = author {
+///         println!("{}", a.name);
+///     }
+/// }
+///
+/// // Call with Option<ModelWithRelations>
+/// let author_with_relations: Option<AuthorWithRelations> = ...;
+/// process_author(author_with_relations.as_model());
+/// ```
+pub trait OptionModelExt<M> {
+    /// Convert `&Option<ModelWithRelations>` to `Option<&Model>`
+    ///
+    /// This enables passing `Option<ModelWithRelations>` to functions
+    /// that expect `Option<&Model>`.
+    fn as_model(&self) -> Option<&M>;
+}
+
+/// Implementation for Option<T> where T implements `AsRef`<M>
+impl<T, M> OptionModelExt<M> for Option<T>
+where
+    T: AsRef<M>,
+{
+    fn as_model(&self) -> Option<&M> {
+        self.as_ref().map(std::convert::AsRef::as_ref)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

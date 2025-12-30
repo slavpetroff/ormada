@@ -375,7 +375,7 @@ fn parse_many_to_many(meta_list: &syn::MetaList) -> syn::Result<ManyToManyConfig
             // The M:N helpers are generated OUTSIDE _internal, so we only need one super
             // From article module, super gets us to models, then tag::_internal::Entity
             let entity_path = if path.segments.len() == 1 {
-                // Simple name like `Tag` - assume sibling module
+                // Simple case: Tag -> super::tag::_internal::Entity
                 let model_name = &path.segments[0].ident;
                 let module_name = format_ident!("{}", to_snake_case(&model_name.to_string()));
                 syn::parse_quote! { super::#module_name::_internal::Entity }
@@ -596,6 +596,8 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
     let django_entity_impl =
         generate_django_entity_impl(&field_configs, table_name, soft_delete_field.as_ref())?;
     let has_relation_impls = generate_has_relation_impls(&foreign_keys);
+    let has_reverse_relation_impls = generate_has_reverse_relation_impls(&foreign_keys);
+    let reverse_relation_helpers = generate_reverse_relation_helpers(&foreign_keys, &original_name);
     let with_relations_trait_impl = generate_with_relations_trait(&foreign_keys);
     let model_save_impl = generate_model_save_impl(&field_configs)?;
     let model_delete_impl = generate_model_delete_impl(soft_delete_field.as_ref())?;
@@ -646,6 +648,12 @@ pub fn impl_ormada_model(attr: TokenStream, input: TokenStream) -> syn::Result<T
 
             // HasRelation implementations for foreign keys
             #has_relation_impls
+
+            // HasReverseRelation implementations (allows parent to load children)
+            #has_reverse_relation_impls
+
+            // Reverse relation helper methods (get_books() on Author when Book has FK to Author)
+            #reverse_relation_helpers
 
             // WithRelationsTrait implementation (required for relations system)
             #with_relations_trait_impl
@@ -883,13 +891,7 @@ fn generate_many_to_many_helpers(
             let related_module = entity_segments
                 .iter()
                 .position(|s| s.ident == "_internal")
-                .and_then(|pos| {
-                    if pos > 0 {
-                        Some(&entity_segments[pos - 1].ident)
-                    } else {
-                        None
-                    }
-                })
+                .and_then(|pos| if pos > 0 { Some(&entity_segments[pos - 1].ident) } else { None })
                 .map(|i| i.to_string())
                 .unwrap_or_else(|| "related".to_string());
 
@@ -1220,19 +1222,33 @@ fn generate_has_relation_impls(
             let is_nullable_fk = fk_type_str.contains("Option");
 
             // Generate set_related based on FK nullability
-            // NOTE: set_related now works on ModelWithRelations, not Model
+            // NOTE: set_related converts Model to ModelWithRelations to enable nested prefetch
             let set_related_impl = if is_nullable_fk {
-                // Nullable FK: relation field is Option<Model>
+                // Nullable FK: relation field is Option<ModelWithRelations>
                 quote! {
                     fn set_related(model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
+                        // Convert Model to ModelWithRelations for nested prefetch support
+                        model.#relation_name = related.map(|r| ::core::convert::From::from(r));
+                    }
+
+                    fn set_related_with_relations(model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations, related: ::core::option::Option<<#entity as ::ormada::traits::WithRelationsTrait>::ModelWithRelations>) {
+                        // Set ModelWithRelations directly (for nested prefetch with pre-populated relations)
                         model.#relation_name = related;
                     }
                 }
             } else {
-                // Non-nullable FK: relation field is Model directly
+                // Non-nullable FK: relation field is ModelWithRelations directly
                 // If related is None, we use Default (this shouldn't happen with proper prefetch)
                 quote! {
                     fn set_related(model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations, related: ::core::option::Option<<#entity as ::ormada::__internal::EntityTrait>::Model>) {
+                        if let Some(r) = related {
+                            // Convert Model to ModelWithRelations for nested prefetch support
+                            model.#relation_name = ::core::convert::From::from(r);
+                        }
+                    }
+
+                    fn set_related_with_relations(model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations, related: ::core::option::Option<<#entity as ::ormada::traits::WithRelationsTrait>::ModelWithRelations>) {
+                        // Set ModelWithRelations directly (for nested prefetch with pre-populated relations)
                         if let Some(r) = related {
                             model.#relation_name = r;
                         }
@@ -1383,6 +1399,324 @@ fn generate_has_relation_impls(
         .collect();
 
     quote! { #(#impls)* }
+}
+
+/// Generate `HasReverseRelation` implementations on the parent entity
+///
+/// When Book has `#[foreign_key(Author)]`, this generates:
+/// `impl HasReverseRelation<Book::Entity> for Author::Entity`
+///
+/// This allows `Author::objects(&db).prefetch_related(reverse_relations![Book]).all()`
+fn generate_has_reverse_relation_impls(
+    foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
+) -> TokenStream {
+    let impls: Vec<_> = foreign_keys
+        .iter()
+        .map(|(field_name, fk_field_type, fk)| {
+            let parent_entity = &fk.entity;
+
+            // The child's FK field name (e.g., author_id)
+            let fk_field = field_name;
+
+            // Check if FK field is nullable
+            let fk_type_str = quote!(#fk_field_type).to_string();
+            let is_nullable_fk = fk_type_str.contains("Option");
+
+            // Extract the inner type for nullable FKs
+            let parent_pk_type = if is_nullable_fk {
+                extract_option_inner_type(fk_field_type).unwrap_or_else(|| fk_field_type.clone())
+            } else {
+                fk_field_type.clone()
+            };
+
+            // Generate the relation field name on the parent's ModelWithRelations
+            // e.g., Author.books (pluralized child model name)
+            // We use the module name which is snake_case of the struct name
+            // For now, we'll use a simple pluralization: add 's' to the snake_case name
+
+            // Convert FK field name to PascalCase for Column enum
+            let fk_field_pascal = format_ident!("{}", fk_field.to_string().to_upper_camel_case());
+
+            // Generate load_children implementation
+            let load_children_impl = if is_nullable_fk {
+                quote! {
+                    async fn load_children<C: ::ormada::__internal::ConnectionTrait>(
+                        models: &[<Self as ::ormada::__internal::EntityTrait>::Model],
+                        db: &C,
+                    ) -> ::core::result::Result<
+                        ::ormada::prelude::FxHashMap<Self::ParentPK, ::std::vec::Vec<<Entity as ::ormada::__internal::EntityTrait>::Model>>,
+                        ::ormada::error::OrmadaError
+                    > {
+                        use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
+
+                        // Get parent PKs
+                        let parent_pks: ::std::vec::Vec<Self::ParentPK> = models
+                            .iter()
+                            .map(|m| m.id)
+                            .collect();
+
+                        if parent_pks.is_empty() {
+                            return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
+                        }
+
+                        // Load all children that reference these parents
+                        // Use ColumnTrait::is_in which works on Column enum variants
+                        let children = <Entity as ::ormada::__internal::EntityTrait>::find()
+                            .filter(Column::#fk_field_pascal.is_in(parent_pks.clone()))
+                            .all(db)
+                            .await?;
+
+                        // Group children by parent FK
+                        let mut map: ::ormada::prelude::FxHashMap<Self::ParentPK, ::std::vec::Vec<<Entity as ::ormada::__internal::EntityTrait>::Model>> =
+                            ::ormada::prelude::FxHashMap::default();
+
+                        // Initialize empty vecs for all parent PKs
+                        for pk in &parent_pks {
+                            map.entry(*pk).or_default();
+                        }
+
+                        for child in children {
+                            if let Some(fk_value) = child.#fk_field {
+                                map.entry(fk_value).or_default().push(child);
+                            }
+                        }
+
+                        ::core::result::Result::Ok(map)
+                    }
+                }
+            } else {
+                quote! {
+                    async fn load_children<C: ::ormada::__internal::ConnectionTrait>(
+                        models: &[<Self as ::ormada::__internal::EntityTrait>::Model],
+                        db: &C,
+                    ) -> ::core::result::Result<
+                        ::ormada::prelude::FxHashMap<Self::ParentPK, ::std::vec::Vec<<Entity as ::ormada::__internal::EntityTrait>::Model>>,
+                        ::ormada::error::OrmadaError
+                    > {
+                        use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait, Iterable};
+
+                        // Get parent PKs
+                        let parent_pks: ::std::vec::Vec<Self::ParentPK> = models
+                            .iter()
+                            .map(|m| m.id)
+                            .collect();
+
+                        if parent_pks.is_empty() {
+                            return ::core::result::Result::Ok(::ormada::prelude::FxHashMap::default());
+                        }
+
+                        // Load all children that reference these parents
+                        // Use ColumnTrait::is_in which works on Column enum variants
+                        let children = <Entity as ::ormada::__internal::EntityTrait>::find()
+                            .filter(Column::#fk_field_pascal.is_in(parent_pks.clone()))
+                            .all(db)
+                            .await?;
+
+                        // Group children by parent FK
+                        let mut map: ::ormada::prelude::FxHashMap<Self::ParentPK, ::std::vec::Vec<<Entity as ::ormada::__internal::EntityTrait>::Model>> =
+                            ::ormada::prelude::FxHashMap::default();
+
+                        // Initialize empty vecs for all parent PKs
+                        for pk in &parent_pks {
+                            map.entry(*pk).or_default();
+                        }
+
+                        for child in children {
+                            map.entry(child.#fk_field).or_default().push(child);
+                        }
+
+                        ::core::result::Result::Ok(map)
+                    }
+                }
+            };
+
+            quote! {
+                // HasReverseRelation: allows parent to load children
+                // e.g., Author can load all Books via prefetch_related(reverse_relations![Book])
+                impl ::ormada::relations::HasReverseRelation<Entity> for #parent_entity {
+                    type ParentPK = #parent_pk_type;
+
+                    fn get_primary_key(model: &<Self as ::ormada::__internal::EntityTrait>::Model) -> Self::ParentPK {
+                        model.id
+                    }
+
+                    #load_children_impl
+
+                    fn set_children(
+                        model: &mut <Self as ::ormada::traits::WithRelationsTrait>::ModelWithRelations,
+                        children: ::std::vec::Vec<<Entity as ::ormada::__internal::EntityTrait>::Model>,
+                    ) {
+                        // Store children in the dynamic reverse relation storage
+                        model.__reverse_relations.set(children);
+                    }
+                }
+            }
+        })
+        .collect();
+
+    quote! { #(#impls)* }
+}
+
+/// Generate helper methods on the PARENT model to get children (reverse FK relation)
+///
+/// When Book has `#[foreign_key(Author)]`, this generates `get_books()` on both:
+///
+/// 1. On Author::Model - async method that queries the database:
+/// ```ignore
+/// impl Author::Model {
+///     pub async fn get_books(&self, db: &C) -> Result<Vec<Book::Model>, OrmadaError>
+/// }
+/// ```
+///
+/// 2. On Author::ModelWithRelations - async method that returns prefetched data or queries:
+/// ```ignore
+/// impl Author::ModelWithRelations {
+///     pub async fn get_books(&self, db: &C) -> Result<Vec<Book::Model>, OrmadaError>
+/// }
+/// ```
+///
+/// This mirrors the M2M `get_tags()` pattern for consistency.
+fn generate_reverse_relation_helpers(
+    foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
+    child_struct_name: &Ident,
+) -> TokenStream {
+    if foreign_keys.is_empty() {
+        return quote! {};
+    }
+
+    // Generate child method name: Book -> get_books, Article -> get_articles
+    let child_name_snake = to_snake_case(&child_struct_name.to_string());
+    // Simple pluralization: add 's' (works for most cases)
+    let child_name_plural = format!("{}s", child_name_snake);
+    let get_method_name = format_ident!("get_{}", child_name_plural);
+
+    let methods: Vec<_> = foreign_keys
+        .iter()
+        .map(|(fk_field_name, fk_field_type, fk)| {
+            let parent_entity = &fk.entity;
+
+            // Build path to parent's Model type
+            // From super::author::_internal::Entity -> super::author::Model
+            let parent_model_path = {
+                let mut segments: Vec<_> = parent_entity.segments.iter().cloned().collect();
+                while segments
+                    .last()
+                    .map(|s| s.ident == "Entity" || s.ident == "_internal")
+                    .unwrap_or(false)
+                {
+                    segments.pop();
+                }
+                segments.push(syn::PathSegment {
+                    ident: format_ident!("Model"),
+                    arguments: syn::PathArguments::None,
+                });
+                let mut path = syn::Path {
+                    leading_colon: None,
+                    segments: syn::punctuated::Punctuated::new(),
+                };
+                for seg in segments {
+                    path.segments.push(seg);
+                }
+                path
+            };
+
+            // Build path to parent's ModelWithRelations type
+            let parent_model_with_relations_path = {
+                let mut segments: Vec<_> = parent_entity.segments.iter().cloned().collect();
+                while segments
+                    .last()
+                    .map(|s| s.ident == "Entity" || s.ident == "_internal")
+                    .unwrap_or(false)
+                {
+                    segments.pop();
+                }
+                segments.push(syn::PathSegment {
+                    ident: format_ident!("ModelWithRelations"),
+                    arguments: syn::PathArguments::None,
+                });
+                let mut path = syn::Path {
+                    leading_colon: None,
+                    segments: syn::punctuated::Punctuated::new(),
+                };
+                for seg in segments {
+                    path.segments.push(seg);
+                }
+                path
+            };
+
+            // FK field name in PascalCase for Column enum
+            let fk_field_pascal =
+                format_ident!("{}", fk_field_name.to_string().to_upper_camel_case());
+
+            // Check if FK is nullable
+            let fk_type_str = quote!(#fk_field_type).to_string();
+            let is_nullable_fk = fk_type_str.contains("Option");
+
+            // Generate the filter condition based on nullability
+            let filter_condition = if is_nullable_fk {
+                quote! { Column::#fk_field_pascal.eq(Some(parent_id)) }
+            } else {
+                quote! { Column::#fk_field_pascal.eq(parent_id) }
+            };
+
+            quote! {
+                // Reverse relation helper on Model: async query
+                impl #parent_model_path {
+                    /// Get all child models that reference this parent via foreign key
+                    ///
+                    /// This performs a database query each time it's called.
+                    /// For batch loading, use `prefetch_related(relations![...])` instead.
+                    pub async fn #get_method_name<C: ::ormada::db::ConnectionTrait>(
+                        &self,
+                        db: &C,
+                    ) -> ::core::result::Result<Vec<Model>, ::ormada::error::OrmadaError> {
+                        use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait};
+
+                        let parent_id = self.id;
+
+                        let children = <Entity as ::ormada::__internal::EntityTrait>::find()
+                            .filter(#filter_condition)
+                            .all(db)
+                            .await?;
+
+                        Ok(children)
+                    }
+                }
+
+                // Reverse relation helper on ModelWithRelations: returns prefetched or queries
+                impl #parent_model_with_relations_path {
+                    /// Get all child models that reference this parent via foreign key
+                    ///
+                    /// If data was prefetched via `prefetch_related(relations![...])`, returns
+                    /// the cached data. Otherwise, performs a database query.
+                    pub async fn #get_method_name<C: ::ormada::db::ConnectionTrait>(
+                        &self,
+                        db: &C,
+                    ) -> ::core::result::Result<Vec<Model>, ::ormada::error::OrmadaError> {
+                        // Check if we have prefetched data
+                        let prefetched = self.__reverse_relations.get::<Model>();
+                        if !prefetched.is_empty() || self.__reverse_relations.has::<Model>() {
+                            return Ok(prefetched.to_vec());
+                        }
+
+                        // Fall back to querying
+                        use ::ormada::__internal::{EntityTrait, QueryFilter, ColumnTrait};
+
+                        let parent_id = self.id;
+
+                        let children = <Entity as ::ormada::__internal::EntityTrait>::find()
+                            .filter(#filter_condition)
+                            .all(db)
+                            .await?;
+
+                        Ok(children)
+                    }
+                }
+            }
+        })
+        .collect();
+
+    quote! { #(#methods)* }
 }
 
 /// Generate the save method for the model
@@ -1772,17 +2106,25 @@ fn generate_model_with_relations_struct(
     foreign_keys: &[(Ident, syn::Type, ForeignKeyConfig)],
 ) -> TokenStream {
     if foreign_keys.is_empty() {
-        // No relations - ModelWithRelations is a newtype wrapper around Model
-        // This ensures Deref<Target = Model> is always available
+        // No forward relations - ModelWithRelations wraps Model and has reverse relation storage
         return quote! {
-            /// Model with loaded relations (wrapper for Model when no relations exist)
+            /// Model with loaded relations (wrapper for Model when no forward relations exist)
             #[derive(Debug, Clone, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
-            #[serde(transparent)]
-            pub struct ModelWithRelations(pub Model);
+            #[allow(clippy::pub_underscore_fields)]
+            pub struct ModelWithRelations {
+                #[serde(flatten)]
+                inner: Model,
+                /// Storage for reverse relations (one-to-many) loaded via prefetch_related
+                #[serde(skip)]
+                pub __reverse_relations: ::ormada::relations::ReverseRelationStorage,
+            }
 
             impl ::core::default::Default for ModelWithRelations {
                 fn default() -> Self {
-                    Self(::core::default::Default::default())
+                    Self {
+                        inner: ::core::default::Default::default(),
+                        __reverse_relations: ::core::default::Default::default(),
+                    }
                 }
             }
 
@@ -1790,25 +2132,48 @@ fn generate_model_with_relations_struct(
                 type Target = Model;
 
                 fn deref(&self) -> &Self::Target {
-                    &self.0
+                    &self.inner
                 }
             }
 
             impl ::core::ops::DerefMut for ModelWithRelations {
                 fn deref_mut(&mut self) -> &mut Self::Target {
-                    &mut self.0
+                    &mut self.inner
+                }
+            }
+
+            impl ::core::convert::AsRef<Model> for ModelWithRelations {
+                fn as_ref(&self) -> &Model {
+                    &self.inner
+                }
+            }
+
+            impl ::core::convert::AsMut<Model> for ModelWithRelations {
+                fn as_mut(&mut self) -> &mut Model {
+                    &mut self.inner
+                }
+            }
+
+            impl ::core::borrow::Borrow<Model> for ModelWithRelations {
+                fn borrow(&self) -> &Model {
+                    &self.inner
                 }
             }
 
             impl ::core::convert::From<Model> for ModelWithRelations {
                 fn from(model: Model) -> Self {
-                    Self(model)
+                    Self {
+                        inner: model,
+                        __reverse_relations: ::core::default::Default::default(),
+                    }
                 }
             }
         };
     }
 
     // Generate relation fields for ModelWithRelations
+    // IMPORTANT: We use ModelWithRelations (not Model) for FK fields to enable nested prefetch
+    // This allows: book.author.get_books() to return prefetched data
     let relation_fields: Vec<_> = foreign_keys
         .iter()
         .map(|(field_ident, fk_field_type, fk)| {
@@ -1825,13 +2190,14 @@ fn generate_model_with_relations_struct(
             let fk_type_str = quote!(#fk_field_type).to_string();
             let is_nullable_fk = fk_type_str.contains("Option");
 
+            // Use ModelWithRelations instead of Model to enable nested prefetch
             if is_nullable_fk {
                 quote! {
-                    pub #relation_name: ::core::option::Option<<#relation_type as ::ormada::__internal::EntityTrait>::Model>
+                    pub #relation_name: ::core::option::Option<<#relation_type as ::ormada::traits::WithRelationsTrait>::ModelWithRelations>
                 }
             } else {
                 quote! {
-                    pub #relation_name: <#relation_type as ::ormada::__internal::EntityTrait>::Model
+                    pub #relation_name: <#relation_type as ::ormada::traits::WithRelationsTrait>::ModelWithRelations
                 }
             }
         })
@@ -1870,12 +2236,16 @@ fn generate_model_with_relations_struct(
         /// does NOT have relation fields, providing compile-time safety against accessing
         /// unloaded relations.
         #[derive(Debug, Clone, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
+        #[allow(clippy::pub_underscore_fields)]
         pub struct ModelWithRelations {
             /// The base model with all database fields
             #[serde(flatten)]
             pub inner: Model,
-            /// Loaded relation fields
+            /// Loaded forward relation fields (from FK declarations)
             #(#relation_fields,)*
+            /// Storage for reverse relations (one-to-many) loaded via prefetch_related
+            #[serde(skip)]
+            pub __reverse_relations: ::ormada::relations::ReverseRelationStorage,
         }
 
         impl ::core::default::Default for ModelWithRelations {
@@ -1883,6 +2253,7 @@ fn generate_model_with_relations_struct(
                 Self {
                     inner: ::core::default::Default::default(),
                     #(#relation_defaults,)*
+                    __reverse_relations: ::core::default::Default::default(),
                 }
             }
         }
@@ -1901,11 +2272,30 @@ fn generate_model_with_relations_struct(
             }
         }
 
+        impl ::core::convert::AsRef<Model> for ModelWithRelations {
+            fn as_ref(&self) -> &Model {
+                &self.inner
+            }
+        }
+
+        impl ::core::convert::AsMut<Model> for ModelWithRelations {
+            fn as_mut(&mut self) -> &mut Model {
+                &mut self.inner
+            }
+        }
+
+        impl ::core::borrow::Borrow<Model> for ModelWithRelations {
+            fn borrow(&self) -> &Model {
+                &self.inner
+            }
+        }
+
         impl ::core::convert::From<Model> for ModelWithRelations {
             fn from(model: Model) -> Self {
                 Self {
                     inner: model,
                     #(#relation_defaults,)*
+                    __reverse_relations: ::core::default::Default::default(),
                 }
             }
         }
