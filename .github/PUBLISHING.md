@@ -69,16 +69,22 @@ Every pull request and push to **any branch** triggers:
 
 ## Security
 
-Weekly security audits run automatically:
+Security audits run automatically on:
+- **Weekly schedule**: Every Monday at 9:00 AM UTC
+- **Pull requests**: On all PRs
+- **Pushes to main**: After merges
 
-- **cargo-audit**: Checks for known security vulnerabilities
-- **cargo-deny**: Validates licenses and dependencies
+Checks performed:
+- **cargo-audit**: Checks for known security vulnerabilities in dependencies
+- **cargo-deny**: Validates licenses and checks for security advisories
+
+Note: The workflow automatically generates `Cargo.lock` if needed and handles workspace configurations.
 
 ## Workflows
 
-- **`ci.yml`**: Runs on all PRs and pushes to main
+- **`ci.yml`**: Runs on all PRs and pushes to any branch
 - **`publish.yml`**: Publishes to crates.io when version changes on main
-- **`security.yml`**: Weekly security audits
+- **`security.yml`**: Security audits (weekly + on PRs and main pushes)
 
 ## Version Bumping Strategy
 
