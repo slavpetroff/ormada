@@ -18,7 +18,7 @@ name = "ormada"
 path = "src/main.rs"
 
 [dependencies]
-ormada-schema = { path = "../schema" }
+ormada-schema = { version = "0.1.0" }
 clap = { version = "4.4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 sea-orm = { version = "2.0.0-rc.18", features = ["runtime-tokio-native-tls", "sqlx-postgres", "sqlx-sqlite"] }

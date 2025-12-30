@@ -37,7 +37,7 @@ tracing = "0.1"
 sqlformat = "0.5.0"
 
 # Optional dependencies
-ormada-derive = { path = "./derive", optional = true }
+ormada-derive = { version = "0.1.0", optional = true }
 
 [features]
 default = ["derive"]
