@@ -60,7 +60,6 @@ impl SoftDeleteConfig {
     }
 }
 
-
 /// Trait for entities that support Ormada-style creation behavior
 ///
 /// This is automatically implemented by `#[derive(OrmadaModel)]` and `#[ormada_model]`.
