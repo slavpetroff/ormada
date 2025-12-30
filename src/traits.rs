@@ -33,13 +33,14 @@ impl<T: ConnectionTrait> OrmadaConnection for T {}
 ///     SoftDeleteConfig::Disabled
 /// }
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SoftDeleteConfig {
     /// Soft delete is disabled - records are permanently deleted
+    #[default]
     Disabled,
     /// Soft delete is enabled - records are marked with a timestamp
     Enabled {
-        /// Column name storing the deletion timestamp (e.g., `deleted_at`)
+        /// Column naSoftDeleteConfigme storing the deletion timestamp (e.g., `deleted_at`)
         column: &'static str,
     },
 }
@@ -59,11 +60,6 @@ impl SoftDeleteConfig {
     }
 }
 
-impl Default for SoftDeleteConfig {
-    fn default() -> Self {
-        Self::Disabled
-    }
-}
 
 /// Trait for entities that support Ormada-style creation behavior
 ///

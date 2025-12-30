@@ -2,7 +2,7 @@
 name = "ormada-schema"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.83"
 authors = ["Stanislav Petrov <slavpetroff@gmail.com>"]
 description = "Schema types and parsing for Ormada ORM migrations"
 license = "MIT"

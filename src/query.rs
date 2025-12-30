@@ -3450,11 +3450,11 @@ impl FilterOp {
 #[derive(Debug, Clone)]
 pub enum FilterExpr {
     /// AND combination of multiple conditions
-    And(Vec<FilterExpr>),
+    And(Vec<Self>),
     /// OR combination of multiple conditions
-    Or(Vec<FilterExpr>),
+    Or(Vec<Self>),
     /// NOT (negation) of a condition
-    Not(Box<FilterExpr>),
+    Not(Box<Self>),
     /// Typed filter operation with column name and operation type
     Typed {
         /// Column name being filtered
