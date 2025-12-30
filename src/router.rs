@@ -87,12 +87,12 @@ impl TransactionState {
     }
 
     /// Transition to active state
-    pub fn begin(&mut self) {
+    pub const fn begin(&mut self) {
         *self = Self::Active;
     }
 
     /// Transition to idle state
-    pub fn end(&mut self) {
+    pub const fn end(&mut self) {
         *self = Self::Idle;
     }
 }

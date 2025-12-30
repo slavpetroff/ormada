@@ -493,33 +493,33 @@ impl QueryState {
     }
 
     /// Transition to filtered state
-    pub fn filter(&mut self) {
+    pub const fn filter(&mut self) {
         if matches!(self, Self::Fresh) {
             *self = Self::Filtered;
         }
     }
 
     /// Transition to ordered state
-    pub fn order(&mut self) {
+    pub const fn order(&mut self) {
         if matches!(self, Self::Fresh | Self::Filtered) {
             *self = Self::Ordered;
         }
     }
 
     /// Transition to paginated state
-    pub fn paginate(&mut self) {
+    pub const fn paginate(&mut self) {
         if !matches!(self, Self::Aggregated | Self::Executed) {
             *self = Self::Paginated;
         }
     }
 
     /// Transition to aggregated state
-    pub fn aggregate(&mut self) {
+    pub const fn aggregate(&mut self) {
         *self = Self::Aggregated;
     }
 
     /// Transition to executed state
-    pub fn execute(&mut self) {
+    pub const fn execute(&mut self) {
         *self = Self::Executed;
     }
 }
